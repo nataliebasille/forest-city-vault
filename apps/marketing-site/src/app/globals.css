@@ -1,0 +1,25 @@
+@import "tailwindcss";
+@import "@nataliebasille/natcore-design-system/css";
+
+@theme static {
+  --theme-primary: #b35f1b;
+  --theme-secondary: #4f493d;
+  --theme-accent: #bd9566;
+
+  --theme-surface-50: #f7f3ec;
+  --theme-surface-500: #8a8173;
+  --theme-surface-950: #17130f;
+
+  --theme-success: #4f7a56;
+  --theme-danger: #a9473f;
+}
+
+:root {
+  color-scheme: light;
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
