@@ -1,6 +1,13 @@
 {
   "name": "forest-city-vault",
   "private": true,
-  "scripts": {},
-  "packageManager": "pnpm@latest"
+  "scripts": {
+    "lint": "pnpm -r run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.3"
+  },
+  "packageManager": "pnpm@10.19.0"
 }
