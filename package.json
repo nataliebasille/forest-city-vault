@@ -4,10 +4,18 @@
   "scripts": {
     "lint": "pnpm -r run lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:status": "supabase status",
+    "db:migrate": "pnpm --filter @forest-city-vault/database run db:migrate",
+    "db:generate": "pnpm --filter @forest-city-vault/database run db:generate",
+    "db:studio": "pnpm --filter @forest-city-vault/database run db:studio"
   },
   "devDependencies": {
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.3",
+    "supabase": "^2.101.0"
   },
   "packageManager": "pnpm@10.19.0"
 }

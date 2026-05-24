@@ -1,5 +1,5 @@
 import { Next } from "@mcrovero/effect-nextjs";
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import {
   RouteErrorMiddleware,
   RouteErrorMiddlewareLive,
@@ -8,12 +8,26 @@ import {
   JsonResponseMiddleware,
   JsonResponseMiddlewareLive,
 } from "./middleware/json-response-middleware";
+import {
+  RequestId,
+  RequestIdLive,
+  RequestIdMiddleware,
+} from "./middleware/request-id-middleware";
 
 const AppLive = Layer.mergeAll(
+  RequestIdLive,
   RouteErrorMiddlewareLive,
   JsonResponseMiddlewareLive,
 );
 
-export const AppRoute = Next.make("clover-webhooks/routes", AppLive)
+export const AppRoute = Next.make("api", AppLive)
+  .middleware(RequestIdMiddleware)
   .middleware(RouteErrorMiddleware)
-  .middleware(JsonResponseMiddleware);
+  .middleware(JsonResponseMiddleware)
+  .pipe(() =>
+    Effect.gen(function* () {
+      const requestId = yield* RequestId;
+
+      return Effect.annotateLogs(requestId);
+    }),
+  );

@@ -5,6 +5,9 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "db:generate": "node --env-file=../../.env ./node_modules/.bin/drizzle-kit generate",
+    "db:migrate": "node --env-file=../../.env ./node_modules/.bin/drizzle-kit migrate",
+    "db:studio": "node --env-file=../../.env ./node_modules/.bin/drizzle-kit studio",
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -12,10 +15,13 @@
   "dependencies": {
     "@forest-city-vault/config": "workspace:*",
     "@supabase/supabase-js": "^2.49.8",
-    "effect": "^3.21.2"
+    "drizzle-orm": "^0.44.0",
+    "effect": "^3.21.2",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^20.19.41",
+    "drizzle-kit": "^0.31.0",
     "typescript": "^5"
   }
 }
