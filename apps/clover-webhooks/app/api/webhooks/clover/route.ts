@@ -4,6 +4,7 @@ import {
   badRequest,
   unauthorized,
 } from "@forest-city-vault/nextjs-effect";
+import { CloverConfig } from "@forest-city-vault/config";
 import { timingSafeEqual } from "crypto";
 import { Effect, Either, Schema } from "effect";
 
@@ -25,6 +26,8 @@ const CLOVER_AUTH_HEADER = "x-clover-auth";
 
 export const POST = AppRoute.route((request: Request) =>
   Effect.gen(function* () {
+    const { webhookAuthCode } = yield* CloverConfig;
+
     const body = yield* Either.match(yield* parseBody(CloverWebhookPayload), {
       onLeft: (error) => badRequest("Invalid request body", error),
       onRight: (value) => Effect.succeed(value),
@@ -34,17 +37,9 @@ export const POST = AppRoute.route((request: Request) =>
       return true;
     }
 
-    // TODO Configure app config
-    // if (!expectedAuthCode) {
-    //   return yield* Effect.fail(
-    //     makeUnauthorized("Clover webhook auth code is not configured"),
-    //   );
-    // }
-
     const actualAuthCode = request.headers.get(CLOVER_AUTH_HEADER);
-    if (!actualAuthCode) {
-      // || !safeEqual(actualAuthCode, expectedAuthCode)) {
-      return yield* unauthorized("Missing Clover auth header");
+    if (!actualAuthCode || !safeEqual(actualAuthCode, webhookAuthCode)) {
+      return yield* unauthorized("Missing or invalid Clover auth header");
     }
 
     console.log(body);
