@@ -2,16 +2,19 @@ import { NextRequest } from "next/server";
 import { Cookies } from "./cookies";
 import { Headers } from "./headers";
 import { Layer } from "effect";
+import { Body } from "./body";
 
-const REQUEST_STATE_DEPS = [Headers, Cookies] as const;
-
+const REQUEST_STATE_DEPS = [Body, Cookies, Headers] as const;
+export type RequestStateDeps = InstanceType<
+  (typeof REQUEST_STATE_DEPS)[number]
+>;
 export function buildRequestStateLayer(
   type: "route",
   request: NextRequest,
-): Layer.Layer<(typeof REQUEST_STATE_DEPS)[number]>;
+): Layer.Layer<RequestStateDeps>;
 export function buildRequestStateLayer(
   type: "page",
-): Layer.Layer<(typeof REQUEST_STATE_DEPS)[number]>;
+): Layer.Layer<RequestStateDeps>;
 
 export function buildRequestStateLayer(
   ...args: [type: "route", request: NextRequest] | [type: "page"]

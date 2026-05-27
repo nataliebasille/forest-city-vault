@@ -1,13 +1,7 @@
 import { describe, test } from "node:test";
+import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
 import { make } from "./app";
-
-// ---------------------------------------------------------------------------
-// Type-level helpers
-// ---------------------------------------------------------------------------
-
-type Expect<T extends true> = T;
-type HasRoute<T> = T extends { route: Function } ? true : false;
 
 // ---------------------------------------------------------------------------
 // Test services
@@ -30,7 +24,7 @@ class FailingService extends Context.Tag("building/Failing")<
 describe("app building – types", () => {
   test("make(Layer.empty) has route at the type level", () => {
     const app = make(Layer.empty);
-    type _HasRoute = Expect<HasRoute<typeof app>>;
+    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
   });
 
   test("use(failingLayer) removes route from the type", () => {
@@ -40,21 +34,21 @@ describe("app building – types", () => {
       never
     >;
     const app = make(Layer.empty).use(failingLayer);
-    type _NoRoute = Expect<HasRoute<typeof app> extends false ? true : never>;
+    expectTypeOf<typeof app>().not.toExtend<{ route: Function }>();
   });
 
   test("use(successLayer) keeps route at the type level", () => {
     const app = make(Layer.empty).use(
       Layer.succeed(CounterService, { value: 42 }),
     );
-    type _HasRoute = Expect<HasRoute<typeof app>>;
+    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
   });
 
   test("middleware keeps route at the type level", () => {
     const app = make(Layer.empty).use(
       (next: Effect.Effect<unknown, never>) => next,
     );
-    type _HasRoute = Expect<HasRoute<typeof app>>;
+    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
   });
 
   test("yield* Dep infers the service type from the tag", () => {
@@ -63,12 +57,8 @@ describe("app building – types", () => {
       return counter.value;
     });
 
-    type _Context = Expect<
-      Effect.Effect.Context<typeof effect> extends CounterService ? true : never
-    >;
-    type _Success = Expect<
-      Effect.Effect.Success<typeof effect> extends number ? true : never
-    >;
+    expectTypeOf<Effect.Effect.Context<typeof effect>>().toExtend<CounterService>();
+    expectTypeOf<Effect.Effect.Success<typeof effect>>().toExtend<number>();
   });
 
   test("yield* Dep in middleware correctly requires the service", () => {
@@ -79,10 +69,6 @@ describe("app building – types", () => {
         return { result, value: counter.value };
       });
 
-    type _Context = Expect<
-      Effect.Effect.Context<ReturnType<typeof middleware>> extends CounterService
-        ? true
-        : never
-    >;
+    expectTypeOf<Effect.Effect.Context<ReturnType<typeof middleware>>>().toExtend<CounterService>();
   });
 });

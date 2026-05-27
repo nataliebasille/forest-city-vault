@@ -1,10 +1,10 @@
 import { Effect } from "effect";
 import { RequestCookies } from "next/dist/server/web/spec-extension/cookies";
-import { cookies } from "next/headers";
+import { cookies as nextCookies } from "next/headers";
 import { createRequestStateTag } from "./tag";
 
 type CookieStore = Pick<
-  Awaited<ReturnType<typeof cookies>>,
+  Awaited<ReturnType<typeof nextCookies>>,
   "get" | "getAll" | "has" | "toString"
 >;
 
@@ -17,6 +17,10 @@ export class Cookies extends createRequestStateTag("Cookies")<
   },
 
   forPage() {
-    return Effect.promise(() => cookies());
+    return Effect.promise(() => nextCookies());
   },
 }) {}
+
+export function* cookies() {
+  return yield* Cookies;
+}

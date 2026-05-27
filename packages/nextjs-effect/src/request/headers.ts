@@ -1,9 +1,9 @@
-import { Context, Effect } from "effect";
-import { cookies, headers } from "next/headers";
+import { Effect } from "effect";
+import { headers as nextHeaders } from "next/headers";
 import { type NextRequest } from "next/server";
 import { createRequestStateTag } from "./tag";
 
-type NextHeaders = Awaited<ReturnType<typeof headers>>;
+type NextHeaders = Awaited<ReturnType<typeof nextHeaders>>;
 
 export class Headers extends createRequestStateTag("Headers")<
   Headers,
@@ -14,6 +14,10 @@ export class Headers extends createRequestStateTag("Headers")<
   },
 
   forPage() {
-    return Effect.promise(() => headers());
+    return Effect.promise(() => nextHeaders());
   },
 }) {}
+
+export function* headers() {
+  return yield* Headers;
+}
