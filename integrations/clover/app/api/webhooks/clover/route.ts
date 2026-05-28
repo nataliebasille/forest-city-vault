@@ -42,7 +42,7 @@ export const POST = AppRoute.route((request: Request) =>
       return yield* unauthorized("Missing or invalid Clover auth header");
     }
 
-    console.log(body);
+    console.log(JSON.stringify(body, null, 2));
     return true;
   }),
 );

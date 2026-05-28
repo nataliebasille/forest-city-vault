@@ -1,5 +1,5 @@
 {
-  "name": "clover-webhooks",
+  "name": "@forest-city-vault/integration-clover",
   "version": "0.1.0",
   "private": true,
   "scripts": {
