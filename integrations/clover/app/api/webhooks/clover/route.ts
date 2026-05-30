@@ -1,12 +1,21 @@
-import { AppRoute, tryPromiseOrElse } from "@/runtime";
+import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
+import { AppRoute } from "@/runtime";
+import { now } from "@forest-city-vault/clock";
+import { CloverConfig } from "@forest-city-vault/config";
+import { Database } from "@forest-city-vault/database";
 import {
-  parseBody,
   badRequest,
+  parseBody,
   unauthorized,
 } from "@forest-city-vault/nextjs-effect";
-import { CloverConfig } from "@forest-city-vault/config";
 import { timingSafeEqual } from "crypto";
 import { Effect, Either, Schema } from "effect";
+
+const CloverEvent = Schema.Struct({
+  objectId: Schema.String,
+  type: Schema.Literal("CREATE", "UPDATE", "DELETE"),
+  ts: Schema.Number,
+});
 
 const CloverWebhookVerificationPayload = Schema.Struct({
   verificationCode: Schema.String,
@@ -14,7 +23,10 @@ const CloverWebhookVerificationPayload = Schema.Struct({
 
 const CloverWebhookEventPayload = Schema.Struct({
   appId: Schema.String,
-  merchants: Schema.Any,
+  merchants: Schema.Record({
+    key: Schema.String,
+    value: Schema.Array(CloverEvent),
+  }),
 });
 
 export const CloverWebhookPayload = Schema.Union(
@@ -24,7 +36,7 @@ export const CloverWebhookPayload = Schema.Union(
 
 const CLOVER_AUTH_HEADER = "x-clover-auth";
 
-export const POST = AppRoute.route((request: Request) =>
+const handler = (request: Request) =>
   Effect.gen(function* () {
     const { webhookAuthCode } = yield* CloverConfig;
 
@@ -42,10 +54,52 @@ export const POST = AppRoute.route((request: Request) =>
       return yield* unauthorized("Missing or invalid Clover auth header");
     }
 
-    console.log(JSON.stringify(body, null, 2));
+    yield* recordWebhookEvents(body);
+
     return true;
-  }),
-);
+  });
+
+export const POST = AppRoute.route(handler);
+
+function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    const { requestId } = yield* RequestTrace;
+    const receivedAt = yield* now;
+    yield* db.transaction(async (tx) => {
+      const appId = event.appId;
+
+      for (const [merchantId, cloverEvents] of Object.entries(
+        event.merchants,
+      )) {
+        for (const cloverEvent of cloverEvents) {
+          const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
+          const [eventType, eventId] = cloverEvent.objectId.split(":");
+          const cloverEventRecord: typeof db.schema.cloverEvents.$inferInsert =
+            {
+              appId,
+              requestId,
+              idempotencyKey,
+              merchantId,
+              eventType,
+              eventId,
+              eventTimestampMs: cloverEvent.ts,
+              changeType: cloverEvent.type,
+              payload: cloverEvent,
+              receivedAt,
+            };
+
+          await tx
+            .insert(db.schema.cloverEvents)
+            .values([cloverEventRecord])
+            .onConflictDoNothing({
+              target: db.schema.cloverEvents.idempotencyKey,
+            });
+        }
+      }
+    });
+  });
+}
 
 function safeEqual(a: string, b: string) {
   const aBuffer = Buffer.from(a);

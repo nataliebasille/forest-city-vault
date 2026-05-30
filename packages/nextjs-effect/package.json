@@ -2,6 +2,7 @@
   "name": "@forest-city-vault/nextjs-effect",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "./src/public.ts",
   "types": "./src/public.ts",
   "scripts": {

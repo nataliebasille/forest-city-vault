@@ -112,9 +112,8 @@ describe("app.route - types", () => {
     app.route(() => LabelService.pipe(Effect.map((l) => l.text)));
   });
 
-  test("handler with a non-never error channel is a type error", () => {
+  test("handler with a non-HttpFailure error channel is allowed", () => {
     const app = make(Layer.empty);
-    // @ts-expect-error - Effect.fail produces a non-never error
     app.route(() => Effect.fail(new Error("oops")));
   });
 

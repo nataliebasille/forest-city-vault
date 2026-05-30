@@ -17,27 +17,27 @@ export interface AppBase<Result, Errors, Services> {
     provider: Layer.Layer<LayerService, LayerError, Services>,
   ): App<Result, Errors | LayerError, Services | LayerService>;
 
-  use<MiddlewareResult, MiddlewareError, MiddlewareServices>(
+  use<NextServices, MiddlewareResult, MiddlewareError, MiddlewareServices>(
     handler: MiddlewareHandler<
       Result,
       Errors,
-      Services,
+      NextServices,
       MiddlewareResult,
       MiddlewareError,
       MiddlewareServices
     >,
-  ): App<MiddlewareResult, MiddlewareError, MiddlewareServices>;
+  ): App<MiddlewareResult, MiddlewareError, NextServices>;
 }
 
 export type App<Result, Errors, Services> = AppBase<Result, Errors, Services> &
-  ([Errors] extends [never]
+  ([Errors] extends [never | HttpFailure]
     ? {
-        route<RouteResult>(
+        route<RouteResult, RouteError>(
           handler: (
             request: NextRequest,
           ) => Effect.Effect<
             RouteResult,
-            HttpFailure,
+            RouteError,
             Services | RequestStateDeps
           >,
         ): (request: NextRequest) => Promise<Response>;
@@ -84,10 +84,10 @@ function appBuilder<Result, Errors, Services>(
       }) as never;
     },
 
-    route<R>(
+    route<R, E>(
       handler: (
         request: NextRequest,
-      ) => Effect.Effect<R, HttpFailure, Services | RequestStateDeps>,
+      ) => Effect.Effect<R, E, Services | RequestStateDeps>,
     ) {
       const runtime = ManagedRuntime.make(state.layer);
 
@@ -98,23 +98,25 @@ function appBuilder<Result, Errors, Services>(
               ? new Response(null, { status: 204 })
               : Response.json(result),
           ),
-          Effect.catchTag("HttpFailure", (error) =>
-            Effect.succeed(
-              Response.json(
-                {
-                  error: error.message,
-                },
-                {
-                  status: error.status,
-                },
-              ),
-            ),
-          ),
         );
 
         const pipeline = state.middlewares
           .reduce((next, middleware) => middleware(next), base as AnyEffect)
-          .pipe(Effect.provide(buildRequestStateLayer("route", request)));
+          .pipe(
+            Effect.provide(buildRequestStateLayer("route", request)),
+            Effect.catchTag("HttpFailure", (error) =>
+              Effect.succeed(
+                Response.json(
+                  {
+                    error: error.message,
+                  },
+                  {
+                    status: error.status,
+                  },
+                ),
+              ),
+            ),
+          );
 
         return runtime.runPromise(pipeline);
       };

@@ -1,8 +1,8 @@
-import { CloverConfig } from "@forest-city-vault/config";
 import { App } from "@forest-city-vault/nextjs-effect";
-import { Layer } from "effect";
+import { AppLive } from "./live";
+import { NonHttpTo500Middleware } from "./middleware/non-http-to-500-middleware";
 import { RequestTraceMiddleware } from "./middleware/request-trace";
 
-const AppLive = Layer.mergeAll(CloverConfig.Default).pipe(Layer.orDie);
-
-export const AppRoute = App.make(AppLive).use(RequestTraceMiddleware);
+export const AppRoute = App.make(AppLive)
+  .use(RequestTraceMiddleware)
+  .use(NonHttpTo500Middleware);
