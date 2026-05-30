@@ -1,4 +1,6 @@
 packages:
   - "apps/*"
+  - "core/*"
+  - "domain"
   - "integrations/*"
   - "packages/*"

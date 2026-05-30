@@ -1,0 +1,10 @@
+{
+  "name": "@forest-city-vault/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@forest-city-vault/core-domain": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}
