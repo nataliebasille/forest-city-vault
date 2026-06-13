@@ -11,7 +11,7 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint",
     "format": "prettier --write .",
@@ -23,12 +23,16 @@
     "@effect/sql-pg": "^0.52.1",
     "@forest-city-vault/config": "workspace:*",
     "drizzle-orm": "^0.44.0",
-    "effect": "^3.21.2"
+    "effect": "^3.21.2",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.4.6",
     "@types/node": "^20.19.41",
+    "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.0",
+    "pg": "^8.0.0",
+    "tsx": "^4.0.0",
     "typescript": "^5"
   }
 }
