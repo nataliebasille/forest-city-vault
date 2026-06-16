@@ -13,10 +13,11 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@forest-city-vault/clock": "workspace:*",
-    "@forest-city-vault/config": "workspace:*",
+    "@effect/platform": "^0.96.1",
+    "@forest-city-vault/core-clock": "workspace:*",
+    "@forest-city-vault/core-config": "workspace:*",
     "@forest-city-vault/database": "workspace:*",
-    "@forest-city-vault/nextjs-effect": "workspace:*",
+    "@forest-city-vault/nextjs-core": "workspace:*",
     "dotenv": "^17.4.2",
     "effect": "^3.21.2",
     "next": "16.2.6",

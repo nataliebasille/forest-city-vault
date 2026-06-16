@@ -1,4 +1,4 @@
-import { defineMiddleware, Headers } from "@forest-city-vault/nextjs-effect";
+import { defineMiddleware, Headers } from "@forest-city-vault/nextjs-core";
 import { Context, Effect } from "effect";
 
 export const REQUEST_ID_HEADER = "x-request-id";

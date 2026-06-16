@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { Effect, Layer } from "effect";
 
-import { staticClock } from "@forest-city-vault/clock";
-import { CloverConfig } from "@forest-city-vault/config";
+import { staticClock } from "@forest-city-vault/core-clock";
+import { CloverConfig } from "@forest-city-vault/core-config";
 import {
   Database,
   DatabaseError,

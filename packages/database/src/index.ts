@@ -2,7 +2,7 @@ import { make as makeDrizzle } from "@effect/sql-drizzle/Pg";
 import { PgClient } from "@effect/sql-pg";
 import * as SqlClientModule from "@effect/sql/SqlClient";
 import { SqlError } from "@effect/sql/SqlError";
-import { SupabaseConfig } from "@forest-city-vault/config";
+import { SupabaseConfig } from "@forest-city-vault/core-config";
 import { ConfigError, Context, Data, Effect, Layer, Redacted } from "effect";
 import * as schema from "./schema";
 import { PgRemoteDatabase } from "drizzle-orm/pg-proxy";
@@ -117,7 +117,7 @@ export const DatabaseLive: Layer.Layer<
   Layer.provide(SupabaseConfig.Default),
 );
 
-export { SupabaseConfig } from "@forest-city-vault/config";
+export { SupabaseConfig } from "@forest-city-vault/core-config";
 export * as dbSchema from "./schema";
 
 function tryDatabasePromise<A>(

@@ -1,7 +1,4 @@
-import {
-  defineMiddleware,
-  HttpFailure,
-} from "@forest-city-vault/nextjs-effect";
+import { defineMiddleware, HttpFailure } from "@forest-city-vault/nextjs-core";
 import { Effect } from "effect";
 
 export const NonHttpTo500Middleware = defineMiddleware()((next) =>

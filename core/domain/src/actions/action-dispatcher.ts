@@ -20,15 +20,18 @@ import {
   UnknownEventStoreError,
 } from "../events/event-store";
 
-type ActionDispatchEffect<M extends WithAggregateMetadata<AnyAggregateMetadata>, E, R> =
-  Effect.Effect<
-    MaterializedAggregateRoot<
-      AggregateType_GetId<M>,
-      AggregateType_GetSnapshot<M>
-    >,
-    E | ConcurrencyError | UnknownEventStoreError,
-    EventStore | R
-  >;
+type ActionDispatchEffect<
+  M extends WithAggregateMetadata<AnyAggregateMetadata>,
+  E,
+  R,
+> = Effect.Effect<
+  MaterializedAggregateRoot<
+    AggregateType_GetId<M>,
+    AggregateType_GetSnapshot<M>
+  >,
+  E | ConcurrencyError | UnknownEventStoreError,
+  EventStore | R
+>;
 
 export type InitializingActionDispatcher<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
@@ -57,7 +60,9 @@ export type ActionDispatcher<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
   A extends AggregateType_GetActionDefinitions<M>,
 > = {
-  [K in keyof A]: A[K] extends (...args: infer Args) => Effect.Effect<any, infer E, infer R>
+  [K in keyof A]: A[K] extends (
+    ...args: infer Args
+  ) => Effect.Effect<any, infer E, infer R>
     ? Args extends [payload: infer Payload]
       ? InitializingActionDispatcher<M, Payload, E, R>
       : Args extends [

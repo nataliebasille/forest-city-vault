@@ -245,8 +245,10 @@ describe("createReducer - typing", () => {
         type: "CounterCreated";
         payload: { initialCount: number };
       },
-    ) => MaterializedAggregateRoot<AggregateType_GetId<typeof CreateOnlyAgg>, CounterData> =
-      CreateOnlyAgg.reducer;
+    ) => MaterializedAggregateRoot<
+      AggregateType_GetId<typeof CreateOnlyAgg>,
+      CounterData
+    > = CreateOnlyAgg.reducer;
 
     void reducer;
   });
@@ -258,8 +260,10 @@ describe("createReducer - typing", () => {
         type: "CounterCreated";
         payload: { initialCount: number };
       },
-    ) => MaterializedAggregateRoot<AggregateType_GetId<typeof BothAgg>, CounterData> =
-      BothAgg.reducer;
+    ) => MaterializedAggregateRoot<
+      AggregateType_GetId<typeof BothAgg>,
+      CounterData
+    > = BothAgg.reducer;
 
     void reducer;
   });

@@ -1,5 +1,5 @@
-import { SystemClock } from "@forest-city-vault/clock";
-import { CloverConfig } from "@forest-city-vault/config";
+import { SystemClock } from "@forest-city-vault/core-clock";
+import { CloverConfig } from "@forest-city-vault/core-config";
 import { DatabaseLive } from "@forest-city-vault/database";
 import { Layer } from "effect";
 

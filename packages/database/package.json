@@ -21,7 +21,7 @@
     "@effect/sql": "^0.51.1",
     "@effect/sql-drizzle": "^0.50.0",
     "@effect/sql-pg": "^0.52.1",
-    "@forest-city-vault/config": "workspace:*",
+    "@forest-city-vault/core-config": "workspace:*",
     "drizzle-orm": "^0.44.0",
     "effect": "^3.21.2",
     "uuid": "^14.0.0"
