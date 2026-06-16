@@ -1,5 +1,5 @@
 import { describe, it } from "node:test";
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { applyEvents } from "./operators";
@@ -14,26 +14,37 @@ import { AggregateRoot_MaterializedVariant } from "../aggregates/aggregate-root"
 
 const CounterSchema = Schema.Struct({ count: Schema.Number });
 
+const CounterCreatedSchema = Schema.Struct({
+  initialCount: Schema.Number,
+});
+
+const CounterIncrementedSchema = Schema.Struct({
+  by: Schema.Number,
+});
+
 const Counter = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
-  raw: () => Effect.succeed("counter-1"),
   schema: CounterSchema,
   events: {
-    CounterCreated: (payload: { initialCount: number }) => ({
-      count: payload.initialCount,
-    }),
-    CounterIncremented: (
-      snapshot: { count: number },
-      payload: { by: number },
-    ) => ({
-      count: snapshot.count + payload.by,
-    }),
+    CounterCreated: {
+      schema: CounterCreatedSchema,
+      handler: (payload: { initialCount: number }) => ({
+        count: payload.initialCount,
+      }),
+    },
+    CounterIncremented: {
+      schema: CounterIncrementedSchema,
+      handler: (snapshot: { count: number }, payload: { by: number }) => ({
+        count: snapshot.count + payload.by,
+      }),
+    },
   },
   actions: {},
 });
 
-const counterId = Effect.runSync(Counter.nextId());
-const pristine = Counter.pristine(counterId);
+const pristine = Counter.pristine("counter-1");
+const counterId = pristine.id;
 const materialized: AggregateRoot_MaterializedVariant<
   AggregateType_GetInstance<typeof Counter>
 > = {
@@ -44,13 +55,13 @@ const materialized: AggregateRoot_MaterializedVariant<
 
 type EnsureAgg<AggType> =
   AggType extends AggregateType<
+    infer IdSchema,
     infer Name,
-    infer RawId,
     infer Schema,
     infer Events,
     infer Actions
   >
-    ? AggregateType<Name, RawId, Schema, Events, Actions>
+    ? AggregateType<IdSchema, Name, Schema, Events, Actions>
     : never;
 
 const x = function <AggType>(T: AggType & EnsureAgg<AggType>) {
@@ -246,18 +257,20 @@ describe("applyEvents - typing", () => {
 
   it("wrong aggregate type in instance position is rejected at compile time", () => {
     const OtherCounter = defineAggregateType({
+      idType: Schema.String,
       name: "OtherCounter",
-      raw: () => Effect.succeed("other-1"),
       schema: CounterSchema,
       events: {
-        CounterCreated: (payload: { initialCount: number }) => ({
-          count: payload.initialCount,
-        }),
+        CounterCreated: {
+          schema: CounterCreatedSchema,
+          handler: (payload: { initialCount: number }) => ({
+            count: payload.initialCount,
+          }),
+        },
       },
       actions: {},
     });
-    const otherId = Effect.runSync(OtherCounter.nextId());
-    const otherPristine = OtherCounter.pristine(otherId);
+    const otherPristine = OtherCounter.pristine("other-1");
 
     const _check = () => {
       // @ts-expect-error — otherPristine has a different Id brand than Counter expects

@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@forest-city-vault/core-domain": "workspace:*",
-    "effect": "^3.21.2"
+    "effect": "^3.21.2",
+    "uuid": "^14.0.0"
   }
 }

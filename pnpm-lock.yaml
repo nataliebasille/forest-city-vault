@@ -128,6 +128,9 @@ importers:
       effect:
         specifier: ^3.21.2
         version: 3.21.2
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
 
   integrations/clover:
     dependencies:

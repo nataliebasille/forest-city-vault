@@ -1,34 +1,19 @@
-import { Effect } from "effect";
+import { Brand, Effect, Schema } from "effect";
 import {
+  AggregateId,
   AggregateIdValue,
   AggregateRoot,
   AnyAggregateId,
-  createAggregateIdFactory,
   PristineAggregateRoot,
 } from "./aggregates/aggregate-root";
 import {
   All_Events_From_EventDefinitions,
   EventDefinitions,
 } from "./events/event-handler";
-import { createReducer } from "./events/event-reducer";
+import { createEventCreators, createReducer } from "./events/events.internal";
 import { AnyStruct, IsNever } from "./type-helpers";
 import { ActionDefinitions } from "./actions/action-handlers";
 import { createActionDispatchers } from "./actions/action-dispatcher";
-
-// Domain Factory
-type DefineAggregateTypeOptions<
-  Name extends string,
-  RawId,
-  Schema extends AnyStruct,
-  Events extends EventDefinitions<Schema>,
-  Actions extends ActionDefinitions<Schema, Events>,
-> = {
-  name: Name;
-  raw: () => Effect.Effect<RawId, never, never>;
-  schema: Schema;
-  events: Events;
-  actions: Actions;
-};
 
 const AggregateMetadata: unique symbol = Symbol("AggregateMetadata");
 
@@ -60,24 +45,17 @@ export type AnyAggregateMetadata = AggregateTypeMetadata<
 >;
 
 export type AggregateType<
+  Id extends Schema.Number | Schema.String,
   Name extends string,
-  RawId extends AggregateIdValue,
   Schema extends AnyStruct,
   Events extends EventDefinitions<Schema>,
   Actions extends ActionDefinitions<Schema, Events>,
-> = ReturnType<
-  typeof defineAggregateType<Name, RawId, Schema, Events, Actions>
->;
+> = ReturnType<typeof defineAggregateType<Name, Id, Schema, Events, Actions>>;
 
-export type EnsureAggregateType<AT> =
-  AT extends AggregateType<
-    infer Name,
-    infer RawId,
-    infer Schema,
-    infer Events,
-    infer Actions
-  >
-    ? AggregateType<Name, RawId, Schema, Events, Actions>
+export type EnsureAggregateType<AT> = [AT] extends [never]
+  ? never
+  : AT extends { [AggregateMetadata]: AnyAggregateMetadata }
+    ? AT
     : never;
 
 export type AggregateType_GetMetadata<AT> = AT extends {
@@ -139,9 +117,9 @@ export type AggregateType_GetSchema<AT> =
 
 export type AggregateType_GetEventDefinitions<AT> =
   AggregateType_GetMetadata<AT> extends {
-    readonly events: infer Events extends EventDefinitions<any>;
+    readonly events: infer EventDefs extends EventDefinitions<any>;
   }
-    ? Events
+    ? EventDefs
     : never;
 
 export type AggregateType_GetActionDefinitions<AT> =
@@ -151,34 +129,47 @@ export type AggregateType_GetActionDefinitions<AT> =
     ? Actions
     : never;
 
+// Domain Factory
+type DefineAggregateTypeOptions<
+  Id extends Schema.Number | Schema.String,
+  Schema extends AnyStruct,
+  Events extends EventDefinitions<Schema>,
+  Actions extends ActionDefinitions<Schema, Events>,
+> = {
+  id: Id;
+  schema: Schema;
+  events: Events;
+  actions: Actions;
+};
+
 export function defineAggregateType<
   Name extends string,
-  RawId extends AggregateIdValue,
+  Id extends Schema.Number | Schema.String,
   Schema extends AnyStruct,
   Events extends EventDefinitions<Schema>,
   Actions extends ActionDefinitions<Schema, Events>,
 >(
-  definition: DefineAggregateTypeOptions<Name, RawId, Schema, Events, Actions>,
+  name: Name,
+  definition: DefineAggregateTypeOptions<Id, Schema, Events, Actions>,
 ) {
-  const nextId = createAggregateIdFactory(definition.name)(definition.raw);
-  type Id = Effect.Effect.Success<ReturnType<typeof nextId>>;
-
-  type Metadata = AggregateTypeMetadata<Id, Name, Schema, Events, Actions>;
-
+  type AggId = AggregateId<Schema.Schema.Type<Id>, Name>;
+  type Metadata = AggregateTypeMetadata<AggId, Name, Schema, Events, Actions>;
   const reducer = createReducer<WithAggregateMetadata<Metadata>, Events>(
     definition.events,
   );
 
   const runtime = Object.freeze({
-    nextId,
-    pristine: (id: Id) =>
+    pristine: (id: Brand.Brand.Unbranded<AggId>) =>
       ({
-        id,
+        id: Brand.nominal<AggId>()(id),
         version: 0,
-      }) satisfies PristineAggregateRoot<Id>,
+      }) satisfies PristineAggregateRoot<AggId>,
     reducer,
+    events: createEventCreators<WithAggregateMetadata<Metadata>, Events>(
+      definition.events,
+    ),
     actions: createActionDispatchers<WithAggregateMetadata<Metadata>, Actions>(
-      definition.name,
+      name,
       reducer,
       definition.actions,
     ),

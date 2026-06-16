@@ -13,46 +13,58 @@ import {
   MaterializedAggregateRoot,
   PristineAggregateRoot,
 } from "../aggregates/aggregate-root";
-import { Reducer } from "../events/event-reducer";
-import { EventStore } from "../events/event-store";
+import { Reducer } from "../events/events.internal";
+import {
+  ConcurrencyError,
+  EventStore,
+  UnknownEventStoreError,
+} from "../events/event-store";
+
+type ActionDispatchEffect<M extends WithAggregateMetadata<AnyAggregateMetadata>, E, R> =
+  Effect.Effect<
+    MaterializedAggregateRoot<
+      AggregateType_GetId<M>,
+      AggregateType_GetSnapshot<M>
+    >,
+    E | ConcurrencyError | UnknownEventStoreError,
+    EventStore | R
+  >;
 
 export type InitializingActionDispatcher<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
   Payload,
+  E = never,
+  R = never,
 > = (
   aggregate: PristineAggregateRoot<AggregateType_GetId<M>>,
   payload: Payload,
-) => MaterializedAggregateRoot<
-  AggregateType_GetId<M>,
-  AggregateType_GetSnapshot<M>
->;
+) => ActionDispatchEffect<M, E, R>;
 
 export type UpdatingActionDispatcher<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
   Payload,
+  E = never,
+  R = never,
 > = (
   aggregate: MaterializedAggregateRoot<
     AggregateType_GetId<M>,
     AggregateType_GetSnapshot<M>
   >,
   payload: Payload,
-) => MaterializedAggregateRoot<
-  AggregateType_GetId<M>,
-  AggregateType_GetSnapshot<M>
->;
+) => ActionDispatchEffect<M, E, R>;
 
 export type ActionDispatcher<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
   A extends AggregateType_GetActionDefinitions<M>,
 > = {
-  [K in keyof A]: A[K] extends (...args: infer Args) => any
+  [K in keyof A]: A[K] extends (...args: infer Args) => Effect.Effect<any, infer E, infer R>
     ? Args extends [payload: infer Payload]
-      ? InitializingActionDispatcher<M, Payload>
+      ? InitializingActionDispatcher<M, Payload, E, R>
       : Args extends [
             snapshot: AggregateType_GetSnapshot<M>,
             payload: infer Payload,
           ]
-        ? UpdatingActionDispatcher<M, Payload>
+        ? UpdatingActionDispatcher<M, Payload, E, R>
         : never
     : never;
 };
@@ -91,7 +103,7 @@ export function createActionDispatchers<
             const nextAgg = eventsToApply.reduce(reduceEvents, agg);
 
             const eventStore = yield* EventStore;
-            eventStore.append(name, agg, eventsToApply);
+            yield* eventStore.append(name, agg, eventsToApply);
 
             return nextAgg;
           }),

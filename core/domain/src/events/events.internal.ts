@@ -1,3 +1,4 @@
+import { Effect, Schema } from "effect";
 import {
   AggregateType_GetEventDefinitions,
   AggregateType_GetId,
@@ -13,16 +14,15 @@ import {
   MaterializedAggregateRoot,
   PristineAggregateRoot,
 } from "../aggregates/aggregate-root";
-import { AnyStruct, IsNever } from "../type-helpers";
+import { IsNever } from "../type-helpers";
 import {
-  AggregateEventHandler,
   All_Events_From_EventDefinitions,
   Create_Events_From_EventDefinitions,
-  CreateEventHandler,
   EventDefinitions,
   Update_Events_From_EventDefinitions,
-  UpdateEventHandler,
 } from "./event-handler";
+import { AggregateEvent } from "./event";
+import { ParseError } from "effect/ParseResult";
 
 export type InitializingReducer<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
@@ -35,8 +35,8 @@ export type InitializingReducer<
 ) => MaterializedAggregateRoot<Id, AggregateType_GetSchema<M>["Type"]>;
 
 type UpdatingReducer<M extends WithAggregateMetadata<AnyAggregateMetadata>> = <
-  Id extends AggregateType_GetMetadata<M>["id"],
-  Schema extends AggregateType_GetMetadata<M>["schema"],
+  Id extends AggregateType_GetId<M>,
+  Schema extends AggregateType_GetSchema<M>,
 >(
   agg: AggregateRoot<Id, Schema["Type"]>,
   event: Update_Events_From_EventDefinitions<
@@ -77,20 +77,17 @@ export function createReducer<
     agg: AggregateRoot<Id, AggregateType_GetSchema<M>["Type"]>,
     event: All_Events_From_EventDefinitions<AggregateType_GetSchema<M>, E>,
   ) => {
-    const eventType = (event as { type: string }).type;
-    const eventPayload = (event as { payload: unknown }).payload;
-    const handler = events[eventType] as AggregateEventHandler<
-      AggregateType_GetSchema<M>,
-      unknown
-    >;
+    type Snapshot = AggregateType_GetSchema<M>["Type"];
+    type Payload = typeof event.payload;
+
+    const eventType = event.type as keyof E;
+    const handler = events[eventType].handler;
 
     const nextSnapshot = isPristineAggregateRoot(agg)
-      ? (handler as CreateEventHandler<AggregateType_GetSchema<M>, unknown>)(
-          eventPayload,
-        )
-      : (handler as UpdateEventHandler<AggregateType_GetSchema<M>, unknown>)(
+      ? (handler as (payload: Payload) => Snapshot)(event.payload)
+      : (handler as (snapshot: Snapshot, payload: Payload) => Snapshot)(
           (agg as Extract<typeof agg, { snapshot: unknown }>).snapshot,
-          eventPayload,
+          event.payload,
         );
 
     return {
@@ -99,4 +96,32 @@ export function createReducer<
       snapshot: nextSnapshot,
     };
   }) as Reducer<M>;
+}
+
+type EventDefinitions_To_Creators<
+  M extends WithAggregateMetadata<AnyAggregateMetadata>,
+  E extends AggregateType_GetEventDefinitions<M>,
+> = {
+  [K in keyof E & string]: (
+    payload: E[K]["schema"]["Type"],
+  ) => Effect.Effect<AggregateEvent<K, E[K]["schema"]["Type"]>, ParseError>;
+};
+
+export function createEventCreators<
+  M extends WithAggregateMetadata<AnyAggregateMetadata>,
+  E extends AggregateType_GetEventDefinitions<M>,
+>(events: E) {
+  return Object.fromEntries(
+    Object.entries(events).map(([key, { schema }]) => {
+      const decoder = Schema.decodeUnknown(schema);
+      return [
+        key,
+        (payload: typeof schema.Type) =>
+          Effect.map(decoder(payload), (result) => ({
+            type: key,
+            payload: result,
+          })),
+      ] as const;
+    }),
+  ) as EventDefinitions_To_Creators<M, E>;
 }

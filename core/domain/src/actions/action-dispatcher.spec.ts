@@ -2,9 +2,7 @@ import { describe, it } from "node:test";
 import { Effect, Schema } from "effect";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
-import {
-  type ActionDispatcher,
-} from "./action-dispatcher";
+import { type ActionDispatcher } from "./action-dispatcher";
 import type {
   InitializingActionDispatcher,
   UpdatingActionDispatcher,
@@ -23,18 +21,29 @@ const CounterSchema = Schema.Struct({ count: Schema.Number });
 type CounterSchema = typeof CounterSchema;
 type CounterData = CounterSchema["Type"];
 
+const CounterCreatedSchema = Schema.Struct({
+  initialCount: Schema.Number,
+});
+
+const CounterIncrementedSchema = Schema.Struct({
+  by: Schema.Number,
+});
+
 // Actions are defined inline inside defineAggregateType (rather than as
 // standalone consts) because ActionDefinitions expects generic function types
 // <Payload, E, R>(...) — a concrete function signature inferred from a
 // standalone const is not assignable to that polymorphic shape.
 const CreateOnlyAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-create-1"),
   events: {
-    CounterCreated: (payload: { initialCount: number }) => ({
-      count: payload.initialCount,
-    }),
+    CounterCreated: {
+      schema: CounterCreatedSchema,
+      handler: (payload: { initialCount: number }) => ({
+        count: payload.initialCount,
+      }),
+    },
   },
   actions: {
     create: (payload: { initialCount: number }) =>
@@ -46,13 +55,16 @@ const CreateOnlyAgg = defineAggregateType({
 });
 
 const UpdateOnlyAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-update-1"),
   events: {
-    CounterIncremented: (snapshot: CounterData, payload: { by: number }) => ({
-      count: snapshot.count + payload.by,
-    }),
+    CounterIncremented: {
+      schema: CounterIncrementedSchema,
+      handler: (snapshot: CounterData, payload: { by: number }) => ({
+        count: snapshot.count + payload.by,
+      }),
+    },
   },
   actions: {
     increment: (snapshot: CounterData, payload: { by: number }) =>
@@ -64,16 +76,22 @@ const UpdateOnlyAgg = defineAggregateType({
 });
 
 const BothAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-both-1"),
   events: {
-    CounterCreated: (payload: { initialCount: number }) => ({
-      count: payload.initialCount,
-    }),
-    CounterIncremented: (snapshot: CounterData, payload: { by: number }) => ({
-      count: snapshot.count + payload.by,
-    }),
+    CounterCreated: {
+      schema: CounterCreatedSchema,
+      handler: (payload: { initialCount: number }) => ({
+        count: payload.initialCount,
+      }),
+    },
+    CounterIncremented: {
+      schema: CounterIncrementedSchema,
+      handler: (snapshot: CounterData, payload: { by: number }) => ({
+        count: snapshot.count + payload.by,
+      }),
+    },
   },
   actions: {
     create: (payload: { initialCount: number }) =>
@@ -89,26 +107,25 @@ const BothAgg = defineAggregateType({
   },
 });
 
-const createOnlyUninitialized = CreateOnlyAgg.pristine(
-  Effect.runSync(CreateOnlyAgg.nextId()),
-);
+const createOnlyUninitialized = CreateOnlyAgg.pristine("counter-create-1");
 
 type UpdateOnlyId = AggregateType_GetId<typeof UpdateOnlyAgg>;
+const updateOnlyId = UpdateOnlyAgg.pristine("counter-update-1").id;
 const updateOnlyMaterialized: MaterializedAggregateRoot<
   UpdateOnlyId,
   CounterData
 > = {
-  id: Effect.runSync(UpdateOnlyAgg.nextId()),
+  id: updateOnlyId,
   version: 3,
   snapshot: { count: 5 },
 };
 
-const bothUninitialized = BothAgg.pristine(Effect.runSync(BothAgg.nextId()));
+const bothUninitialized = BothAgg.pristine("counter-both-1");
 const bothMaterialized: MaterializedAggregateRoot<
   AggregateType_GetId<typeof BothAgg>,
   CounterData
 > = {
-  id: Effect.runSync(BothAgg.nextId()),
+  id: bothUninitialized.id,
   version: 2,
   snapshot: { count: 10 },
 };
@@ -134,7 +151,7 @@ function makeTestEventStore() {
 }
 
 function runWithStore<A>(
-  effect: Effect.Effect<A, never, EventStore>,
+  effect: Effect.Effect<A, unknown, EventStore>,
   store: EventStore.Service,
 ): A {
   return Effect.runSync(Effect.provideService(effect, EventStore, store));
@@ -210,11 +227,14 @@ describe("createActionDispatchers - functional", () => {
   it("passes only payload (not snapshot) to a create action handler", () => {
     const calls: unknown[] = [];
     const Agg = defineAggregateType({
+      idType: Schema.String,
       name: "Counter",
       schema: CounterSchema,
-      raw: () => Effect.succeed("counter-create-call-1"),
       events: {
-        Created: (payload: { x: number }) => ({ count: payload.x }),
+        Created: {
+          schema: Schema.Struct({ x: Schema.Number }),
+          handler: (payload: { x: number }) => ({ count: payload.x }),
+        },
       },
       actions: {
         create: (...args: [payload: { x: number }]) => {
@@ -224,7 +244,7 @@ describe("createActionDispatchers - functional", () => {
       },
     });
     const { store } = makeTestEventStore();
-    const uninitialized = Agg.pristine(Effect.runSync(Agg.nextId()));
+    const uninitialized = Agg.pristine("counter-create-call-1");
 
     runWithStore(Agg.actions.create(uninitialized, { x: 7 }), store);
 
@@ -235,13 +255,16 @@ describe("createActionDispatchers - functional", () => {
   it("passes snapshot and payload to an update action handler", () => {
     const calls: unknown[] = [];
     const Agg = defineAggregateType({
+      idType: Schema.String,
       name: "Counter",
       schema: CounterSchema,
-      raw: () => Effect.succeed("counter-update-call-1"),
       events: {
-        Incremented: (snapshot: CounterData, payload: { by: number }) => ({
-          count: snapshot.count + payload.by,
-        }),
+        Incremented: {
+          schema: CounterIncrementedSchema,
+          handler: (snapshot: CounterData, payload: { by: number }) => ({
+            count: snapshot.count + payload.by,
+          }),
+        },
       },
       actions: {
         increment: (
@@ -260,7 +283,7 @@ describe("createActionDispatchers - functional", () => {
       AggregateType_GetId<typeof Agg>,
       CounterData
     > = {
-      id: Effect.runSync(Agg.nextId()),
+      id: Agg.pristine("counter-update-call-1").id,
       version: 1,
       snapshot: { count: 5 },
     };
@@ -302,33 +325,51 @@ describe("createActionDispatchers - functional", () => {
 
   it("handles an action that returns an array of events", () => {
     const Agg = defineAggregateType({
+      idType: Schema.String,
       name: "Counter",
       schema: CounterSchema,
-      raw: () => Effect.succeed("counter-multi-1"),
       events: {
-        CounterCreated: (payload: { initialCount: number }) => ({
-          count: payload.initialCount,
-        }),
-        CounterIncremented: (snapshot: CounterData, payload: { by: number }) => ({
-          count: snapshot.count + payload.by,
-        }),
+        CounterCreated: {
+          schema: CounterCreatedSchema,
+          handler: (payload: { initialCount: number }) => ({
+            count: payload.initialCount,
+          }),
+        },
+        CounterIncremented: {
+          schema: CounterIncrementedSchema,
+          handler: (snapshot: CounterData, payload: { by: number }) => ({
+            count: snapshot.count + payload.by,
+          }),
+        },
       },
       actions: {
-        createAndIncrement: (payload: { initialCount: number; by: number }) =>
-          Effect.succeed([
+        createAndIncrement: (payload: { initialCount: number; by: number }) => {
+          const events: [
             {
-              type: "CounterCreated" as const,
+              type: "CounterCreated";
+              payload: { initialCount: number };
+            },
+            {
+              type: "CounterIncremented";
+              payload: { by: number };
+            },
+          ] = [
+            {
+              type: "CounterCreated",
               payload: { initialCount: payload.initialCount },
             },
             {
-              type: "CounterIncremented" as const,
+              type: "CounterIncremented",
               payload: { by: payload.by },
             },
-          ] as const),
+          ];
+
+          return Effect.succeed(events);
+        },
       },
     });
     const { store, calls } = makeTestEventStore();
-    const uninitialized = Agg.pristine(Effect.runSync(Agg.nextId()));
+    const uninitialized = Agg.pristine("counter-multi-1");
 
     const result = runWithStore(
       Agg.actions.createAndIncrement(uninitialized, {

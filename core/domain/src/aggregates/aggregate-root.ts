@@ -47,30 +47,6 @@ export type AggregateRoot_PristineVariant<AR extends AnyAggregateRoot> =
 export type AggregateRoot_MaterializedVariant<AR extends AnyAggregateRoot> =
   Extract<AR, { snapshot: unknown }>;
 
-export function createAggregateIdFactory<K extends string>(aggName: K) {
-  return <T>(raw: () => Effect.Effect<T, never, never>) => {
-    type Id = AggregateId<Readonly<{ entity: K; value: T }>, K>;
-    const brander = Brand.nominal<Id>();
-    return () =>
-      Effect.gen(function* () {
-        const id = yield* raw();
-        const newId = brander(
-          Object.freeze({
-            entity: aggName,
-            value: id,
-            toJSON() {
-              return JSON.stringify(id);
-            },
-            toString() {
-              return String(id);
-            },
-          }) as unknown as Brand.Brand.Unbranded<Id>,
-        );
-        return newId;
-      });
-  };
-}
-
 export function isPristineAggregateRoot<Agg extends AnyAggregateRoot>(
   agg: Agg,
 ): agg is Extract<Agg, { version: 0 }> {

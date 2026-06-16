@@ -1,8 +1,7 @@
 import { describe, it } from "node:test";
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
-import { type InitializingReducer } from "./event-reducer";
 import type { MaterializedAggregateRoot } from "../aggregates/aggregate-root";
 import {
   defineAggregateType,
@@ -15,68 +14,86 @@ const CounterSchema = Schema.Struct({ count: Schema.Number });
 type CounterSchema = typeof CounterSchema;
 type CounterData = CounterSchema["Type"];
 
+const CounterCreatedSchema = Schema.Struct({
+  initialCount: Schema.Number,
+});
+
+const CounterIncrementedSchema = Schema.Struct({
+  by: Schema.Number,
+});
+
 // Event definitions covering all three Reducer shapes
 const bothEvents = {
-  CounterCreated: (payload: { initialCount: number }) => ({
-    count: payload.initialCount,
-  }),
-  CounterIncremented: (snapshot: CounterData, payload: { by: number }) => ({
-    count: snapshot.count + payload.by,
-  }),
+  CounterCreated: {
+    schema: CounterCreatedSchema,
+    handler: (payload: { initialCount: number }) => ({
+      count: payload.initialCount,
+    }),
+  },
+  CounterIncremented: {
+    schema: CounterIncrementedSchema,
+    handler: (snapshot: CounterData, payload: { by: number }) => ({
+      count: snapshot.count + payload.by,
+    }),
+  },
 };
 
 const createOnlyEvents = {
-  CounterCreated: (payload: { initialCount: number }) => ({
-    count: payload.initialCount,
-  }),
+  CounterCreated: {
+    schema: CounterCreatedSchema,
+    handler: (payload: { initialCount: number }) => ({
+      count: payload.initialCount,
+    }),
+  },
 };
 
 const updateOnlyEvents = {
-  CounterIncremented: (snapshot: CounterData, payload: { by: number }) => ({
-    count: snapshot.count + payload.by,
-  }),
+  CounterIncremented: {
+    schema: CounterIncrementedSchema,
+    handler: (snapshot: CounterData, payload: { by: number }) => ({
+      count: snapshot.count + payload.by,
+    }),
+  },
 };
 
 const BothAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-both-1"),
   events: bothEvents,
   actions: {},
 });
 
 const CreateOnlyAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-create-1"),
   events: createOnlyEvents,
   actions: {},
 });
 
 const UpdateOnlyAgg = defineAggregateType({
+  idType: Schema.String,
   name: "Counter",
   schema: CounterSchema,
-  raw: () => Effect.succeed("counter-update-1"),
   events: updateOnlyEvents,
   actions: {},
 });
 
-const bothUninitialized = BothAgg.pristine(Effect.runSync(BothAgg.nextId()));
+const bothUninitialized = BothAgg.pristine("counter-both-1");
 const bothMaterialized = BothAgg.reducer(bothUninitialized, {
   type: "CounterCreated",
   payload: { initialCount: 5 },
 });
 
-const createOnlyUninitialized = CreateOnlyAgg.pristine(
-  Effect.runSync(CreateOnlyAgg.nextId()),
-);
+const createOnlyUninitialized = CreateOnlyAgg.pristine("counter-create-1");
 
 type UpdateOnlyId = AggregateType_GetId<typeof UpdateOnlyAgg>;
 const updateOnlyMaterialized: MaterializedAggregateRoot<
   UpdateOnlyId,
   CounterData
 > = {
-  id: Effect.runSync(UpdateOnlyAgg.nextId()),
+  id: UpdateOnlyAgg.pristine("counter-update-1").id,
   version: 3,
   snapshot: { count: 5 },
 };
@@ -163,18 +180,21 @@ describe("createReducer - functional", () => {
   it("passes only the payload (not snapshot) to a create handler", () => {
     const calls: unknown[] = [];
     const Agg = defineAggregateType({
+      idType: Schema.String,
       name: "Counter",
       schema: CounterSchema,
-      raw: () => Effect.succeed("counter-create-call-1"),
       events: {
-        Created: (...args: [payload: { x: number }]) => {
-          calls.push(args);
-          return { count: args[0].x };
+        Created: {
+          schema: Schema.Struct({ x: Schema.Number }),
+          handler: (...args: [payload: { x: number }]) => {
+            calls.push(args);
+            return { count: args[0].x };
+          },
         },
       },
       actions: {},
     });
-    const uninitialized = Agg.pristine(Effect.runSync(Agg.nextId()));
+    const uninitialized = Agg.pristine("counter-create-call-1");
 
     Agg.reducer(uninitialized, { type: "Created", payload: { x: 7 } });
 
@@ -185,13 +205,16 @@ describe("createReducer - functional", () => {
   it("passes snapshot and payload to an update handler", () => {
     const calls: unknown[] = [];
     const Agg = defineAggregateType({
+      idType: Schema.String,
       name: "Counter",
       schema: CounterSchema,
-      raw: () => Effect.succeed("counter-update-call-1"),
       events: {
-        Updated: (snapshot: CounterData, payload: { by: number }) => {
-          calls.push([snapshot, payload]);
-          return { count: snapshot.count + payload.by };
+        Updated: {
+          schema: CounterIncrementedSchema,
+          handler: (snapshot: CounterData, payload: { by: number }) => {
+            calls.push([snapshot, payload]);
+            return { count: snapshot.count + payload.by };
+          },
         },
       },
       actions: {},
@@ -200,7 +223,7 @@ describe("createReducer - functional", () => {
       AggregateType_GetId<typeof Agg>,
       CounterData
     > = {
-      id: Effect.runSync(Agg.nextId()),
+      id: Agg.pristine("counter-update-call-1").id,
       version: 3,
       snapshot: { count: 5 },
     };
@@ -215,19 +238,33 @@ describe("createReducer - functional", () => {
 // ─── Typing tests ─────────────────────────────────────────────────────────────
 
 describe("createReducer - typing", () => {
-  it("reducer with only create events is assignable to InitializingReducer", () => {
-    expectTypeOf(CreateOnlyAgg.reducer).toExtend<
-      InitializingReducer<typeof CreateOnlyAgg>
-    >();
+  it("reducer with only create events accepts a pristine aggregate and create event", () => {
+    const reducer: (
+      agg: typeof createOnlyUninitialized,
+      event: {
+        type: "CounterCreated";
+        payload: { initialCount: number };
+      },
+    ) => MaterializedAggregateRoot<AggregateType_GetId<typeof CreateOnlyAgg>, CounterData> =
+      CreateOnlyAgg.reducer;
+
+    void reducer;
   });
 
-  it("reducer with both events is assignable to InitializingReducer", () => {
-    expectTypeOf(BothAgg.reducer).toExtend<
-      InitializingReducer<typeof BothAgg>
-    >();
+  it("reducer with both events can initialize from a pristine aggregate", () => {
+    const reducer: (
+      agg: typeof bothUninitialized,
+      event: {
+        type: "CounterCreated";
+        payload: { initialCount: number };
+      },
+    ) => MaterializedAggregateRoot<AggregateType_GetId<typeof BothAgg>, CounterData> =
+      BothAgg.reducer;
+
+    void reducer;
   });
 
-  it("create event payload is inferred from handler signature", () => {
+  it("create event payload is inferred from the event schema", () => {
     type Event = Parameters<typeof CreateOnlyAgg.reducer>[1];
 
     expectTypeOf<{
@@ -236,7 +273,7 @@ describe("createReducer - typing", () => {
     }>().toExtend<Event>();
   });
 
-  it("update event payload is inferred from handler signature", () => {
+  it("update event payload is inferred from the event schema", () => {
     type Event = Parameters<typeof UpdateOnlyAgg.reducer>[1];
 
     expectTypeOf<{

@@ -1,5 +1,5 @@
 import { describe, it } from "node:test";
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import { expectTypeOf } from "expect-type";
 import {
   defineAggregateType,
@@ -23,23 +23,37 @@ const OrderSchema = Schema.Struct({
 type OrderSchema = typeof OrderSchema;
 type OrderData = OrderSchema["Type"];
 
+const OrderPlacedSchema = Schema.Struct({
+  title: Schema.String,
+  quantity: Schema.Number,
+});
+
+const OrderQuantityUpdatedSchema = Schema.Struct({
+  quantity: Schema.Number,
+});
+
 const orderEvents = {
-  OrderPlaced: (payload: { title: string; quantity: number }): OrderData => ({
-    title: payload.title,
-    quantity: payload.quantity,
-  }),
-  OrderQuantityUpdated: (
-    snapshot: OrderData,
-    payload: { quantity: number },
-  ): OrderData => ({
-    ...snapshot,
-    quantity: payload.quantity,
-  }),
+  OrderPlaced: {
+    schema: OrderPlacedSchema,
+    handler: (payload: { title: string; quantity: number }): OrderData => ({
+      title: payload.title,
+      quantity: payload.quantity,
+    }),
+  },
+  OrderQuantityUpdated: {
+    schema: OrderQuantityUpdatedSchema,
+    handler: (
+      snapshot: OrderData,
+      payload: { quantity: number },
+    ): OrderData => ({
+      ...snapshot,
+      quantity: payload.quantity,
+    }),
+  },
 };
 
-const OrderAggregate = defineAggregateType({
-  name: "Order",
-  raw: () => Effect.succeed("uuid" as string),
+const OrderAggregate = defineAggregateType("Order", {
+  id: Schema.String,
   schema: OrderSchema,
   events: orderEvents,
   actions: {},
@@ -47,11 +61,7 @@ const OrderAggregate = defineAggregateType({
 
 type OrderAT = typeof OrderAggregate;
 
-// The branded Id type produced by createAggregateIdFactory("Order") with RawId = string
-type OrderId = AggregateId<
-  Readonly<{ entity: "Order"; value: string }>,
-  "Order"
->;
+type OrderId = AggregateId<string, "Order">;
 
 // ─── EnsureAggregateType ──────────────────────────────────────────────────────
 
@@ -83,17 +93,17 @@ describe("EnsureAggregateType", () => {
 describe("AggregateType_GetMetadata", () => {
   it("exposes the aggregate name literal", () => {
     type Result = AggregateType_GetMetadata<OrderAT>;
-    expectTypeOf<Result>().toExtend<{ name: "Order" }>();
+    expectTypeOf<Result["name"]>().toEqualTypeOf<"Order">();
   });
 
   it("exposes the snapshot type", () => {
     type Result = AggregateType_GetMetadata<OrderAT>;
-    expectTypeOf<Result>().toExtend<{ snapshot: OrderData }>();
+    expectTypeOf<Result["snapshot"]>().toEqualTypeOf<OrderData>();
   });
 
   it("exposes the events definitions", () => {
     type Result = AggregateType_GetMetadata<OrderAT>;
-    expectTypeOf<Result>().toExtend<{ events: typeof orderEvents }>();
+    expectTypeOf<Result["events"]>().toEqualTypeOf<typeof orderEvents>();
   });
 
   it("resolves to never for a non-AggregateType", () => {
@@ -136,22 +146,28 @@ describe("AggregateType_GetEvents", () => {
   it("extracts the union of all create and update events", () => {
     type Result = AggregateType_GetEvents<OrderAT>;
     type Expected =
-      | AggregateEvent<"OrderPlaced", { title: string; quantity: number }>
-      | AggregateEvent<"OrderQuantityUpdated", { quantity: number }>;
+      | AggregateEvent<
+          "OrderPlaced",
+          Readonly<{ title: string; quantity: number }>
+        >
+      | AggregateEvent<"OrderQuantityUpdated", Readonly<{ quantity: number }>>;
     expectTypeOf<Result>().toEqualTypeOf<Expected>();
   });
 
   it("includes the create event in the union", () => {
     type Result = AggregateType_GetEvents<OrderAT>;
     expectTypeOf<
-      AggregateEvent<"OrderPlaced", { title: string; quantity: number }>
+      AggregateEvent<
+        "OrderPlaced",
+        Readonly<{ title: string; quantity: number }>
+      >
     >().toExtend<Result>();
   });
 
   it("includes the update event in the union", () => {
     type Result = AggregateType_GetEvents<OrderAT>;
     expectTypeOf<
-      AggregateEvent<"OrderQuantityUpdated", { quantity: number }>
+      AggregateEvent<"OrderQuantityUpdated", Readonly<{ quantity: number }>>
     >().toExtend<Result>();
   });
 
@@ -182,8 +198,8 @@ describe("AggregateType_GetInstance", () => {
 describe("AggregateType", () => {
   it("defineAggregateType result is assignable to AggregateType with explicit type params", () => {
     type Explicit = AggregateType<
+      typeof Schema.String,
       "Order",
-      string,
       OrderSchema,
       typeof orderEvents,
       {}
