@@ -21,6 +21,8 @@ export const eventStatus = pgEnum("event_status", [
   "dead_letter",
 ]);
 
+export const cloverEventType = pgEnum("clover_event_type", ["P"]);
+
 export const cloverEventChangeType = pgEnum("clover_event_change_type", [
   "CREATE",
   "UPDATE",
@@ -39,7 +41,7 @@ export const cloverEvents = cloverTable(
     appId: text("app_id").notNull(),
     merchantId: text("merchant_id").notNull(),
 
-    eventType: text("event_type").notNull(),
+    eventType: cloverEventType("event_type").notNull(),
     eventId: text("event_id").notNull(),
     eventTimestampMs: bigint("event_timestamp_ms", {
       mode: "number",

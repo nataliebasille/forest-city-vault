@@ -81,7 +81,9 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
               requestId,
               idempotencyKey,
               merchantId,
-              eventType,
+              // to do need to fix this so an error is recorded if
+              // event type can't be ingested
+              eventType: eventType as "P",
               eventId,
               eventTimestampMs: cloverEvent.ts,
               changeType: cloverEvent.type,
