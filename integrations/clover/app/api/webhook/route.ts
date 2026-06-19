@@ -46,6 +46,10 @@ const handler = (request: Request) =>
     });
 
     if ("verificationCode" in body) {
+      yield* Effect.log("Received Clover webhook verification request", {
+        verificationCode: body.verificationCode,
+      });
+
       return true;
     }
 

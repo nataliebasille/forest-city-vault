@@ -6,7 +6,7 @@ try {
 } catch {}
 
 export default defineConfig({
-  schema: "./src/schema/index.ts",
+  schema: ["./src/schema/index.ts", "./src/schema/inboxes/index.ts"],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

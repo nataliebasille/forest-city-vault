@@ -15,6 +15,13 @@
       "when": 1780182740419,
       "tag": "0001_sales-and-vendors",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781891692863,
+      "tag": "0002_payment_inboxes",
+      "breakpoints": true
     }
   ]
 }
