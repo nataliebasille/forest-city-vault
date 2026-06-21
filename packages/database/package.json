@@ -10,7 +10,9 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "db:generate": "drizzle-kit generate",
+    "test": "node --import tsx --test src/**/*.spec.ts",
+    "db:generate:drizzle-schema": "tsx scripts/generate-drizzle-flat-schema.ts",
+    "db:generate": "pnpm db:generate:drizzle-schema && drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint",
@@ -27,6 +29,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
+    "@effect/experimental": "0.60.0",
     "@electric-sql/pglite": "^0.4.6",
     "@types/node": "^20.19.41",
     "@types/pg": "^8.20.0",

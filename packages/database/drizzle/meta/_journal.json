@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779983304677,
-      "tag": "0000_clover_events",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1780182740419,
-      "tag": "0001_sales-and-vendors",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1781891692863,
-      "tag": "0002_payment_inboxes",
+      "when": 1781966933256,
+      "tag": "0000_initial",
       "breakpoints": true
     }
   ]

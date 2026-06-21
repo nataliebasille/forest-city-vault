@@ -1,19 +1,19 @@
+import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { AppRoute } from "@/runtime";
-import { Database } from "@forest-city-vault/database";
+import { Database, drain } from "@forest-city-vault/database";
+import { and, eq } from "drizzle-orm/sql/expressions/conditions";
 import { Effect } from "effect";
+import { Sales } from "@forest-city-vault/domain";
 
 export const POST = AppRoute.route(() =>
   Effect.gen(function* () {
-    const db = yield* Database;
-
-    const eventsToProcess = yield* db.query((sql) =>
-      sql.query.cloverEvents.findMany({
-        where: (entity, { eq, and }) =>
-          and(eq(entity.status, "received"), eq(entity.eventType, "P")),
-        orderBy: (entity, { asc }) => asc(entity.receivedAt),
-        limit: 100,
-        offset: 0,
-      }),
-    );
+    yield* drain({
+      inbox: "payments",
+      requestId: (yield* RequestTrace).requestId,
+      action: (sql, message) =>
+        Effect.gen(function* () {
+          const newSale = Sales.pristine(yield* IdGenerator.next());
+        }),
+    });
   }),
 );

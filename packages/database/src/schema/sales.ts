@@ -12,7 +12,7 @@ import { vendors } from "./vendors";
 
 export const salesSource = pgEnum("sales_source", ["clover"]);
 
-export const salesTable = fcvTable(
+export const sales = fcvTable(
   "sales",
   {
     id: id(),
@@ -41,13 +41,13 @@ export const salesTable = fcvTable(
   ],
 );
 
-export const salesLineItemsTable = fcvTable(
+export const salesLineItems = fcvTable(
   "sales_line_items",
   {
     id: id(),
     saleId: uuid("sale_id")
       .notNull()
-      .references(() => salesTable.id, { onDelete: "no action" }),
+      .references(() => sales.id, { onDelete: "no action" }),
 
     vendorId: uuid("vendor_id").references(() => vendors.id),
 

@@ -7,7 +7,9 @@ import { ConfigError, Context, Data, Effect, Layer, Redacted } from "effect";
 import * as schema from "./schema";
 import { PgRemoteDatabase } from "drizzle-orm/pg-proxy";
 
-type SapphoDatabase = PgRemoteDatabase<typeof schema>;
+export * from "./utils/public";
+
+export type SapphoDatabase = PgRemoteDatabase<typeof schema>;
 
 export type DatabaseTransaction = SapphoDatabase;
 
@@ -26,12 +28,12 @@ export type DatabaseService = {
     },
   ) => Effect.Effect<A, DatabaseError>;
 
-  readonly transaction: <A>(
-    operation: (tx: DatabaseTransaction) => Promise<A>,
+  readonly transaction: <A, E, R>(
+    operation: (tx: DatabaseTransaction) => Effect.Effect<A, E, R>,
     options?: {
       readonly errorMessage?: string;
     },
-  ) => Effect.Effect<A, DatabaseError>;
+  ) => Effect.Effect<A, DatabaseError, R>;
 };
 
 export class Database extends Context.Tag("sappho/Database")<
@@ -39,11 +41,11 @@ export class Database extends Context.Tag("sappho/Database")<
   DatabaseService
 >() {}
 
-const makeSapphoDatabase = makeDrizzle<typeof schema>({ schema });
+const makeSapphoDatabase = makeDrizzle<typeof schema>();
 
 const createDatabaseService = Effect.gen(function* () {
   const db = yield* makeSapphoDatabase;
-  const sql = yield* PgClient.PgClient;
+  const sql = yield* SqlClientModule.SqlClient;
 
   return {
     schema,
@@ -59,8 +61,8 @@ const createDatabaseService = Effect.gen(function* () {
         options?.errorMessage ?? "Database query failed",
       ),
 
-    transaction: <A>(
-      operation: (tx: DatabaseTransaction) => Promise<A>,
+    transaction: <A, E, R>(
+      operation: (tx: DatabaseTransaction) => Effect.Effect<A, E, R>,
       options?: {
         readonly errorMessage?: string;
       },
@@ -69,19 +71,21 @@ const createDatabaseService = Effect.gen(function* () {
         .withTransaction(
           Effect.gen(function* () {
             const txDb = yield* Effect.provideService(
-              makeDrizzle<typeof schema>({ schema }),
+              makeDrizzle<typeof schema>(),
               SqlClientModule.SqlClient,
               sql,
             );
-            return yield* Effect.tryPromise({
-              try: () => operation(txDb),
-              catch: (cause) =>
-                new DatabaseError({
-                  message:
-                    options?.errorMessage ?? "Database transaction failed",
-                  cause,
-                }),
-            });
+
+            return yield* operation(txDb).pipe(
+              Effect.catchAll(
+                (cause) =>
+                  new DatabaseError({
+                    message:
+                      options?.errorMessage ?? "Database transaction failed",
+                    cause,
+                  }),
+              ),
+            );
           }),
         )
         .pipe(
@@ -98,6 +102,16 @@ const createDatabaseService = Effect.gen(function* () {
   } satisfies DatabaseService;
 });
 
+/**
+ * Base database layer. Requires `SqlClient.SqlClient` to be provided externally.
+ * Use this layer in tests by injecting a test SQL client (e.g. via PgClient.layer or a test adapter).
+ */
+export const DatabaseLayer: Layer.Layer<
+  Database,
+  never,
+  SqlClientModule.SqlClient
+> = Layer.effect(Database, createDatabaseService);
+
 const PgLive = Layer.unwrapEffect(
   Effect.gen(function* () {
     const { databaseUrl } = yield* SupabaseConfig;
@@ -112,13 +126,14 @@ export const DatabaseLive: Layer.Layer<
   Database,
   SqlError | ConfigError.ConfigError,
   never
-> = Layer.effect(Database, createDatabaseService).pipe(
+> = DatabaseLayer.pipe(
   Layer.provide(PgLive),
   Layer.provide(SupabaseConfig.Default),
 );
 
 export { SupabaseConfig } from "@forest-city-vault/core-config";
 export * as dbSchema from "./schema";
+import * as dbSchema from "./schema";
 
 function tryDatabasePromise<A>(
   operation: () => Promise<A>,

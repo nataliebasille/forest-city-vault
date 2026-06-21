@@ -14,6 +14,7 @@ import { createEventCreators, createReducer } from "./events/events.internal";
 import { AnyStruct, IsNever } from "./type-helpers";
 import { ActionDefinitions } from "./actions/action-handlers";
 import { createActionDispatchers } from "./actions/action-dispatcher";
+import { createRepository } from "./public";
 
 const AggregateMetadata: unique symbol = Symbol("AggregateMetadata");
 
@@ -159,20 +160,21 @@ export function defineAggregateType<
   );
 
   const runtime = Object.freeze({
+    actions: createActionDispatchers<WithAggregateMetadata<Metadata>, Actions>(
+      name,
+      reducer,
+      definition.actions,
+    ),
+    events: createEventCreators<WithAggregateMetadata<Metadata>, Events>(
+      definition.events,
+    ),
     pristine: (id: Brand.Brand.Unbranded<AggId>) =>
       ({
         id: Brand.nominal<AggId>()(id),
         version: 0,
       }) satisfies PristineAggregateRoot<AggId>,
     reducer,
-    events: createEventCreators<WithAggregateMetadata<Metadata>, Events>(
-      definition.events,
-    ),
-    actions: createActionDispatchers<WithAggregateMetadata<Metadata>, Actions>(
-      name,
-      reducer,
-      definition.actions,
-    ),
+    repository: createRepository<WithAggregateMetadata<Metadata>>(name),
   } as const);
 
   return runtime as typeof runtime & {

@@ -3,7 +3,7 @@ import { createInboxTables } from "./base_inbox";
 
 export const provider = pgEnum("payment_provider", ["clover"]);
 
-export const { inbox: payments, errors: paymentProcessingErrors } =
+export const payments =
   createInboxTables("payment", {
     provider: provider("provider").notNull(),
     providerEventId: text("provider_event_id").notNull(),

@@ -88,11 +88,9 @@ export function createActionDispatchers<
               agg.version > 0 ? [agg.snapshot, payload] : [payload];
 
             const handlerEvents = yield* handler(...handlerArgs);
-            const eventsToApply: AggregateType_GetEvents<M>[] = Array.isArray(
-              handlerEvents,
-            )
-              ? handlerEvents
-              : [handlerEvents];
+            const eventsToApply = (
+              Array.isArray(handlerEvents) ? handlerEvents : [handlerEvents]
+            ) as AggregateType_GetEvents<M>[];
 
             const reduceEvents = (
               previous: AggregateType_GetInstance<M>,

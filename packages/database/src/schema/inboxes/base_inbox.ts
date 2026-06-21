@@ -7,7 +7,6 @@ import {
   uniqueIndex,
   integer,
   primaryKey,
-  serial,
   index,
 } from "drizzle-orm/pg-core";
 import { fcvTable } from "../+helpers";
@@ -22,7 +21,7 @@ const inboxBaseColumns = {
   requestId: text("request_id").notNull(),
   idempotencyKey: text("idempotency_key").notNull(),
   status: inboxStatus("status").notNull(),
-  attempts: text("attempts").notNull(),
+  attempts: integer("attempts").notNull().default(0),
   receivedAt: text("received_at").notNull(),
   processedAt: text("processed_at").notNull(),
 };
@@ -38,6 +37,10 @@ type InboxTable<
   columns: BuildColumns<TTableName, InboxBaseColumns & TColumnsMap, "pg">;
   dialect: "pg";
 }>;
+
+export type InboxErrorTable = ReturnType<
+  typeof createInboxTables<"test", Record<string, PgColumnBuilderBase>>
+>["errors"];
 
 export const createInboxTables = <
   TTableName extends string,
@@ -78,15 +81,15 @@ export const createInboxTables = <
   const errors = fcvTable(
     `${name}_inbox_errors`,
     {
-      [`${name}InboxId` as const]: uuid(`${name}_inbox_id`)
+      inboxId: uuid("inbox_id")
         .notNull()
         .references(() => inbox.id),
-      attemptNumber: serial("attempt_number").notNull(),
+      attemptNumber: integer("attempt_number").notNull(),
       requestId: text("request_id").notNull(),
-      errorMessage: text("error_message").notNull(),
+      error: text("error").notNull(),
     },
     (table) => [
-      primaryKey({ columns: [table[`${name}InboxId`], table.attemptNumber] }),
+      primaryKey({ columns: [table.inboxId, table.attemptNumber] }),
       index(`${name}_inbox_errors_request_id_idx`).on(table.requestId),
     ],
   );
