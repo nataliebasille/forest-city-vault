@@ -13,7 +13,7 @@ import {
   DatabaseError,
   type DatabaseService,
   dbSchema,
-} from "@forest-city-vault/database";
+} from "@forest-city-vault/infrastructure-database";
 
 const MIGRATIONS_FOLDER = fileURLToPath(
   new URL("../../../../packages/database/drizzle", import.meta.url),

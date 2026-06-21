@@ -1,6 +1,6 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { AppRoute } from "@/runtime";
-import { Database, drain } from "@forest-city-vault/database";
+import { Database, drain } from "@forest-city-vault/infrastructure-database";
 import { and, eq } from "drizzle-orm/sql/expressions/conditions";
 import { Effect } from "effect";
 import { Sales } from "@forest-city-vault/domain";

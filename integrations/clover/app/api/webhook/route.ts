@@ -2,7 +2,7 @@ import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { AppRoute } from "@/runtime";
 import { now } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
-import { Database } from "@forest-city-vault/database";
+import { Database } from "@forest-city-vault/infrastructure-database";
 import {
   badRequest,
   parseBody,

@@ -1,5 +1,5 @@
 {
-  "name": "@forest-city-vault/database",
+  "name": "@forest-city-vault/infrastructure-database",
   "version": "0.1.0",
   "private": true,
   "type": "module",

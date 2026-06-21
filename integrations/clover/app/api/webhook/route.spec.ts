@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { dbSchema } from "@forest-city-vault/database";
+import { dbSchema } from "@forest-city-vault/infrastructure-database";
 
 import { makeRouteTest } from "@/lib/testing/make-route-test";
 import { NextRequest } from "next/server";

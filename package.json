@@ -9,9 +9,9 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:status": "supabase status",
-    "db:migrate": "pnpm --filter @forest-city-vault/database run db:migrate",
-    "db:generate": "pnpm --filter @forest-city-vault/database run db:generate",
-    "db:studio": "pnpm --filter @forest-city-vault/database run db:studio"
+    "db:migrate": "pnpm --filter @forest-city-vault/infrastructure-database run db:migrate",
+    "db:generate": "pnpm --filter @forest-city-vault/infrastructure-database run db:generate",
+    "db:studio": "pnpm --filter @forest-city-vault/infrastructure-database run db:studio"
   },
   "devDependencies": {
     "prettier": "^3.8.3",
