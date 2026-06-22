@@ -9,6 +9,8 @@ export class HttpFailure extends Schema.TaggedError<HttpFailure>()(
   },
 ) {}
 
+export const isHttpFailure = Schema.is(HttpFailure);
+
 export function httpFailure(status: number, message: string, cause?: unknown) {
   return Effect.fail(new HttpFailure({ status, message, cause }));
 }

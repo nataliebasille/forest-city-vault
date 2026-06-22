@@ -1,7 +1,6 @@
 import { describe, test } from "node:test";
-import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
-import { make } from "./app";
+import { App } from "./app";
 
 // ---------------------------------------------------------------------------
 // Test services
@@ -12,63 +11,61 @@ class CounterService extends Context.Tag("building/Counter")<
   { value: number }
 >() {}
 
-class FailingService extends Context.Tag("building/Failing")<
-  FailingService,
-  { x: number }
+class LabelService extends Context.Tag("building/Label")<
+  LabelService,
+  { text: string }
 >() {}
 
 // ---------------------------------------------------------------------------
 // Typing tests
 // ---------------------------------------------------------------------------
 
-describe("app building – types", () => {
-  test("make(Layer.empty) has route at the type level", () => {
-    const app = make(Layer.empty);
-    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
+describe("app building - types", () => {
+  test("handler requiring a service provided by use(layer) compiles", () => {
+    const app = App.use(Layer.succeed(CounterService, { value: 42 }));
+    app.route(() => CounterService.pipe(Effect.map((c) => c.value)));
   });
 
-  test("use(failingLayer) removes route from the type", () => {
-    const failingLayer = Layer.fail(new Error("oops")) as Layer.Layer<
-      FailingService,
-      Error,
-      never
-    >;
-    const app = make(Layer.empty).use(failingLayer);
-    expectTypeOf<typeof app>().not.toExtend<{ route: Function }>();
+  test("handler requiring an unprovided service is a type error", () => {
+    // @ts-expect-error - CounterService has not been installed via use()
+    App.route(() => CounterService.pipe(Effect.map((c) => c.value)));
   });
 
-  test("use(successLayer) keeps route at the type level", () => {
-    const app = make(Layer.empty).use(
-      Layer.succeed(CounterService, { value: 42 }),
+  test("services from two separate use(layer) calls are both available to handlers", () => {
+    const app = App.use(Layer.succeed(CounterService, { value: 1 })).use(
+      Layer.succeed(LabelService, { text: "hello" }),
     );
-    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
-  });
 
-  test("middleware keeps route at the type level", () => {
-    const app = make(Layer.empty).use(
-      (next: Effect.Effect<unknown, never>) => next,
-    );
-    expectTypeOf<typeof app>().toExtend<{ route: Function }>();
-  });
-
-  test("yield* Dep infers the service type from the tag", () => {
-    const effect = Effect.gen(function* () {
-      const counter = yield* CounterService;
-      return counter.value;
-    });
-
-    expectTypeOf<Effect.Effect.Context<typeof effect>>().toExtend<CounterService>();
-    expectTypeOf<Effect.Effect.Success<typeof effect>>().toExtend<number>();
-  });
-
-  test("yield* Dep in middleware correctly requires the service", () => {
-    const middleware = (next: Effect.Effect<unknown, never, CounterService>) =>
+    app.route(() =>
       Effect.gen(function* () {
         const counter = yield* CounterService;
-        const result = yield* next;
-        return { result, value: counter.value };
-      });
+        const label = yield* LabelService;
+        return `${label.text}:${counter.value}`;
+      }),
+    );
+  });
 
-    expectTypeOf<Effect.Effect.Context<ReturnType<typeof middleware>>>().toExtend<CounterService>();
+  test("a dependent layer pre-composed into a self-sufficient layer can be added", () => {
+    const derivedLayer = Layer.effect(
+      LabelService,
+      CounterService.pipe(Effect.map((c) => ({ text: `count:${c.value}` }))),
+    );
+
+    const selfSufficient = Layer.provide(
+      derivedLayer,
+      Layer.succeed(CounterService, { value: 7 }),
+    );
+
+    App.use(selfSufficient);
+  });
+
+  test("a layer with unmet deps passed directly to use() is a type error", () => {
+    const derivedLayer = Layer.effect(
+      LabelService,
+      CounterService.pipe(Effect.map((c) => ({ text: `count:${c.value}` }))),
+    );
+
+    // @ts-expect-error - derivedLayer requires CounterService which is not yet installed
+    App.use(derivedLayer);
   });
 });
