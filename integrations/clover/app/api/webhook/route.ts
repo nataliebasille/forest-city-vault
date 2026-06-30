@@ -1,5 +1,5 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
-import { AppRoute } from "@/runtime";
+import { route } from "@/runtime";
 import { now } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
 import { Database } from "@forest-city-vault/infrastructure-database";
@@ -10,6 +10,7 @@ import {
 } from "@forest-city-vault/nextjs-core";
 import { timingSafeEqual } from "crypto";
 import { Effect, Either, Schema } from "effect";
+import { NextRequest } from "next/server";
 
 const CloverEvent = Schema.Struct({
   objectId: Schema.String,
@@ -36,7 +37,7 @@ export const CloverWebhookPayload = Schema.Union(
 
 const CLOVER_AUTH_HEADER = "x-clover-auth";
 
-const handler = (request: Request) =>
+const handler = (request: NextRequest) =>
   Effect.gen(function* () {
     const { webhookAuthCode } = yield* CloverConfig;
 
@@ -63,47 +64,49 @@ const handler = (request: Request) =>
     return true;
   });
 
-export const POST = AppRoute.route(handler);
+export const POST = route(handler);
 
 function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
   return Effect.gen(function* () {
     const db = yield* Database;
     const { requestId } = yield* RequestTrace;
     const receivedAt = yield* now;
-    yield* db.transaction(async (tx) => {
-      const appId = event.appId;
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const appId = event.appId;
 
-      for (const [merchantId, cloverEvents] of Object.entries(
-        event.merchants,
-      )) {
-        for (const cloverEvent of cloverEvents) {
-          const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
-          const [eventType, eventId] = cloverEvent.objectId.split(":");
-          const cloverEventRecord: typeof db.schema.cloverEvents.$inferInsert =
-            {
-              appId,
-              requestId,
-              idempotencyKey,
-              merchantId,
-              // to do need to fix this so an error is recorded if
-              // event type can't be ingested
-              eventType: eventType as "P",
-              eventId,
-              eventTimestampMs: cloverEvent.ts,
-              changeType: cloverEvent.type,
-              payload: cloverEvent,
-              receivedAt,
-            };
+        for (const [merchantId, cloverEvents] of Object.entries(
+          event.merchants,
+        )) {
+          for (const cloverEvent of cloverEvents) {
+            const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
+            const [eventType, eventId] = cloverEvent.objectId.split(":");
+            const cloverEventRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
+              {
+                appId,
+                requestId,
+                idempotencyKey,
+                merchantId,
+                // to do need to fix this so an error is recorded if
+                // event type can't be ingested
+                eventType: eventType as "P",
+                eventId,
+                eventTimestampMs: cloverEvent.ts,
+                changeType: cloverEvent.type,
+                payload: cloverEvent,
+                receivedAt,
+              };
 
-          await tx
-            .insert(db.schema.cloverEvents)
-            .values([cloverEventRecord])
-            .onConflictDoNothing({
-              target: db.schema.cloverEvents.idempotencyKey,
-            });
+            yield* tx
+              .insert(db.schema.cloverEvents)
+              .values([cloverEventRecord])
+              .onConflictDoNothing({
+                target: db.schema.cloverEvents.idempotencyKey,
+              });
+          }
         }
-      }
-    });
+      }),
+    );
   });
 }
 

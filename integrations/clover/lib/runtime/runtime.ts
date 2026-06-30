@@ -1,8 +1,9 @@
-import { App } from "@forest-city-vault/nextjs-core";
+import { defineRoute } from "@forest-city-vault/nextjs-core";
 import { AppLive } from "./live";
-import { NonHttpTo500Middleware } from "./middleware/non-http-to-500-middleware";
 import { RequestTraceMiddleware } from "./middleware/request-trace";
+import { Effect } from "effect";
+import { compose } from "effect/Function";
 
-export const AppRoute = App.use(AppLive)
-  .use(RequestTraceMiddleware)
-  .use(NonHttpTo500Middleware);
+export const route = defineRoute(
+  compose(Effect.provide(AppLive), RequestTraceMiddleware),
+);

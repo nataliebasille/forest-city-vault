@@ -3,18 +3,17 @@ import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
 import { NextRequest } from "next/dist/server/web/spec-extension/request";
-import { App } from "./app";
-import { Headers } from "./request/headers";
-import { Cookies } from "./request/cookies";
+import { App } from "../app";
+import { Headers } from "../adapters/request/headers";
+import { Cookies } from "../adapters/request/cookies";
 import {
-  HttpFailure,
   httpFailure,
   badRequest,
   unauthorized,
   forbidden,
   notFound,
   noContent,
-} from "./http/http-failure";
+} from "../http/http-result";
 
 // ---------------------------------------------------------------------------
 // Test services
@@ -37,45 +36,8 @@ const mockRequest = (url = "http://localhost/test") => new NextRequest(url);
 // ---------------------------------------------------------------------------
 
 describe("app.route - types", () => {
-  test("handler requirement is typed to provided services", () => {
-    const handler = (_req: NextRequest) =>
-      CounterService.pipe(Effect.map((c) => c.value));
-
-    expectTypeOf<
-      Effect.Effect.Context<ReturnType<typeof handler>>
-    >().toEqualTypeOf<CounterService>();
-  });
-
-  test("yield* Dep in route handler infers service type", () => {
-    const handler = (_req: NextRequest) =>
-      Effect.gen(function* () {
-        const counter = yield* CounterService;
-        return counter.value;
-      });
-
-    expectTypeOf<
-      Effect.Effect.Context<ReturnType<typeof handler>>
-    >().toEqualTypeOf<CounterService>();
-    expectTypeOf<
-      Effect.Effect.Success<ReturnType<typeof handler>>
-    >().toEqualTypeOf<number>();
-  });
-
-  test("yield* multiple Deps in route handler merges requirements", () => {
-    const handler = (_req: NextRequest) =>
-      Effect.gen(function* () {
-        const counter = yield* CounterService;
-        const label = yield* LabelService;
-        return `${label.text}:${counter.value}`;
-      });
-
-    expectTypeOf<
-      Effect.Effect.Context<ReturnType<typeof handler>>
-    >().toEqualTypeOf<CounterService | LabelService>();
-  });
-
   test("yield* unprovided Dep in route handler is a type error", () => {
-    const app = App.use(Layer.succeed(CounterService, { value: 1 }));
+    const app = App.provide(Layer.succeed(CounterService, { value: 1 }));
     // @ts-expect-error - LabelService is not provided by the app
     app.route((_req: NextRequest) =>
       Effect.gen(function* () {

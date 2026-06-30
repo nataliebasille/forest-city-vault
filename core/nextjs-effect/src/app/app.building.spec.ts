@@ -21,22 +21,22 @@ class LabelService extends Context.Tag("building/Label")<
 // ---------------------------------------------------------------------------
 
 describe("app building - types", () => {
-  test("handler requiring a service provided by use(layer) compiles", () => {
-    const app = App.use(Layer.succeed(CounterService, { value: 42 }));
-    app.route(() => CounterService.pipe(Effect.map((c) => c.value)));
+  test("handler requiring a service provided by provide(layer) compiles", () => {
+    const app = App.provide(Layer.succeed(CounterService, { value: 42 }));
+    app.run(CounterService.pipe(Effect.map((c) => c.value)));
   });
 
   test("handler requiring an unprovided service is a type error", () => {
-    // @ts-expect-error - CounterService has not been installed via use()
-    App.route(() => CounterService.pipe(Effect.map((c) => c.value)));
+    // @ts-expect-error - CounterService has not been installed via provide()
+    App.run(CounterService.pipe(Effect.map((c) => c.value)));
   });
 
-  test("services from two separate use(layer) calls are both available to handlers", () => {
-    const app = App.use(Layer.succeed(CounterService, { value: 1 })).use(
-      Layer.succeed(LabelService, { text: "hello" }),
-    );
+  test("services from two separate provide(layer) calls are both available to handlers", () => {
+    const app = App.provide(
+      Layer.succeed(CounterService, { value: 1 }),
+    ).provide(Layer.succeed(LabelService, { text: "hello" }));
 
-    app.route(() =>
+    app.run(
       Effect.gen(function* () {
         const counter = yield* CounterService;
         const label = yield* LabelService;
@@ -56,16 +56,16 @@ describe("app building - types", () => {
       Layer.succeed(CounterService, { value: 7 }),
     );
 
-    App.use(selfSufficient);
+    App.provide(selfSufficient);
   });
 
-  test("a layer with unmet deps passed directly to use() is a type error", () => {
+  test("a layer with unmet deps passed directly to provide() is a type error", () => {
     const derivedLayer = Layer.effect(
       LabelService,
       CounterService.pipe(Effect.map((c) => ({ text: `count:${c.value}` }))),
     );
 
     // @ts-expect-error - derivedLayer requires CounterService which is not yet installed
-    App.use(derivedLayer);
+    App.provide(derivedLayer);
   });
 });

@@ -1,4 +1,4 @@
-import { defineMiddleware, Headers } from "@forest-city-vault/nextjs-core";
+import { Headers } from "@forest-city-vault/nextjs-core";
 import { Context, Effect } from "effect";
 
 export const REQUEST_ID_HEADER = "x-request-id";
@@ -20,7 +20,7 @@ export class RequestTrace extends Context.Tag("clover-webhooks/request-trace")<
   RequestTraceEntity
 >() {}
 
-export const RequestTraceMiddleware = defineMiddleware()((next) =>
+export const RequestTraceMiddleware = <A, E, R>(next: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const headers = yield* Headers;
     const requestIdHeader = headers.get(REQUEST_ID_HEADER);
@@ -42,5 +42,4 @@ export const RequestTraceMiddleware = defineMiddleware()((next) =>
       Effect.provideService(RequestTrace, trace),
       Effect.annotateLogs(trace),
     );
-  }),
-);
+  });
