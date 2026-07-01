@@ -4,14 +4,43 @@ import {
   HttpClientRequest,
 } from "@effect/platform";
 import { Schema } from "effect";
+import { makeRequest } from "./make-request";
+import { Effect } from "effect";
 
-const CloverPaymentSchema = Schema.Struct({
+export const CloverPaymentSchema = Schema.Struct({
   id: Schema.String,
-  amount: Schema.Number,
-  tipAmount: Schema.optional(Schema.Number),
+  total: Schema.Number,
   taxAmount: Schema.optional(Schema.Number),
-  result: Schema.optional(Schema.String),
-  order: Schema.optional(Schema.Struct({ id: Schema.String })),
+  discountAmount: Schema.optional(Schema.Number),
+  createdTime: Schema.Number,
+  lineItems: Schema.optional(
+    Schema.Struct({
+      elements: Schema.optional(
+        Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            name: Schema.String,
+            price: Schema.Number,
+            quantity: Schema.Number,
+            note: Schema.optional(Schema.String),
+          }),
+        ),
+      ),
+    }),
+  ),
 });
 
-// export function getCloverPayment();
+export type CloverPayment = typeof CloverPaymentSchema.Type;
+
+export function getCloverPayment(
+  merchantId: string,
+  paymentId: string,
+  accessToken: string,
+) {
+  return makeRequest({
+    method: "GET",
+    path: `/v3/merchants/${merchantId}/payments/${paymentId}`,
+    accessToken,
+    responseSchema: CloverPaymentSchema,
+  });
+}

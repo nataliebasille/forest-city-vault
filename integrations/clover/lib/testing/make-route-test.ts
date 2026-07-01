@@ -5,9 +5,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "@effect/platform";
 
 import { staticClock } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
+import { staticIdGenerator } from "@forest-city-vault/core-id-generator";
 import {
   Database,
   DatabaseError,
@@ -16,10 +18,10 @@ import {
 } from "@forest-city-vault/infrastructure-database";
 
 const MIGRATIONS_FOLDER = fileURLToPath(
-  new URL("../../../../packages/database/drizzle", import.meta.url),
+  new URL("../../../../infrastructure/database/drizzle", import.meta.url),
 );
 
-export type TestDb = ReturnType<typeof drizzle<typeof dbSchema>>;
+export type TestDb = ReturnType<typeof drizzle>;
 
 export interface MakeRouteTestOptions {
   appId?: string;
@@ -46,7 +48,7 @@ export async function makeRouteTest<T>(
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
 
   const client = new PGlite();
-  const testDb = drizzle(client, { schema: dbSchema });
+  const testDb = drizzle(client);
   const dbService: DatabaseService = {
     schema: dbSchema,
     query: (op, opts) =>
@@ -60,7 +62,10 @@ export async function makeRouteTest<T>(
       }),
     transaction: (op, opts) =>
       Effect.tryPromise({
-        try: () => testDb.transaction((tx) => op(tx as never)),
+        try: () =>
+          testDb.transaction((tx) =>
+            Effect.runPromise(op(tx as never) as never),
+          ),
         catch: (cause) =>
           new DatabaseError({
             message: opts?.errorMessage ?? "Transaction failed",
@@ -71,8 +76,13 @@ export async function makeRouteTest<T>(
 
   const testLayer = Layer.mergeAll(
     Layer.succeed(Database, dbService),
-    Layer.succeed(CloverConfig, CloverConfig.make({ appId, webhookAuthCode })),
+    Layer.succeed(
+      CloverConfig,
+      CloverConfig.make({ appId, webhookAuthCode, url: "http://localhost" }),
+    ),
+    FetchHttpClient.layer,
     staticClock(fixedTime),
+    staticIdGenerator("00000000-0000-7000-8000-000000000001"),
   );
 
   mock.module(new URL("../runtime/live.ts", import.meta.url).href, {
@@ -88,7 +98,13 @@ export async function makeRouteTest<T>(
   return {
     db: testDb,
     time: fixedTime,
-    config: { clover: CloverConfig.make({ appId, webhookAuthCode }) },
+    config: {
+      clover: CloverConfig.make({
+        appId,
+        webhookAuthCode,
+        url: "http://localhost",
+      }),
+    },
     module: moduleExported,
   };
 }

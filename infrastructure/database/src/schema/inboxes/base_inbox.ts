@@ -8,6 +8,7 @@ import {
   integer,
   primaryKey,
   index,
+  timestamp,
 } from "drizzle-orm/pg-core";
 import { fcvTable } from "../+helpers";
 import {
@@ -22,8 +23,13 @@ const inboxBaseColumns = {
   idempotencyKey: text("idempotency_key").notNull(),
   status: inboxStatus("status").notNull(),
   attempts: integer("attempts").notNull().default(0),
-  receivedAt: text("received_at").notNull(),
-  processedAt: text("processed_at").notNull(),
+
+  // Time the event occurred (from the provider)
+  occurredAt: timestamp("occurred_at"),
+  // Time the event was received by our system
+  receivedAt: timestamp("received_at").notNull(),
+  // Time the event was processed by our system
+  processedAt: timestamp("processed_at"),
 };
 
 type InboxBaseColumns = typeof inboxBaseColumns;

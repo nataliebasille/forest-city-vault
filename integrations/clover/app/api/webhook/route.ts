@@ -80,28 +80,27 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
         )) {
           for (const cloverEvent of cloverEvents) {
             const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
-            const [eventType, eventId] = cloverEvent.objectId.split(":");
-            const cloverEventRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
+            const [eventType, paymentId] = cloverEvent.objectId.split(":");
+            if (eventType !== "P") continue;
+            const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
               {
-                appId,
                 requestId,
+                status: "received",
+                provider: "clover",
                 idempotencyKey,
-                merchantId,
-                // to do need to fix this so an error is recorded if
-                // event type can't be ingested
-                eventType: eventType as "P",
-                eventId,
-                eventTimestampMs: cloverEvent.ts,
-                changeType: cloverEvent.type,
-                payload: cloverEvent,
+                providerEventId: cloverEvent.objectId,
+                providerObjectId: paymentId,
+                eventType: "payment",
+                occurredAt: new Date(cloverEvent.ts),
+                payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
                 receivedAt,
               };
 
             yield* tx
-              .insert(db.schema.cloverEvents)
-              .values([cloverEventRecord])
+              .insert(db.schema.inboxes.payments.inbox)
+              .values([paymentInboxRecord])
               .onConflictDoNothing({
-                target: db.schema.cloverEvents.idempotencyKey,
+                target: db.schema.inboxes.payments.inbox.idempotencyKey,
               });
           }
         }

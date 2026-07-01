@@ -1,5 +1,5 @@
 {
-  "id": "2652a638-dcc0-4908-a73c-6a6f15c9811c",
+  "id": "220ca500-027c-4b05-8231-622ff5217b89",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -118,15 +118,15 @@
         },
         "received_at": {
           "name": "received_at",
-          "type": "text",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true
         },
         "processed_at": {
           "name": "processed_at",
-          "type": "text",
+          "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "provider": {
           "name": "provider",

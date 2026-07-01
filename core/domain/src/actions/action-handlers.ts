@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import {
-  All_Events_From_EventDefinitions,
   Create_Events_From_EventDefinitions,
   EventDefinitions,
   Update_Events_From_EventDefinitions,

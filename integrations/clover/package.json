@@ -16,6 +16,8 @@
     "@effect/platform": "^0.96.1",
     "@forest-city-vault/core-clock": "workspace:*",
     "@forest-city-vault/core-config": "workspace:*",
+    "@forest-city-vault/core-domain": "workspace:*",
+    "@forest-city-vault/core-id-generator": "workspace:*",
     "@forest-city-vault/infrastructure-database": "workspace:*",
     "@forest-city-vault/domain": "workspace:*",
     "@forest-city-vault/nextjs-core": "workspace:*",

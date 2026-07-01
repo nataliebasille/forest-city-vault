@@ -155,6 +155,31 @@ importers:
         specifier: ^4.22.3
         version: 4.22.3
 
+  core/id-generator:
+    dependencies:
+      effect:
+        specifier: ^3.21.2
+        version: 3.21.2
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.41
+      expect:
+        specifier: ^29.0.0
+        version: 29.7.0
+      expect-type:
+        specifier: ^1.3.0
+        version: 1.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   core/nextjs-effect:
     dependencies:
       effect:
@@ -258,6 +283,12 @@ importers:
       '@forest-city-vault/core-config':
         specifier: workspace:*
         version: link:../../core/config
+      '@forest-city-vault/core-domain':
+        specifier: workspace:*
+        version: link:../../core/domain
+      '@forest-city-vault/core-id-generator':
+        specifier: workspace:*
+        version: link:../../core/id-generator
       '@forest-city-vault/domain':
         specifier: workspace:*
         version: link:../../domain

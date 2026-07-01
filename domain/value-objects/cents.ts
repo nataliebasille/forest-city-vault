@@ -4,7 +4,7 @@ export const CentsSchema = Schema.Number.pipe(
   Schema.int({
     message: () => "Cents must be an integer",
   }),
-  Schema.positive({
-    message: () => "Cents must be a positive number",
+  Schema.nonNegative({
+    message: () => "Cents must be a non-negative number",
   }),
 );

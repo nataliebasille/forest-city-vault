@@ -1,5 +1,6 @@
 CREATE TYPE "public"."inbox_status" AS ENUM('received', 'processed', 'failed', 'dead_letter');--> statement-breakpoint
 CREATE TYPE "public"."payment_provider" AS ENUM('clover');--> statement-breakpoint
+CREATE TYPE "public"."payment_event_type" AS ENUM('payment');--> statement-breakpoint
 CREATE TYPE "public"."sales_source" AS ENUM('clover');--> statement-breakpoint
 CREATE TABLE "fcv_payment_inbox_errors" (
 	"inbox_id" uuid NOT NULL,
@@ -15,12 +16,13 @@ CREATE TABLE "fcv_payment_inbox" (
 	"idempotency_key" text NOT NULL,
 	"status" "inbox_status" NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
-	"received_at" text NOT NULL,
-	"processed_at" text NOT NULL,
+	"occurred_at" timestamp,
+	"received_at" timestamp NOT NULL,
+	"processed_at" timestamp,
 	"provider" "payment_provider" NOT NULL,
 	"provider_event_id" text NOT NULL,
 	"provider_object_id" text NOT NULL,
-	"event_type" text NOT NULL,
+	"event_type" "payment_event_type" NOT NULL,
 	"payload_json" text NOT NULL
 );
 --> statement-breakpoint

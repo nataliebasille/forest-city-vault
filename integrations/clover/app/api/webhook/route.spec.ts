@@ -71,7 +71,7 @@ describe("POST /api/webhooks/clover", () => {
             merchants: {
               merchant_valid: [
                 {
-                  objectId: "ORDER:order_valid_1",
+                  objectId: "P:order_valid_1",
                   type: "CREATE",
                   ts: 1700000001000,
                 },
@@ -91,7 +91,7 @@ describe("POST /api/webhooks/clover", () => {
         merchants: {
           merchant_store: [
             {
-              objectId: "ORDER:order_store_1",
+              objectId: "P:order_store_1",
               type: "CREATE",
               ts: 1700000002000,
             },
@@ -101,17 +101,14 @@ describe("POST /api/webhooks/clover", () => {
 
       await POST(makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }));
 
-      const events = await db.select().from(dbSchema.cloverEvents);
+      const events = await db.select().from(dbSchema.inboxes.payments.inbox);
       const inserted = events.find(
-        (e) =>
-          e.merchantId === "merchant_store" && e.eventId === "order_store_1",
+        (e) => e.providerEventId === "P:order_store_1",
       );
 
       assert.ok(inserted, "Expected event to be stored in the database");
-      assert.equal(inserted.appId, APP_ID);
-      assert.equal(inserted.changeType, "CREATE");
-      assert.equal(inserted.eventType, "ORDER");
-      assert.equal(inserted.eventTimestampMs, 1700000002000);
+      assert.equal(inserted.eventType, "payment");
+      assert.equal(inserted.occurredAt?.getTime(), 1700000002000);
       assert.deepEqual(inserted.receivedAt, FIXED_TIME);
     });
 
@@ -120,11 +117,11 @@ describe("POST /api/webhooks/clover", () => {
         appId: APP_ID,
         merchants: {
           multi_merchant_1: [
-            { objectId: "ORDER:m1_order_1", type: "CREATE", ts: 1700000003000 },
-            { objectId: "ORDER:m1_order_2", type: "UPDATE", ts: 1700000003001 },
+            { objectId: "P:m1_payment_1", type: "CREATE", ts: 1700000003000 },
+            { objectId: "P:m1_payment_2", type: "UPDATE", ts: 1700000003001 },
           ],
           multi_merchant_2: [
-            { objectId: "ITEM:m2_item_1", type: "DELETE", ts: 1700000003002 },
+            { objectId: "P:m2_payment_1", type: "DELETE", ts: 1700000003002 },
           ],
         },
       };
@@ -134,11 +131,13 @@ describe("POST /api/webhooks/clover", () => {
       );
       assert.equal(response.status, 200);
 
-      const events = await db.select().from(dbSchema.cloverEvents);
-      const batchEvents = events.filter((e) =>
-        e.merchantId.startsWith("multi_merchant"),
+      const events = await db.select().from(dbSchema.inboxes.payments.inbox);
+      const inserted = events.filter((e) =>
+        ["P:m1_payment_1", "P:m1_payment_2", "P:m2_payment_1"].includes(
+          e.providerEventId,
+        ),
       );
-      assert.equal(batchEvents.length, 3);
+      assert.equal(inserted.length, 3);
     });
 
     test("is idempotent for duplicate payloads with the same idempotency key", async () => {
@@ -147,7 +146,7 @@ describe("POST /api/webhooks/clover", () => {
         merchants: {
           merchant_idempotent: [
             {
-              objectId: "ORDER:order_idempotent",
+              objectId: "P:order_idempotent",
               type: "CREATE",
               ts: 1700000004000,
             },
@@ -162,11 +161,9 @@ describe("POST /api/webhooks/clover", () => {
       assert.equal(response1.status, 200);
       assert.equal(response2.status, 200);
 
-      const events = await db.select().from(dbSchema.cloverEvents);
+      const events = await db.select().from(dbSchema.inboxes.payments.inbox);
       const deduplicated = events.filter(
-        (e) =>
-          e.merchantId === "merchant_idempotent" &&
-          e.eventId === "order_idempotent",
+        (e) => e.providerEventId === "P:order_idempotent",
       );
       assert.equal(
         deduplicated.length,
