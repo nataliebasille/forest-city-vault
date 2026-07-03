@@ -145,6 +145,7 @@ function makeTestEventStore() {
       calls.push({ aggType, fromAgg, events });
       return Effect.succeed(undefined as void);
     },
+    save: () => Effect.succeed(undefined as void),
     read: () => Effect.succeed([]),
   };
   return { store, calls };

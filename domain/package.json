@@ -6,7 +6,8 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./sales/sale.events": "./sales/sale.events.ts"
   },
   "dependencies": {
     "@forest-city-vault/core-domain": "workspace:*",

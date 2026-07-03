@@ -237,6 +237,12 @@ importers:
       '@forest-city-vault/core-config':
         specifier: workspace:*
         version: link:../../core/config
+      '@forest-city-vault/core-domain':
+        specifier: workspace:*
+        version: link:../../core/domain
+      '@forest-city-vault/domain':
+        specifier: workspace:*
+        version: link:../../domain
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(@electric-sql/pglite@0.4.6)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)

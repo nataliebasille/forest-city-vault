@@ -1,20 +1,11 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { route } from "@/runtime";
-import { EventStore } from "@forest-city-vault/core-domain";
 import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
 import {
-  dbSchema,
   drain,
-  tryDb,
-  type SapphoDatabase,
 } from "@forest-city-vault/infrastructure-database";
 import { getCloverPayment } from "@/lib/integration/payments";
 import { Effect, Schema } from "effect";
-
-const NoopEventStore: EventStore.Service = {
-  append: () => Effect.void,
-  read: () => Effect.succeed([]),
-};
 
 const PaymentPayloadSchema = Schema.Struct({
   merchantId: Schema.String,
@@ -29,9 +20,11 @@ export const POST = route(() =>
     yield* drain({
       inbox: "payments",
       requestId: (yield* RequestTrace).requestId,
-      action: (sql, message) =>
+      action: (_sql, message) =>
         Effect.gen(function* () {
-          const { merchantId } = yield* decodePaymentPayload(message.payloadJson);
+          const { merchantId } = yield* decodePaymentPayload(
+            message.payloadJson,
+          );
 
           const accessToken = process.env.CLOVER_ACCESS_TOKEN || "";
 
@@ -48,16 +41,17 @@ export const POST = route(() =>
             payment: {
               merchantId,
               paymentId: message.providerObjectId,
-              timestamp: new Date(cloverPayment.createdTime).toISOString(),
+              timestamp: new Date(cloverPayment.createdTime),
             },
             items: saleItems,
           };
 
-          const sale = yield* Sales.actions
-            .fromCloverPayment(newSale, actionPayload)
-            .pipe(Effect.provideService(EventStore, NoopEventStore));
+          const sale = yield* Sales.actions.fromCloverPayment(
+            newSale,
+            actionPayload,
+          );
 
-          yield* persistSale(sql, sale);
+          yield* Sales.repository.save(sale);
         }),
     });
 
@@ -65,60 +59,13 @@ export const POST = route(() =>
   }),
 );
 
-function persistSale(
-  sql: SapphoDatabase,
-  sale: { id: string; snapshot: typeof Sales.schema.Type },
-) {
-  return Effect.gen(function* () {
-    const saleTimestamp = new Date();
-    const saleRow: typeof dbSchema.sales.$inferInsert = {
-      id: sale.id,
-      source: sale.snapshot.source.provider,
-      cloverMerchantId: sale.snapshot.source.merchantId,
-      cloverPaymentId: sale.snapshot.source.paymentId,
-      occurredAt: sale.snapshot.recordedAt,
-      subtotalCents: BigInt(sale.snapshot.subtotal ?? 0),
-      taxCents: BigInt(sale.snapshot.tax ?? 0),
-      discountCents: BigInt(sale.snapshot.discount ?? 0),
-      totalCents: BigInt(sale.snapshot.total ?? 0),
-      createdAt: saleTimestamp,
-      updatedAt: saleTimestamp,
-    };
-
-    const lineItemRows = yield* Effect.forEach(sale.snapshot.items, (item) =>
-      Effect.gen(function* () {
-        return {
-          id: crypto.randomUUID(),
-          saleId: sale.id,
-          vendorId: null,
-          name: item.name,
-          quantity: BigInt(item.quantity),
-          grossAmountCents: BigInt(item.grossAmount),
-          discountAmountCents: BigInt(item.discountAmount),
-          netAmountCents: BigInt(item.netAmount),
-          cloverItemId: null,
-          createdAt: saleTimestamp,
-          updatedAt: saleTimestamp,
-        } satisfies typeof dbSchema.salesLineItems.$inferInsert;
-      }),
-    );
-
-    yield* tryDb(() => sql.insert(dbSchema.sales).values([saleRow]));
-    if (lineItemRows.length > 0) {
-      yield* tryDb(() => sql.insert(dbSchema.salesLineItems).values(lineItemRows));
-    }
-  });
-}
-
 function mapCloverPaymentToSaleItems(
-  payment: typeof getCloverPayment extends (...args: any[]) => Effect.Effect<
-    infer T,
-    any,
-    any
-  >
+  payment: typeof getCloverPayment extends (
+    ...args: any[]
+  ) => Effect.Effect<infer T, any, any>
     ? T
     : never,
-): typeof FromCloverPaymentSchema.Type["items"] {
+): (typeof FromCloverPaymentSchema.Type)["items"] {
   const lineItems = payment.lineItems?.elements ?? [];
 
   if (lineItems.length === 0) {
