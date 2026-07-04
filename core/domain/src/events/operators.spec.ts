@@ -22,9 +22,8 @@ const CounterIncrementedSchema = Schema.Struct({
   by: Schema.Number,
 });
 
-const Counter = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const Counter = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: {
     CounterCreated: {
@@ -63,12 +62,6 @@ type EnsureAgg<AggType> =
   >
     ? AggregateType<IdSchema, Name, Schema, Events, Actions>
     : never;
-
-const x = function <AggType>(T: AggType & EnsureAgg<AggType>) {
-  return T;
-};
-
-const y = x(Counter);
 
 // ─── Functional tests ─────────────────────────────────────────────────────────
 
@@ -256,9 +249,8 @@ describe("applyEvents - typing", () => {
   });
 
   it("wrong aggregate type in instance position is rejected at compile time", () => {
-    const OtherCounter = defineAggregateType({
-      idType: Schema.String,
-      name: "OtherCounter",
+    const OtherCounter = defineAggregateType("OtherCounter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         CounterCreated: {

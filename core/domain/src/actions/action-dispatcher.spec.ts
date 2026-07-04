@@ -33,9 +33,8 @@ const CounterIncrementedSchema = Schema.Struct({
 // standalone consts) because ActionDefinitions expects generic function types
 // <Payload, E, R>(...) — a concrete function signature inferred from a
 // standalone const is not assignable to that polymorphic shape.
-const CreateOnlyAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const CreateOnlyAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: {
     CounterCreated: {
@@ -54,9 +53,8 @@ const CreateOnlyAgg = defineAggregateType({
   },
 });
 
-const UpdateOnlyAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const UpdateOnlyAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: {
     CounterIncremented: {
@@ -75,9 +73,8 @@ const UpdateOnlyAgg = defineAggregateType({
   },
 });
 
-const BothAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const BothAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: {
     CounterCreated: {
@@ -227,9 +224,8 @@ describe("createActionDispatchers - functional", () => {
 
   it("passes only payload (not snapshot) to a create action handler", () => {
     const calls: unknown[] = [];
-    const Agg = defineAggregateType({
-      idType: Schema.String,
-      name: "Counter",
+    const Agg = defineAggregateType("Counter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         Created: {
@@ -255,9 +251,8 @@ describe("createActionDispatchers - functional", () => {
 
   it("passes snapshot and payload to an update action handler", () => {
     const calls: unknown[] = [];
-    const Agg = defineAggregateType({
-      idType: Schema.String,
-      name: "Counter",
+    const Agg = defineAggregateType("Counter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         Incremented: {
@@ -325,9 +320,8 @@ describe("createActionDispatchers - functional", () => {
   });
 
   it("handles an action that returns an array of events", () => {
-    const Agg = defineAggregateType({
-      idType: Schema.String,
-      name: "Counter",
+    const Agg = defineAggregateType("Counter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         CounterCreated: {

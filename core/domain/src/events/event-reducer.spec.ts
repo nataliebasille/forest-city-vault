@@ -56,25 +56,22 @@ const updateOnlyEvents = {
   },
 };
 
-const BothAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const BothAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: bothEvents,
   actions: {},
 });
 
-const CreateOnlyAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const CreateOnlyAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: createOnlyEvents,
   actions: {},
 });
 
-const UpdateOnlyAgg = defineAggregateType({
-  idType: Schema.String,
-  name: "Counter",
+const UpdateOnlyAgg = defineAggregateType("Counter", {
+  id: Schema.String,
   schema: CounterSchema,
   events: updateOnlyEvents,
   actions: {},
@@ -179,9 +176,8 @@ describe("createReducer - functional", () => {
 
   it("passes only the payload (not snapshot) to a create handler", () => {
     const calls: unknown[] = [];
-    const Agg = defineAggregateType({
-      idType: Schema.String,
-      name: "Counter",
+    const Agg = defineAggregateType("Counter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         Created: {
@@ -204,9 +200,8 @@ describe("createReducer - functional", () => {
 
   it("passes snapshot and payload to an update handler", () => {
     const calls: unknown[] = [];
-    const Agg = defineAggregateType({
-      idType: Schema.String,
-      name: "Counter",
+    const Agg = defineAggregateType("Counter", {
+      id: Schema.String,
       schema: CounterSchema,
       events: {
         Updated: {

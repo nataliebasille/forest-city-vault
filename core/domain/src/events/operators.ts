@@ -50,7 +50,13 @@ export function applyEvents<AT>(
 ): AggregateRoot_MaterializedVariant<AggregateType_GetInstance<AT>>;
 
 export function applyEvents<AggType>(
-  Type: AggType & EnsureAggregateType<AggType>,
+  Type: AggType &
+    EnsureAggregateType<AggType> & {
+      reducer: (
+        instance: AggregateType_GetInstance<AggType>,
+        event: AggregateType_GetEvents<AggType>,
+      ) => AggregateType_GetInstance<AggType>;
+    },
   instance: AggregateType_GetInstance<AggType>,
   events: AggregateType_GetEvents<AggType>[],
 ) {
