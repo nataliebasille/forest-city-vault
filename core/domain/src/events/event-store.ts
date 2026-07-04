@@ -1,6 +1,5 @@
 import { Context, Data, Effect, Layer } from "effect";
 import { AggregateEvent } from "./event";
-import { AnyAggregateRoot } from "../aggregates/aggregate-root";
 
 export class ConcurrencyError extends Data.TaggedError(
   "core/domain/EventStore/ConcurrencyError",
@@ -62,22 +61,16 @@ export namespace EventStorePersistence {
   };
 }
 
-type PendingStream = {
-  baseVersion: number;
-  events: AggregateEvent<string, unknown>[];
-};
-
-const streamKey = (aggType: string, aggId: string) => `${aggType}:${aggId}`;
-
 export class EventStore extends Context.Tag("core/domain/EventStore")<
   EventStore,
   EventStore.Service
 >() {
   /**
-   * Builds the {@link EventStore} layer. The returned event store stages
-   * appended events per aggregate in memory until the aggregate is saved via
-   * its repository, at which point the buffered events are versioned, handed to
-   * the given {@link EventStorePersistence} for durable storage, and drained.
+   * Builds the {@link EventStore} layer. The event store is purely a durable
+   * append log: {@link EventStore.Service.append} assigns sequential versions to
+   * the given events (starting after `baseVersion`) and hands them to the
+   * {@link EventStorePersistence} port. Staging of applied events and
+   * concurrency detection live in the {@link EventTracker}.
    */
   static make<E = never, RIn = never>(
     persistenceLayer: Layer.Layer<EventStorePersistence, E, RIn>,
@@ -86,77 +79,26 @@ export class EventStore extends Context.Tag("core/domain/EventStore")<
       EventStore,
       Effect.gen(function* () {
         const persistence = yield* EventStorePersistence;
-        const pendingStreams = new Map<string, PendingStream>();
 
         return {
-          append: (aggType, fromAgg, events) =>
+          append: (aggType, aggId, baseVersion, events) =>
             Effect.gen(function* () {
-              const aggId = String(fromAgg.id);
-              const key = streamKey(aggType, aggId);
-              const existing = pendingStreams.get(key);
-
-              if (!existing) {
-                pendingStreams.set(key, {
-                  baseVersion: fromAgg.version,
-                  events: [...events],
-                });
-
+              if (events.length === 0) {
                 return;
               }
 
-              const expectedVersion =
-                existing.baseVersion + existing.events.length;
-              if (fromAgg.version !== expectedVersion) {
-                return yield* Effect.fail(
-                  new ConcurrencyError({
-                    aggType,
-                    aggId,
-                    expectedVersion,
-                    actualVersion: fromAgg.version,
-                  }),
-                );
-              }
-
-              existing.events.push(...events);
-            }),
-
-          save: (aggType, aggregate) =>
-            Effect.gen(function* () {
-              const aggId = String(aggregate.id);
-              const key = streamKey(aggType, aggId);
-              const pending = pendingStreams.get(key);
-
-              if (!pending || pending.events.length === 0) {
-                return;
-              }
-
-              const expectedVersion =
-                pending.baseVersion + pending.events.length;
-              if (aggregate.version !== expectedVersion) {
-                return yield* Effect.fail(
-                  new ConcurrencyError({
-                    aggType,
-                    aggId,
-                    expectedVersion,
-                    actualVersion: aggregate.version,
-                  }),
-                );
-              }
-
-              const persistedEvents = pending.events.map(
+              const persistedEvents = events.map(
                 (event, index) =>
                   ({
                     aggregateType: aggType,
                     aggregateId: aggId,
-                    version: pending.baseVersion + index + 1,
+                    version: baseVersion + index + 1,
                     type: event.type,
                     payload: event.payload,
                   }) satisfies PersistedEvent,
               );
 
               yield* persistence.persist(persistedEvents);
-
-              pendingStreams.delete(key);
             }),
 
           read: (aggType, aggId) =>
@@ -187,14 +129,10 @@ export namespace EventStore {
   export type Service = {
     append: (
       aggType: string,
-      fromAgg: AnyAggregateRoot,
-      events: AggregateEvent<string, any>[],
-    ) => Effect.Effect<void, ConcurrencyError | UnknownEventStoreError>;
-
-    save: (
-      aggType: string,
-      aggregate: AnyAggregateRoot,
-    ) => Effect.Effect<void, ConcurrencyError | UnknownEventStoreError>;
+      aggId: string,
+      baseVersion: number,
+      events: readonly AggregateEvent<string, any>[],
+    ) => Effect.Effect<void, UnknownEventStoreError>;
 
     read: (
       aggType: string,

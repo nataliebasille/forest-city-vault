@@ -13,7 +13,7 @@ import {
   type AggregateType_GetId,
   type AggregateType_GetActionDefinitions,
 } from "../aggregate-type-factory";
-import { EventStore } from "../events/event-store";
+import { EventTracker } from "../events/event-tracker";
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ const bothMaterialized: MaterializedAggregateRoot<
   snapshot: { count: 10 },
 };
 
-// ─── EventStore test helper ───────────────────────────────────────────────────
+// ─── EventTracker test helper ─────────────────────────────────────────────────
 
 type AppendCall = {
   aggType: string;
@@ -140,22 +140,22 @@ type AppendCall = {
 
 function makeTestEventStore() {
   const calls: AppendCall[] = [];
-  const store: EventStore.Service = {
-    append: (aggType, fromAgg, events) => {
-      calls.push({ aggType, fromAgg, events });
+  const store: EventTracker.Service = {
+    track: (aggType, fromAgg, events) => {
+      calls.push({ aggType, fromAgg, events: [...events] });
       return Effect.succeed(undefined as void);
     },
-    save: () => Effect.succeed(undefined as void),
-    read: () => Effect.succeed([]),
+    drain: () => Effect.succeed(undefined),
+    peek: () => Effect.succeed([]),
   };
   return { store, calls };
 }
 
 function runWithStore<A>(
-  effect: Effect.Effect<A, unknown, EventStore>,
-  store: EventStore.Service,
+  effect: Effect.Effect<A, unknown, EventTracker>,
+  store: EventTracker.Service,
 ): A {
-  return Effect.runSync(Effect.provideService(effect, EventStore, store));
+  return Effect.runSync(Effect.provideService(effect, EventTracker, store));
 }
 
 // ─── Functional tests ─────────────────────────────────────────────────────────

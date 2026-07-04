@@ -7,7 +7,10 @@ import {
   WithAggregateMetadata,
 } from "../aggregate-type-factory";
 import { MaterializedAggregateRoot } from "../aggregates/aggregate-root";
+import { AggregateEvent } from "../events/event";
 import { EventStore } from "../events/event-store";
+import { EventTracker } from "../events/event-tracker";
+import { Reducer } from "../events/events.internal";
 
 export class AggregateNotFoundError extends Data.TaggedError(
   "core/domain/Repository/AggregateNotFoundError",
@@ -78,7 +81,7 @@ export namespace Repository {
         AggregateType_GetSnapshot<M>
       >,
       AggregateNotFoundError | RepositoryError,
-      ServiceIdentifier<AggregateType_GetName<M>>
+      ServiceIdentifier<AggregateType_GetName<M>> | EventTracker
     >;
 
     readonly save: (
@@ -89,28 +92,79 @@ export namespace Repository {
     ) => Effect.Effect<
       void,
       RepositoryError,
-      ServiceIdentifier<AggregateType_GetName<M>>
+      ServiceIdentifier<AggregateType_GetName<M>> | EventTracker
     >;
   };
 }
 
 export function createRepository<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
->(name: AggregateType_GetName<M>): Repository.Definition<M> {
+>(
+  name: AggregateType_GetName<M>,
+  reducer: Reducer<M>,
+): Repository.Definition<M> {
   const RepositoryTag = Context.GenericTag<
     Repository.ServiceIdentifier<AggregateType_GetName<M>>,
-    Repository.Service<M>
+    TrackedService
   >(`core/domain/Repository/${name}`);
 
-  const withEventStore = (
+  type Materialized = MaterializedAggregateRoot<
+    AggregateType_GetId<M>,
+    AggregateType_GetSnapshot<M>
+  >;
+
+  // The service held by the repository tag. Unlike the caller-supplied backing
+  // service, its methods resolve the {@link EventTracker} at call time (rather
+  // than capturing one when the layer is built), so each unit of work — e.g. a
+  // commit scope — replays and drains its own per-request tracker instance.
+  type TrackedService = {
+    getById: (
+      id: AggregateType_GetId<M>,
+    ) => Effect.Effect<
+      Materialized,
+      AggregateNotFoundError | RepositoryError,
+      EventTracker
+    >;
+    save: (
+      aggregate: Materialized,
+    ) => Effect.Effect<void, RepositoryError, EventTracker>;
+  };
+
+  // Erases the reducer's create/update union: tracked events are drained as a
+  // generic list, so they are replayed with the same fold applyEvents uses.
+  const foldTrackedEvents = reducer as (
+    agg: Materialized,
+    event: AggregateEvent<string, unknown>,
+  ) => Materialized;
+
+  const withEventTracking = (
     service: Repository.Service<M>,
     eventStore: EventStore.Service,
-  ): Repository.Service<M> => ({
-    ...service,
+  ): TrackedService => ({
+    getById: (id) =>
+      Effect.gen(function* () {
+        const aggregate = yield* service.getById(id);
+        const tracker = yield* EventTracker;
+        const tracked = yield* tracker.peek(name, String(id));
+
+        return tracked.reduce(foldTrackedEvents, aggregate);
+      }),
+
     save: (aggregate) =>
       Effect.gen(function* () {
         yield* service.save(aggregate);
-        yield* eventStore.save(name, aggregate);
+
+        const tracker = yield* EventTracker;
+        const drained = yield* tracker.drain(name, String(aggregate.id));
+
+        if (drained && drained.events.length > 0) {
+          yield* eventStore.append(
+            name,
+            String(aggregate.id),
+            drained.baseVersion,
+            drained.events,
+          );
+        }
       }).pipe(
         Effect.mapError((error) =>
           error instanceof RepositoryError
@@ -157,7 +211,7 @@ export function createRepository<
           ? yield* serviceOrEffect
           : serviceOrEffect;
 
-        return withEventStore(service, eventStore);
+        return withEventTracking(service, eventStore);
       }),
     );
   }
