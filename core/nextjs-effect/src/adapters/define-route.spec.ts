@@ -14,7 +14,7 @@ import {
   notFound,
   noContent,
 } from "../http/http-result";
-import { defineRoute } from "./define-route";
+import { defineRoute, testRoute } from "./define-route";
 
 // ---------------------------------------------------------------------------
 // Test services
@@ -38,9 +38,9 @@ const mockRequest = (url = "http://localhost/test") => new NextRequest(url);
 
 describe("app.route - types", () => {
   test("yield* unprovided Dep in route handler is a type error", () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 1 })),
-    );
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 1 }),
+    });
     // @ts-expect-error - LabelService is not provided by the app
     route((_req: NextRequest) =>
       Effect.gen(function* () {
@@ -50,18 +50,20 @@ describe("app.route - types", () => {
   });
 
   test("route return type is Promise<Response>", () => {
-    const routeFn = defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => Effect.succeed(123));
+    const routeFn = defineRoute({ layer: Layer.empty })(() =>
+      Effect.succeed(123),
+    );
     expectTypeOf<ReturnType<typeof routeFn>>().toEqualTypeOf<
       Promise<Response>
     >();
   });
 
   test("route return type is always Promise<Response> regardless of middleware", () => {
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) =>
-      next.pipe(Effect.map(() => "transformed" as const)),
-    );
+    const route = defineRoute({
+      layer: Layer.empty,
+      middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
+        next.pipe(Effect.map(() => "transformed" as const)),
+    });
     const routeFn = route(() => Effect.succeed("handled" as const));
     expectTypeOf<ReturnType<typeof routeFn>>().toEqualTypeOf<
       Promise<Response>
@@ -69,20 +71,20 @@ describe("app.route - types", () => {
   });
 
   test("handler requiring an unprovided service is a type error", () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 1 })),
-    );
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 1 }),
+    });
     // @ts-expect-error - LabelService is not provided by the app
     route(() => LabelService.pipe(Effect.map((l) => l.text)));
   });
 
   test("handler with a non-HttpFailure error channel is allowed", () => {
-    const route = defineRoute(Effect.provide(Layer.empty));
+    const route = defineRoute({ layer: Layer.empty });
     route(() => Effect.fail(new Error("oops")));
   });
 
   test("handler with HttpFailure error channel is not a type error", () => {
-    const route = defineRoute(Effect.provide(Layer.empty));
+    const route = defineRoute({ layer: Layer.empty });
     // HttpFailure is the allowed error type - no @ts-expect-error needed
     route(() => httpFailure(422, "unprocessable"));
   });
@@ -94,15 +96,15 @@ describe("app.route - types", () => {
 
 describe("app.route - runtime", () => {
   test("resolves with handler value", async () => {
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) => next);
+    const route = defineRoute({ layer: Layer.empty });
     const response = await route(() => Effect.succeed("ok"))(mockRequest());
     expect(await response.json()).toBe("ok");
   });
 
-  test("service provided via use() is accessible in route handler", async () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 55 })),
-    );
+  test("service provided via layer is accessible in route handler", async () => {
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 55 }),
+    });
     const response = await route(() =>
       CounterService.pipe(Effect.map((c) => c.value)),
     )(mockRequest());
@@ -110,9 +112,9 @@ describe("app.route - runtime", () => {
   });
 
   test("yield* Dep resolves the service value at runtime", async () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 21 })),
-    );
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 21 }),
+    });
     const response = await route(() =>
       Effect.gen(function* () {
         const counter = yield* CounterService;
@@ -123,12 +125,12 @@ describe("app.route - runtime", () => {
   });
 
   test("yield* multiple Deps resolves all service values", async () => {
-    const route = defineRoute(
-      compose(
-        Effect.provide(Layer.succeed(CounterService, { value: 7 })),
-        Effect.provide(Layer.succeed(LabelService, { text: "hello" })),
+    const route = defineRoute({
+      layer: Layer.merge(
+        Layer.succeed(CounterService, { value: 7 }),
+        Layer.succeed(LabelService, { text: "hello" }),
       ),
-    );
+    });
 
     const response = await route(() =>
       Effect.gen(function* () {
@@ -142,14 +144,16 @@ describe("app.route - runtime", () => {
 
   test("middleware wraps route handler", async () => {
     const order: string[] = [];
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) =>
-      Effect.gen(function* () {
-        order.push("before");
-        const r = yield* next;
-        order.push("after");
-        return r;
-      }),
-    );
+    const route = defineRoute({
+      layer: Layer.empty,
+      middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
+        Effect.gen(function* () {
+          order.push("before");
+          const r = yield* next;
+          order.push("after");
+          return r;
+        }),
+    });
     await route(() => Effect.sync(() => order.push("handler")))(mockRequest());
     expect(order).toEqual(["before", "handler", "after"]);
   });
@@ -169,7 +173,10 @@ describe("app.route - runtime", () => {
           return r;
         });
 
-    const route = defineRoute(compose(m("A"), m("B")));
+    const route = defineRoute({
+      layer: Layer.empty,
+      middleware: compose(m("A"), m("B")),
+    });
     await route(() => Effect.sync(() => order.push("handler")))(mockRequest());
     expect(order).toEqual(["B:in", "A:in", "handler", "A:out", "B:out"]);
   });
@@ -182,7 +189,7 @@ describe("app.route - runtime", () => {
       },
     });
 
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) => next);
+    const route = defineRoute({ layer: Layer.empty });
     const response = await route(() =>
       Effect.gen(function* () {
         const headers = yield* Headers;
@@ -203,60 +210,141 @@ describe("app.route - runtime", () => {
 });
 
 // ---------------------------------------------------------------------------
+// testRoute - dependency override
+// ---------------------------------------------------------------------------
+
+describe("app.route - testRoute overrides", () => {
+  test("testRoute overrides the layer value in the handler", async () => {
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 1 }),
+    });
+    const POST = route(() => CounterService.pipe(Effect.map((c) => c.value)));
+
+    const response = await testRoute(POST, {
+      layer: Layer.succeed(CounterService, { value: 999 }),
+    })(mockRequest());
+
+    expect(await response.json()).toBe(999);
+  });
+
+  test("testRoute does not build the production layer", async () => {
+    let realBuilt = false;
+    const RealCounter = Layer.effect(
+      CounterService,
+      Effect.sync(() => {
+        realBuilt = true;
+        return { value: 1 };
+      }),
+    );
+
+    const route = defineRoute({ layer: RealCounter });
+    const POST = route(() => CounterService.pipe(Effect.map((c) => c.value)));
+
+    const response = await testRoute(POST, {
+      layer: Layer.succeed(CounterService, { value: 42 }),
+    })(mockRequest());
+
+    expect(await response.json()).toBe(42);
+    expect(realBuilt).toBe(false);
+  });
+
+  test("production call still builds the real layer", async () => {
+    let realBuilt = false;
+    const RealCounter = Layer.effect(
+      CounterService,
+      Effect.sync(() => {
+        realBuilt = true;
+        return { value: 7 };
+      }),
+    );
+
+    const route = defineRoute({ layer: RealCounter });
+    const POST = route(() => CounterService.pipe(Effect.map((c) => c.value)));
+
+    const response = await POST(mockRequest());
+
+    expect(await response.json()).toBe(7);
+    expect(realBuilt).toBe(true);
+  });
+
+  test("testRoute preserves middleware behavior", async () => {
+    const order: string[] = [];
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 1 }),
+      middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
+        Effect.gen(function* () {
+          order.push("before");
+          const r = yield* next;
+          order.push("after");
+          return r;
+        }),
+    });
+    const POST = route(() => CounterService.pipe(Effect.map((c) => c.value)));
+
+    const response = await testRoute(POST, {
+      layer: Layer.succeed(CounterService, { value: 5 }),
+    })(mockRequest());
+
+    expect(await response.json()).toBe(5);
+    expect(order).toEqual(["before", "after"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // HttpFailure tests
 // ---------------------------------------------------------------------------
 
 describe("app.route - HttpFailure", () => {
   test("HttpFailure is converted to a Response with correct status", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => httpFailure(422, "unprocessable"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      httpFailure(422, "unprocessable"),
+    )(mockRequest());
     expect(response.status).toBe(422);
   });
 
   test("HttpFailure response body contains the error message", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => httpFailure(500, "internal error"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      httpFailure(500, "internal error"),
+    )(mockRequest());
     expect(await response.json()).toEqual({ error: "internal error" });
   });
 
   test("badRequest produces a 400 response", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => badRequest("bad input"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      badRequest("bad input"),
+    )(mockRequest());
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "bad input" });
   });
 
   test("unauthorized produces a 401 response", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => unauthorized("not authenticated"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      unauthorized("not authenticated"),
+    )(mockRequest());
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "not authenticated" });
   });
 
   test("forbidden produces a 403 response", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => forbidden("access denied"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      forbidden("access denied"),
+    )(mockRequest());
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "access denied" });
   });
 
   test("notFound produces a 404 response", async () => {
-    const response = await defineRoute(
-      <A, E, R>(next: Effect.Effect<A, E, R>) => next,
-    )(() => notFound("resource missing"))(mockRequest());
+    const response = await defineRoute({ layer: Layer.empty })(() =>
+      notFound("resource missing"),
+    )(mockRequest());
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "resource missing" });
   });
 
   test("HttpFailure from a service is caught and converted to a Response", async () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 0 })),
-    );
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 0 }),
+    });
     const response = await route(() =>
       Effect.gen(function* () {
         const counter = yield* CounterService;
@@ -269,7 +357,7 @@ describe("app.route - HttpFailure", () => {
   });
 
   test("successful handler result is wrapped in a JSON response", async () => {
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) => next);
+    const route = defineRoute({ layer: Layer.empty });
     const response = await route(() => Effect.succeed("all good"))(
       mockRequest(),
     );
@@ -284,21 +372,21 @@ describe("app.route - HttpFailure", () => {
 
 describe("app.route - noContent", () => {
   test("noContent produces a 204 response", async () => {
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) => next);
+    const route = defineRoute({ layer: Layer.empty });
     const response = await route(() => noContent())(mockRequest());
     expect(response.status).toBe(204);
   });
 
   test("noContent response has no body", async () => {
-    const route = defineRoute(<A, E, R>(next: Effect.Effect<A, E, R>) => next);
+    const route = defineRoute({ layer: Layer.empty });
     const response = await route(() => noContent())(mockRequest());
     expect(response.body).toBeNull();
   });
 
   test("noContent from a service is returned correctly", async () => {
-    const route = defineRoute(
-      Effect.provide(Layer.succeed(CounterService, { value: 0 })),
-    );
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 0 }),
+    });
     const response = await route(() =>
       Effect.gen(function* () {
         const counter = yield* CounterService;

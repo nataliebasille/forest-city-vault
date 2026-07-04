@@ -7,8 +7,7 @@ import {
   RepositoriesLive,
 } from "@forest-city-vault/infrastructure-database";
 import { defineRoute } from "@forest-city-vault/nextjs-core";
-import { Effect, Layer } from "effect";
-import { compose } from "effect/Function";
+import { Layer } from "effect";
 import { RequestTraceMiddleware } from "./middleware/request-trace";
 
 export const AppLive = Layer.mergeAll(
@@ -20,6 +19,7 @@ export const AppLive = Layer.mergeAll(
   RepositoriesLive,
 ).pipe(Layer.orDie);
 
-export const route = defineRoute(
-  compose(Effect.provide(AppLive), RequestTraceMiddleware),
-);
+export const route = defineRoute({
+  layer: AppLive,
+  middleware: RequestTraceMiddleware,
+});
