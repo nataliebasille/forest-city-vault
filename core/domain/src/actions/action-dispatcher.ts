@@ -14,11 +14,8 @@ import {
   PristineAggregateRoot,
 } from "../aggregates/aggregate-root";
 import { Reducer } from "../events/events.internal";
-import {
-  ConcurrencyError,
-  EventStore,
-  UnknownEventStoreError,
-} from "../events/event-store";
+import { ConcurrencyError } from "../events/event-store";
+import { EventTracker } from "../events/event-tracker";
 
 type ActionDispatchEffect<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
@@ -29,8 +26,8 @@ type ActionDispatchEffect<
     AggregateType_GetId<M>,
     AggregateType_GetSnapshot<M>
   >,
-  E | ConcurrencyError | UnknownEventStoreError,
-  EventStore | R
+  E | ConcurrencyError,
+  EventTracker | R
 >;
 
 export type InitializingActionDispatcher<
@@ -105,8 +102,8 @@ export function createActionDispatchers<
 
             const nextAgg = eventsToApply.reduce(reduceEvents, agg);
 
-            const eventStore = yield* EventStore;
-            yield* eventStore.append(name, agg, eventsToApply);
+            const tracker = yield* EventTracker;
+            yield* tracker.track(name, agg, eventsToApply);
 
             return nextAgg;
           }),

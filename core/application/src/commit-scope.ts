@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { EventTracker } from "@forest-city-vault/core-domain";
 import { Transactor } from "./transactor";
 
 /**
@@ -12,17 +13,26 @@ import { Transactor } from "./transactor";
  * - the effect **fails or dies** → the scope rolls back and the original typed
  *   error/defect is re-raised unchanged.
  *
+ * The scope also provides a fresh, per-request {@link EventTracker}: the events
+ * applied to aggregates within this unit of work are staged in a tracker that is
+ * private to this scope and discarded when it ends. Because a new tracker is
+ * built for each call, concurrent commit scopes never see each other's staged
+ * events, and any events left undrained (e.g. after a rollback) cannot leak into
+ * a later request.
+ *
  * @example
  * ```ts
  * const program = withCommitScope(
  *   Effect.gen(function* () {
- *     const eventStore = yield* EventStore;
- *     yield* eventStore.append("sale", sale, events);
- *     yield* eventStore.save("sale", sale);
- *     return sale.id;
+ *     // repository saves, event appends and ad-hoc queries run here and
+ *     // commit (or roll back) as a single unit, tracking events on this
+ *     // scope's own EventTracker
+ *     return yield* doTransactionalWork();
  *   }),
  * );
  * ```
  */
 export const withCommitScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.flatMap(Transactor, (transactor) => transactor.transaction(effect));
+  Effect.flatMap(Transactor, (transactor) =>
+    transactor.transaction(Effect.provide(effect, EventTracker.make)),
+  );

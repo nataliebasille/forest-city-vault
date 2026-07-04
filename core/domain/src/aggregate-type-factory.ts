@@ -174,7 +174,10 @@ export function defineAggregateType<
         version: 0,
       }) satisfies PristineAggregateRoot<AggId>,
     reducer,
-    repository: createRepository<WithAggregateMetadata<Metadata>>(name),
+    repository: createRepository<WithAggregateMetadata<Metadata>>(
+      name,
+      reducer,
+    ),
   } as const);
 
   return runtime as typeof runtime & {

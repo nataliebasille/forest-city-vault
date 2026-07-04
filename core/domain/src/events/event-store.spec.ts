@@ -1,9 +1,7 @@
 import { describe, it } from "node:test";
 import { Effect, Layer } from "effect";
 import { expect } from "expect";
-import { AnyAggregateRoot } from "../aggregates/aggregate-root";
 import {
-  ConcurrencyError,
   EventStore,
   EventStorePersistence,
   StreamNotFoundError,
@@ -13,9 +11,6 @@ import {
 import type { AggregateEvent } from "./event";
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
-
-const agg = (id: string, version: number): AnyAggregateRoot =>
-  ({ id, version, snapshot: {} }) as unknown as AnyAggregateRoot;
 
 const event = (
   type: string,
@@ -105,70 +100,14 @@ function runExit<A, E>(
 // ─── append ───────────────────────────────────────────────────────────────────
 
 describe("EventStore - append", () => {
-  it("buffers events in memory without persisting", () => {
+  it("persists events with sequential versions starting after the base version", () => {
     const persistence = makeTestPersistence();
 
     run(persistence, (store) =>
-      store.append("Counter", agg("c1", 0), [event("Created", { n: 1 })]),
-    );
-
-    expect(persistence.persisted).toHaveLength(0);
-    expect(persistence.persistCalls).toBe(0);
-  });
-
-  it("accumulates events across multiple appends on the same aggregate", () => {
-    const persistence = makeTestPersistence();
-
-    run(persistence, (store) =>
-      Effect.gen(function* () {
-        // base version 0, no buffered events yet
-        yield* store.append("Counter", agg("c1", 0), [event("Created", {})]);
-        // one event buffered, so next append expects the aggregate at version 1
-        yield* store.append("Counter", agg("c1", 1), [event("Incremented", {})]);
-        yield* store.save("Counter", agg("c1", 2));
-      }),
-    );
-
-    expect(persistence.persisted.map((e) => e.version)).toEqual([1, 2]);
-    expect(persistence.persisted.map((e) => e.type)).toEqual([
-      "Created",
-      "Incremented",
-    ]);
-  });
-
-  it("fails with ConcurrencyError when a later append does not match the buffered version", () => {
-    const persistence = makeTestPersistence();
-
-    const exit = runExit(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [event("Created", {})]);
-        // buffer already has 1 event (expected version 1), but we pass 5
-        yield* store.append("Counter", agg("c1", 5), [event("Incremented", {})]);
-      }),
-    );
-
-    expect(exit._tag).toBe("Failure");
-    const error = extractFailure(exit);
-    expect(error).toBeInstanceOf(ConcurrencyError);
-    expect((error as ConcurrencyError).expectedVersion).toBe(1);
-    expect((error as ConcurrencyError).actualVersion).toBe(5);
-  });
-});
-
-// ─── save ───────────────────────────────────────────────────────────────────
-
-describe("EventStore - save", () => {
-  it("flushes buffered events with sequential versions starting after the base version", () => {
-    const persistence = makeTestPersistence();
-
-    run(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 3), [
-          event("A", { a: 1 }),
-          event("B", { b: 2 }),
-        ]);
-        yield* store.save("Counter", agg("c1", 5));
-      }),
+      store.append("Counter", "c1", 3, [
+        event("A", { a: 1 }),
+        event("B", { b: 2 }),
+      ]),
     );
 
     expect(persistence.persisted).toEqual([
@@ -189,58 +128,30 @@ describe("EventStore - save", () => {
     ]);
   });
 
-  it("drains the buffer so a second save is a no-op", () => {
+  it("assigns versions starting at 1 for a brand new stream", () => {
     const persistence = makeTestPersistence();
 
     run(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [event("Created", {})]);
-        yield* store.save("Counter", agg("c1", 1));
-        // buffer drained — nothing left to persist
-        yield* store.save("Counter", agg("c1", 1));
-      }),
+      store.append("Counter", "c1", 0, [event("Created", { n: 1 })]),
     );
 
-    expect(persistence.persistCalls).toBe(1);
-    expect(persistence.persisted).toHaveLength(1);
+    expect(persistence.persisted.map((e) => e.version)).toEqual([1]);
   });
 
-  it("is a no-op when there are no buffered events", () => {
+  it("is a no-op when there are no events to append", () => {
     const persistence = makeTestPersistence();
 
-    run(persistence, (store) => store.save("Counter", agg("c1", 0)));
+    run(persistence, (store) => store.append("Counter", "c1", 0, []));
 
     expect(persistence.persistCalls).toBe(0);
     expect(persistence.persisted).toHaveLength(0);
-  });
-
-  it("fails with ConcurrencyError when the aggregate version does not match the buffer", () => {
-    const persistence = makeTestPersistence();
-
-    const exit = runExit(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [event("Created", {})]);
-        // buffer implies version should be 1, but the aggregate says 9
-        yield* store.save("Counter", agg("c1", 9));
-      }),
-    );
-
-    expect(exit._tag).toBe("Failure");
-    const error = extractFailure(exit);
-    expect(error).toBeInstanceOf(ConcurrencyError);
-    expect((error as ConcurrencyError).expectedVersion).toBe(1);
-    expect((error as ConcurrencyError).actualVersion).toBe(9);
-    expect(persistence.persistCalls).toBe(0);
   });
 
   it("propagates persistence failures", () => {
     const persistence = makeTestPersistence({ failPersist: true });
 
     const exit = runExit(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [event("Created", {})]);
-        yield* store.save("Counter", agg("c1", 1));
-      }),
+      store.append("Counter", "c1", 0, [event("Created", {})]),
     );
 
     expect(exit._tag).toBe("Failure");
@@ -282,7 +193,9 @@ describe("EventStore - read", () => {
   it("fails with StreamNotFoundError when there are no persisted events", () => {
     const persistence = makeTestPersistence();
 
-    const exit = runExit(persistence, (store) => store.read("Counter", "missing"));
+    const exit = runExit(persistence, (store) =>
+      store.read("Counter", "missing"),
+    );
 
     expect(exit._tag).toBe("Failure");
     const error = extractFailure(exit);
@@ -300,47 +213,17 @@ describe("EventStore - read", () => {
     expect(extractFailure(exit)).toBeInstanceOf(UnknownEventStoreError);
   });
 
-  it("reads back events that were appended and saved in the same unit of work", () => {
+  it("reads back events that were appended in the same unit of work", () => {
     const persistence = makeTestPersistence();
 
     const events = run(persistence, (store) =>
       Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [
-          event("Created", { n: 0 }),
-        ]);
-        yield* store.save("Counter", agg("c1", 1));
+        yield* store.append("Counter", "c1", 0, [event("Created", { n: 0 })]);
         return yield* store.read("Counter", "c1");
       }),
     );
 
     expect(events).toEqual([{ type: "Created", payload: { n: 0 } }]);
-  });
-});
-
-// ─── isolation ─────────────────────────────────────────────────────────────────
-
-describe("EventStore - stream isolation", () => {
-  it("keeps buffered events separate per aggregate", () => {
-    const persistence = makeTestPersistence();
-
-    run(persistence, (store) =>
-      Effect.gen(function* () {
-        yield* store.append("Counter", agg("c1", 0), [event("A", {})]);
-        yield* store.append("Counter", agg("c2", 0), [event("B", {})]);
-        yield* store.save("Counter", agg("c1", 1));
-      }),
-    );
-
-    // Only c1 was saved; c2 remains buffered.
-    expect(persistence.persisted).toEqual([
-      {
-        aggregateType: "Counter",
-        aggregateId: "c1",
-        version: 1,
-        type: "A",
-        payload: {},
-      },
-    ]);
   });
 });
 
