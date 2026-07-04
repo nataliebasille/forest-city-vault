@@ -1,7 +1,6 @@
 packages:
   - "apps/*"
-  - "application/*"
+  - "apps/integrations/*"
   - "core/*"
   - "domain"
-  - "integrations/*"
   - "infrastructure/*"
