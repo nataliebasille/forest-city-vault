@@ -6,7 +6,7 @@ import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
 
-const RouteOverride = Symbol.for("nextjs-core/RouteOverride");
+const RouteOverride = Symbol.for("platform-nextjs-effect/RouteOverride");
 
 /**
  * A route handler produced by {@link defineRoute}. It is callable as a Next.js

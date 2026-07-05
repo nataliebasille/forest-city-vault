@@ -1,4 +1,4 @@
-import { sagaScoped } from "@forest-city-vault/application-core";
+import { sagaScoped } from "@forest-city-vault/platform-saga";
 import { Effect } from "effect";
 import { Database } from "./database";
 

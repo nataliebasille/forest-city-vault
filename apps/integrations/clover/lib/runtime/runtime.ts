@@ -6,7 +6,7 @@ import {
   DatabaseLive,
   RepositoriesLive,
 } from "@forest-city-vault/infrastructure-database";
-import { defineRoute } from "@forest-city-vault/nextjs-core";
+import { defineRoute } from "@forest-city-vault/platform-nextjs-effect";
 import { Layer } from "effect";
 import { RequestTraceMiddleware } from "./middleware/request-trace";
 

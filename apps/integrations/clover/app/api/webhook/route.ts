@@ -7,7 +7,7 @@ import {
   badRequest,
   parseBody,
   unauthorized,
-} from "@forest-city-vault/nextjs-core";
+} from "@forest-city-vault/platform-nextjs-effect";
 import { timingSafeEqual } from "crypto";
 import { Effect, Either, Schema } from "effect";
 import { NextRequest } from "next/server";

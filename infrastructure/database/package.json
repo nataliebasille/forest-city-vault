@@ -25,7 +25,7 @@
     "@effect/sql-pg": "^0.52.1",
     "@forest-city-vault/core-config": "workspace:*",
     "@forest-city-vault/core-domain": "workspace:*",
-    "@forest-city-vault/application-core": "workspace:*",
+    "@forest-city-vault/platform-saga": "workspace:*",
     "@forest-city-vault/domain": "workspace:*",
     "drizzle-orm": "^0.44.0",
     "effect": "^3.21.2",

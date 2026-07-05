@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Cause, Data, Effect, Exit, Option } from "effect";
-import { SagaError, withSaga } from "@forest-city-vault/application-core";
+import { SagaError, withSaga } from "@forest-city-vault/platform-saga";
 import { Database } from "./index";
 import * as schema from "./schema";
 import { DatabaseTest } from "./testing";

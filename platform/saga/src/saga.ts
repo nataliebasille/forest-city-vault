@@ -9,7 +9,7 @@ import { Context, Data, Effect, Layer } from "effect";
  * commit failure in the error channel without ever depending on—or knowing
  * about—the infrastructure that actually ran the work.
  */
-export class SagaError extends Data.TaggedError("application/SagaError")<{
+export class SagaError extends Data.TaggedError("platform/SagaError")<{
   message: string;
   cause: unknown;
 }> {}
@@ -49,7 +49,7 @@ export type Participant = {
  * then drains {@link Service.participants} to drive commit or rollback once the
  * wrapped effect has settled.
  */
-export class Saga extends Context.Tag("application/Saga")<
+export class Saga extends Context.Tag("platform/Saga")<
   Saga,
   Saga.Service
 >() {}
