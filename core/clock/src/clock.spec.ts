@@ -2,8 +2,8 @@ import { describe, test } from "node:test";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Effect, Layer } from "effect";
-import { Clock, currentTimeMillis, now } from "./clock";
-import { ClockLive, makeClock, staticClock } from "./clocks";
+import { Clock, currentTimeMillis, now } from "./public";
+import { SystemClock, makeClock, staticClock } from "./clocks";
 
 const FIXED_DATE = new Date("2024-06-01T00:00:00.000Z");
 const FIXED_MS = FIXED_DATE.getTime();
@@ -48,11 +48,11 @@ describe("staticClock", () => {
   });
 });
 
-describe("ClockLive", () => {
+describe("SystemClock", () => {
   test("currentTimeMillis is within a reasonable range of Date.now()", async () => {
     const before = Date.now();
     const result = await Effect.runPromise(
-      currentTimeMillis.pipe(Effect.provide(ClockLive)),
+      currentTimeMillis.pipe(Effect.provide(SystemClock)),
     );
     const after = Date.now();
     expect(result).toBeGreaterThanOrEqual(before);
@@ -61,7 +61,9 @@ describe("ClockLive", () => {
 
   test("now returns a Date within a reasonable range", async () => {
     const before = Date.now();
-    const result = await Effect.runPromise(now.pipe(Effect.provide(ClockLive)));
+    const result = await Effect.runPromise(
+      now.pipe(Effect.provide(SystemClock)),
+    );
     const after = Date.now();
     expect(result.getTime()).toBeGreaterThanOrEqual(before);
     expect(result.getTime()).toBeLessThanOrEqual(after);
@@ -89,7 +91,7 @@ describe("Clock – types", () => {
     expectTypeOf<ReturnType<typeof makeClock>>().toExtend<Layer.Layer<Clock>>();
   });
 
-  test("ClockLive is a Layer<Clock>", () => {
-    expectTypeOf<typeof ClockLive>().toExtend<Layer.Layer<Clock>>();
+  test("SystemClock is a Layer<Clock>", () => {
+    expectTypeOf<typeof SystemClock>().toExtend<Layer.Layer<Clock>>();
   });
 });
