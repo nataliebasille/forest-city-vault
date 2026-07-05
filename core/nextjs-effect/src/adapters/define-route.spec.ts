@@ -306,7 +306,9 @@ describe("app.route - HttpFailure", () => {
     const response = await defineRoute({ layer: Layer.empty })(() =>
       httpFailure(500, "internal error"),
     )(mockRequest());
-    expect(await response.json()).toEqual({ error: "internal error" });
+    expect(await response.json()).toEqual({
+      error: { status: 500, message: "internal error" },
+    });
   });
 
   test("badRequest produces a 400 response", async () => {
@@ -314,7 +316,9 @@ describe("app.route - HttpFailure", () => {
       badRequest("bad input"),
     )(mockRequest());
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "bad input" });
+    expect(await response.json()).toEqual({
+      error: { status: 400, message: "bad input" },
+    });
   });
 
   test("unauthorized produces a 401 response", async () => {
@@ -322,7 +326,9 @@ describe("app.route - HttpFailure", () => {
       unauthorized("not authenticated"),
     )(mockRequest());
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: "not authenticated" });
+    expect(await response.json()).toEqual({
+      error: { status: 401, message: "not authenticated" },
+    });
   });
 
   test("forbidden produces a 403 response", async () => {
@@ -330,7 +336,9 @@ describe("app.route - HttpFailure", () => {
       forbidden("access denied"),
     )(mockRequest());
     expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: "access denied" });
+    expect(await response.json()).toEqual({
+      error: { status: 403, message: "access denied" },
+    });
   });
 
   test("notFound produces a 404 response", async () => {
@@ -338,7 +346,9 @@ describe("app.route - HttpFailure", () => {
       notFound("resource missing"),
     )(mockRequest());
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "resource missing" });
+    expect(await response.json()).toEqual({
+      error: { status: 404, message: "resource missing" },
+    });
   });
 
   test("HttpFailure from a service is caught and converted to a Response", async () => {
@@ -353,7 +363,9 @@ describe("app.route - HttpFailure", () => {
       }),
     )(mockRequest());
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "counter is zero" });
+    expect(await response.json()).toEqual({
+      error: { status: 404, message: "counter is zero" },
+    });
   });
 
   test("successful handler result is wrapped in a JSON response", async () => {
