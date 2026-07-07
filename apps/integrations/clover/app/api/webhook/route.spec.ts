@@ -1,27 +1,33 @@
-import { describe, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { dbSchema } from "@forest-city-vault/infrastructure-database";
-
-import { makeRouteTest } from "@/lib/testing/make-route-test";
+import { testRoute } from "@forest-city-vault/nextjs-core";
 import { NextRequest } from "next/server";
+
+import { makeCloverTestContext } from "@/lib/testing/test-context";
+import { POST } from "./route";
 
 const {
   db,
-  module: { POST },
+  reset,
+  layer,
   config: {
     clover: { appId: APP_ID, webhookAuthCode: WEBHOOK_AUTH_CODE },
   },
   time: FIXED_TIME,
-} = await makeRouteTest<{ POST: (req: NextRequest) => Promise<Response> }>(
-  import.meta.url,
-  "./route",
-);
+} = await makeCloverTestContext();
+
+const post = testRoute(POST, { layer });
+
+beforeEach(async () => {
+  await reset();
+});
 
 describe("POST /api/webhooks/clover", () => {
   describe("verification", () => {
     test("returns 200 for a verification payload", async () => {
-      const response = await POST(makeRequest({ verificationCode: "abc123" }));
+      const response = await post(makeRequest({ verificationCode: "abc123" }));
       assert.equal(response.status, 200);
       assert.equal(await response.json(), true);
     });
@@ -29,12 +35,12 @@ describe("POST /api/webhooks/clover", () => {
 
   describe("invalid body", () => {
     test("returns 400 for an empty body", async () => {
-      const response = await POST(makeRequest({}));
+      const response = await post(makeRequest({}));
       assert.equal(response.status, 400);
     });
 
     test("returns 400 for a body missing required event fields", async () => {
-      const response = await POST(makeRequest({ appId: APP_ID }));
+      const response = await post(makeRequest({ appId: APP_ID }));
       assert.equal(response.status, 400);
     });
   });
@@ -50,12 +56,12 @@ describe("POST /api/webhooks/clover", () => {
     };
 
     test("returns 401 when auth header is missing", async () => {
-      const response = await POST(makeRequest(validEventBody));
+      const response = await post(makeRequest(validEventBody));
       assert.equal(response.status, 401);
     });
 
     test("returns 401 when auth header is incorrect", async () => {
-      const response = await POST(
+      const response = await post(
         makeRequest(validEventBody, { "x-clover-auth": "wrong-code" }),
       );
       assert.equal(response.status, 401);
@@ -64,7 +70,7 @@ describe("POST /api/webhooks/clover", () => {
 
   describe("event processing", () => {
     test("returns 200 for a valid event with correct auth", async () => {
-      const response = await POST(
+      const response = await post(
         makeRequest(
           {
             appId: APP_ID,
@@ -99,7 +105,7 @@ describe("POST /api/webhooks/clover", () => {
         },
       };
 
-      await POST(makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }));
+      await post(makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }));
 
       const events = await db.select().from(dbSchema.inboxes.payments.inbox);
       const inserted = events.find(
@@ -126,7 +132,7 @@ describe("POST /api/webhooks/clover", () => {
         },
       };
 
-      const response = await POST(
+      const response = await post(
         makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }),
       );
       assert.equal(response.status, 200);
@@ -155,8 +161,8 @@ describe("POST /api/webhooks/clover", () => {
       };
       const headers = { "x-clover-auth": WEBHOOK_AUTH_CODE };
 
-      const response1 = await POST(makeRequest(body, headers));
-      const response2 = await POST(makeRequest(body, headers));
+      const response1 = await post(makeRequest(body, headers));
+      const response2 = await post(makeRequest(body, headers));
 
       assert.equal(response1.status, 200);
       assert.equal(response2.status, 200);

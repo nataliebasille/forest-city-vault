@@ -6,6 +6,7 @@ const CloverPaymentSchema = Schema.Struct({
   merchantId: Schema.String,
   paymentId: Schema.String,
   timestamp: Schema.Date,
+  idempotencyKey: Schema.String,
 });
 
 export const FromCloverPaymentSchema = Schema.Struct({
@@ -23,10 +24,9 @@ type SaleItemRecordedEvent = {
   payload: typeof events.SaleItemRecorded.schema.Type;
 };
 
-export function fromCloverPayment(payload: typeof FromCloverPaymentSchema.Type): [
-  SaleRecordedEvent,
-  ...SaleItemRecordedEvent[],
-] {
+export function fromCloverPayment(
+  payload: typeof FromCloverPaymentSchema.Type,
+): [SaleRecordedEvent, ...SaleItemRecordedEvent[]] {
   const saleRecordedEvent: SaleRecordedEvent = {
     type: "SaleRecorded",
     payload: {
@@ -34,6 +34,7 @@ export function fromCloverPayment(payload: typeof FromCloverPaymentSchema.Type):
         provider: "clover",
         merchantId: payload.payment.merchantId,
         paymentId: payload.payment.paymentId,
+        idempotencyKey: payload.payment.idempotencyKey,
       },
       timestamp: payload.payment.timestamp,
     },

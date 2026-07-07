@@ -1,9 +1,7 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { route } from "@/runtime";
 import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
-import {
-  drain,
-} from "@forest-city-vault/infrastructure-database";
+import { drain } from "@forest-city-vault/infrastructure-database";
 import { getCloverPayment } from "@/lib/integration/payments";
 import { Effect, Schema } from "effect";
 
@@ -42,6 +40,7 @@ export const POST = route(() =>
               merchantId,
               paymentId: message.providerObjectId,
               timestamp: new Date(cloverPayment.createdTime),
+              idempotencyKey: message.idempotencyKey,
             },
             items: saleItems,
           };
@@ -60,11 +59,7 @@ export const POST = route(() =>
 );
 
 function mapCloverPaymentToSaleItems(
-  payment: typeof getCloverPayment extends (
-    ...args: any[]
-  ) => Effect.Effect<infer T, any, any>
-    ? T
-    : never,
+  payment: Effect.Effect.Success<ReturnType<typeof getCloverPayment>>,
 ): (typeof FromCloverPaymentSchema.Type)["items"] {
   const lineItems = payment.lineItems?.elements ?? [];
 

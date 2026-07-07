@@ -6,6 +6,12 @@ const CloverSaleSourceSchema = Schema.Struct({
   provider: Schema.Literal("clover"),
   merchantId: Schema.String,
   paymentId: Schema.String,
+  /**
+   * The inbox idempotency key of the payment event this sale was recorded from.
+   * It uniquely identifies the originating provider event, so it is what ties a
+   * sale back to exactly one payment (and is enforced unique in storage).
+   */
+  idempotencyKey: Schema.String,
 });
 
 export const SaleSourceSchema = CloverSaleSourceSchema;

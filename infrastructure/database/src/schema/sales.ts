@@ -6,6 +6,7 @@ import {
   pgEnum,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { vendors } from "./vendors";
@@ -21,6 +22,7 @@ export const sales = fcvTable(
 
     cloverMerchantId: text("clover_merchant_id"),
     cloverPaymentId: text("clover_payment_id"),
+    cloverIdempotencyKey: text("clover_idempotency_key"),
 
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
 
@@ -34,6 +36,9 @@ export const sales = fcvTable(
   },
   (table) => [
     index("sales_occurred_at_idx").on(table.occurredAt),
+    uniqueIndex("sales_clover_idempotency_key_uidx").on(
+      table.cloverIdempotencyKey,
+    ),
     check("sales_subtotal_amount_check", sql`${table.subtotalCents} >= 0`),
     check("sales_discount_amount_check", sql`${table.discountCents} >= 0`),
     check("sales_tax_amount_check", sql`${table.taxCents} >= 0`),

@@ -71,41 +71,41 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
     const db = yield* Database;
     const { requestId } = yield* RequestTrace;
     const receivedAt = yield* now;
-    yield* db.transaction((tx) =>
-      Effect.gen(function* () {
-        const appId = event.appId;
 
-        for (const [merchantId, cloverEvents] of Object.entries(
-          event.merchants,
-        )) {
-          for (const cloverEvent of cloverEvents) {
-            const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
-            const [eventType, paymentId] = cloverEvent.objectId.split(":");
-            if (eventType !== "P") continue;
-            const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
-              {
-                requestId,
-                status: "received",
-                provider: "clover",
-                idempotencyKey,
-                providerEventId: cloverEvent.objectId,
-                providerObjectId: paymentId,
-                eventType: "payment",
-                occurredAt: new Date(cloverEvent.ts),
-                payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
-                receivedAt,
-              };
+    const appId = event.appId;
 
-            yield* tx
-              .insert(db.schema.inboxes.payments.inbox)
-              .values([paymentInboxRecord])
-              .onConflictDoNothing({
-                target: db.schema.inboxes.payments.inbox.idempotencyKey,
-              });
-          }
-        }
-      }),
-    );
+    // Writes run on the request's saga transaction (provided by SagaMiddleware
+    // as the ambient `Database`), so every insert for this payload commits or
+    // rolls back atomically with the rest of the request.
+    for (const [merchantId, cloverEvents] of Object.entries(event.merchants)) {
+      for (const cloverEvent of cloverEvents) {
+        const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
+        const [eventType, paymentId] = cloverEvent.objectId.split(":");
+        if (eventType !== "P") continue;
+        const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
+          {
+            requestId,
+            status: "received",
+            provider: "clover",
+            idempotencyKey,
+            providerEventId: cloverEvent.objectId,
+            providerObjectId: paymentId,
+            eventType: "payment",
+            occurredAt: new Date(cloverEvent.ts),
+            payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
+            receivedAt,
+          };
+
+        yield* db.query((sql) =>
+          sql
+            .insert(db.schema.inboxes.payments.inbox)
+            .values([paymentInboxRecord])
+            .onConflictDoNothing({
+              target: db.schema.inboxes.payments.inbox.idempotencyKey,
+            }),
+        );
+      }
+    }
   });
 }
 

@@ -8,6 +8,20 @@
       "when": 1782782721139,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783265547528,
+      "tag": "0001_add_aggregate_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783300787698,
+      "tag": "0002_add_sale_idempotency_key",
+      "breakpoints": true
     }
   ]
 }

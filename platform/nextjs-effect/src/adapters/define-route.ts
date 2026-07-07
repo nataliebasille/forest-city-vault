@@ -73,9 +73,15 @@ export function defineRoute(config: {
       layer: Layer.Layer<unknown, unknown, never>,
     ) =>
       Effect.runPromise(
+        // `layer` is provided *after* `middleware` so the middleware can both
+        // observe and rewrite the handler's dependency on any service in `LOut`
+        // — e.g. a saga middleware that provides a transaction-bound `Database`
+        // to the handler and lets its own base-`Database` requirement resolve
+        // against `layer`. RequestState deps (Headers/Cookies/Body) are provided
+        // last so middleware may use them too.
         action(req).pipe(
-          Effect.provide(layer),
           middleware,
+          Effect.provide(layer),
           Effect.provide(buildRequestStateLayer("route", req)),
           Effect.match({
             onFailure: (error) =>

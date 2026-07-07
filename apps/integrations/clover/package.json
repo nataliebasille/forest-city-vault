@@ -7,13 +7,14 @@
     "dev": "next dev -p 3103",
     "build": "next build",
     "start": "next start -p 3103",
-    "test": "node --import tsx --experimental-test-module-mocks --test app/**/*.spec.ts",
+    "test": "node --import tsx --test \"app/**/*.spec.ts\" \"lib/**/*.spec.ts\"",
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
+    "@forest-city-vault/application-core": "workspace:*",
     "@forest-city-vault/core-clock": "workspace:*",
     "@forest-city-vault/core-config": "workspace:*",
     "@forest-city-vault/core-domain": "workspace:*",

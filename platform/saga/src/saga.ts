@@ -46,13 +46,10 @@ export type Participant = {
  * transactional participant they drain into during the saga.
  *
  * The boundary combinator ({@link withSaga}) provides a fresh registry per saga,
- * then drains {@link Service.participants} to drive commit or rollback once the
+ * then drains {@link Saga.Service.participants} to drive commit or rollback once the
  * wrapped effect has settled.
  */
-export class Saga extends Context.Tag("platform/Saga")<
-  Saga,
-  Saga.Service
->() {}
+export class Saga extends Context.Tag("platform/Saga")<Saga, Saga.Service>() {}
 
 export namespace Saga {
   export type Service = {

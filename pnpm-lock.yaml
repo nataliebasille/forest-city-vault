@@ -57,6 +57,9 @@ importers:
       '@effect/platform':
         specifier: ^0.96.1
         version: 0.96.1(effect@3.21.2)
+      '@forest-city-vault/application-core':
+        specifier: workspace:*
+        version: link:../../../core/application
       '@forest-city-vault/core-clock':
         specifier: workspace:*
         version: link:../../../core/clock
@@ -250,6 +253,40 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+<<<<<<< HEAD
+=======
+  core/nextjs-effect:
+    dependencies:
+      effect:
+        specifier: ^3.21.2
+        version: 3.21.2
+      next:
+        specifier: '>=15.0.0'
+        version: 16.2.6(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: '>=19.0.0'
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.41
+      '@types/react':
+        specifier: ^19
+        version: 19.2.15
+      expect:
+        specifier: ^29.0.0
+        version: 29.7.0
+      expect-type:
+        specifier: ^1.3.0
+        version: 1.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+>>>>>>> agents/saga-integration-and-tests-update-357dce0e
   domain:
     dependencies:
       '@forest-city-vault/core-domain':
