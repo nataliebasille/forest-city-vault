@@ -1,23 +1,30 @@
 import { defineRoute } from "@forest-city-vault/platform-nextjs-effect";
-import { Effect } from "effect";
-import { AppLive } from "./live";
+import { AppLive, AppLivePooled } from "./live";
 import { RequestTraceMiddleware } from "./middleware/request-trace";
-import { SagaMiddleware } from "./middleware/saga";
 
 export { AppLive } from "./live";
 
 /**
- * The composed route middleware.
- *
- * `RequestTraceMiddleware` is outermost so the request-trace context is
- * available to everything it wraps (including the saga's transaction-bound
- * handler), and `SagaMiddleware` wraps the handler so all of its work runs
- * inside one transaction that commits on success and rolls back on failure.
+ * The default route factory. Every request runs inside one saga-scoped database
+ * transaction: `AppLive` provides the {@link Database} saga-scoped, so the
+ * handler's writes commit together on success — or roll back together on any
+ * failure, defect or interruption. Handlers get this atomicity for free.
  */
-const middleware = <A, E, R>(handler: Effect.Effect<A, E, R>) =>
-  RequestTraceMiddleware(SagaMiddleware(handler));
-
 export const route = defineRoute({
   layer: AppLive,
-  middleware,
+  middleware: RequestTraceMiddleware,
+});
+
+/**
+ * Route factory for handlers that manage their own transactions and therefore
+ * must NOT run inside one enclosing request transaction. `AppLivePooled` provides
+ * the base pool {@link Database}, so `withSaga` has no request-level participant.
+ *
+ * Used by inbox drains: `drain` runs each message as its own saga (its own
+ * transaction) and, when a message rolls back, records the failure on a separate
+ * pooled connection that survives that rollback.
+ */
+export const pooledRoute = defineRoute({
+  layer: AppLivePooled,
+  middleware: RequestTraceMiddleware,
 });

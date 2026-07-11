@@ -1,33 +1,56 @@
-import { beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { dbSchema } from "@forest-city-vault/infrastructure-database";
-import { testRoute } from "@forest-city-vault/nextjs-core";
-import { NextRequest } from "next/server";
+import { Database, dbSchema } from "@forest-city-vault/infrastructure-database";
+import { Effect } from "effect";
 
-import { makeCloverTestContext } from "@/lib/testing/test-context";
-import { POST } from "./route";
+import { makeRouteTest } from "@/lib/testing/make-route-test";
+import { NextRequest } from "next/server";
 
 const {
   db,
-  reset,
-  layer,
+  module: { POST },
   config: {
     clover: { appId: APP_ID, webhookAuthCode: WEBHOOK_AUTH_CODE },
   },
   time: FIXED_TIME,
-} = await makeCloverTestContext();
+} = await makeRouteTest<{ POST: (req: NextRequest) => Promise<Response> }>(
+  import.meta.url,
+  "./route",
+);
 
-const post = testRoute(POST, { layer });
+// `@/runtime` is imported *after* makeRouteTest has installed the `live.ts`
+// mock, so `route` is bound to the transactional test AppLive (not production).
+const { route } = await import("@/runtime");
 
-beforeEach(async () => {
-  await reset();
-});
+const inbox = dbSchema.inboxes.payments.inbox;
+
+function insertPaymentEvent(providerEventId: string) {
+  return Effect.gen(function* () {
+    const database = yield* Database;
+    yield* database.query((sql) =>
+      sql.insert(inbox).values([
+        {
+          requestId: "req-tx-test",
+          status: "received",
+          idempotencyKey: `tx:${providerEventId}`,
+          provider: "clover",
+          providerEventId,
+          providerObjectId: providerEventId.split(":")[1] ?? providerEventId,
+          eventType: "payment",
+          payloadJson: JSON.stringify({ merchantId: "merchant-tx" }),
+          occurredAt: new Date(1700000000000),
+          receivedAt: FIXED_TIME,
+        },
+      ]),
+    );
+  });
+}
 
 describe("POST /api/webhooks/clover", () => {
   describe("verification", () => {
     test("returns 200 for a verification payload", async () => {
-      const response = await post(makeRequest({ verificationCode: "abc123" }));
+      const response = await POST(makeRequest({ verificationCode: "abc123" }));
       assert.equal(response.status, 200);
       assert.equal(await response.json(), true);
     });
@@ -35,12 +58,12 @@ describe("POST /api/webhooks/clover", () => {
 
   describe("invalid body", () => {
     test("returns 400 for an empty body", async () => {
-      const response = await post(makeRequest({}));
+      const response = await POST(makeRequest({}));
       assert.equal(response.status, 400);
     });
 
     test("returns 400 for a body missing required event fields", async () => {
-      const response = await post(makeRequest({ appId: APP_ID }));
+      const response = await POST(makeRequest({ appId: APP_ID }));
       assert.equal(response.status, 400);
     });
   });
@@ -56,12 +79,12 @@ describe("POST /api/webhooks/clover", () => {
     };
 
     test("returns 401 when auth header is missing", async () => {
-      const response = await post(makeRequest(validEventBody));
+      const response = await POST(makeRequest(validEventBody));
       assert.equal(response.status, 401);
     });
 
     test("returns 401 when auth header is incorrect", async () => {
-      const response = await post(
+      const response = await POST(
         makeRequest(validEventBody, { "x-clover-auth": "wrong-code" }),
       );
       assert.equal(response.status, 401);
@@ -70,7 +93,7 @@ describe("POST /api/webhooks/clover", () => {
 
   describe("event processing", () => {
     test("returns 200 for a valid event with correct auth", async () => {
-      const response = await post(
+      const response = await POST(
         makeRequest(
           {
             appId: APP_ID,
@@ -105,7 +128,7 @@ describe("POST /api/webhooks/clover", () => {
         },
       };
 
-      await post(makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }));
+      await POST(makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }));
 
       const events = await db.select().from(dbSchema.inboxes.payments.inbox);
       const inserted = events.find(
@@ -132,7 +155,7 @@ describe("POST /api/webhooks/clover", () => {
         },
       };
 
-      const response = await post(
+      const response = await POST(
         makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }),
       );
       assert.equal(response.status, 200);
@@ -161,8 +184,8 @@ describe("POST /api/webhooks/clover", () => {
       };
       const headers = { "x-clover-auth": WEBHOOK_AUTH_CODE };
 
-      const response1 = await post(makeRequest(body, headers));
-      const response2 = await post(makeRequest(body, headers));
+      const response1 = await POST(makeRequest(body, headers));
+      const response2 = await POST(makeRequest(body, headers));
 
       assert.equal(response1.status, 200);
       assert.equal(response2.status, 200);
@@ -176,6 +199,60 @@ describe("POST /api/webhooks/clover", () => {
         1,
         "Expected exactly one record (no duplicate)",
       );
+    });
+  });
+
+  // Every webhook request runs inside one saga-scoped database transaction,
+  // provided automatically by `AppLive` (the saga-scoped `Database`) and driven
+  // by the `withSaga` wrapper in `defineRoute`. These tests exercise that
+  // boundary through the real transactional `route` factory: a request that
+  // fails after writing must leave nothing behind, while one that succeeds must
+  // persist its writes — with no opt-in from the handler.
+  describe("transactionality", () => {
+    test("rolls back writes when the request fails after writing", async () => {
+      const failingRoute = route(() =>
+        Effect.gen(function* () {
+          yield* insertPaymentEvent("P:tx_rollback_1");
+          return yield* Effect.fail(new Error("boom after write"));
+        }),
+      );
+
+      const response = await failingRoute(
+        new NextRequest("http://localhost/api/webhooks/clover", {
+          method: "POST",
+        }),
+      );
+      assert.equal(response.status, 500);
+
+      const rows = await db.select().from(inbox);
+      const persisted = rows.find(
+        (r) => r.providerEventId === "P:tx_rollback_1",
+      );
+      assert.equal(
+        persisted,
+        undefined,
+        "the write before the failure should be rolled back",
+      );
+    });
+
+    test("commits writes when the request succeeds", async () => {
+      const succeedingRoute = route(() =>
+        Effect.gen(function* () {
+          yield* insertPaymentEvent("P:tx_commit_1");
+          return true;
+        }),
+      );
+
+      const response = await succeedingRoute(
+        new NextRequest("http://localhost/api/webhooks/clover", {
+          method: "POST",
+        }),
+      );
+      assert.equal(response.status, 200);
+
+      const rows = await db.select().from(inbox);
+      const persisted = rows.find((r) => r.providerEventId === "P:tx_commit_1");
+      assert.ok(persisted, "the write should be committed");
     });
   });
 });

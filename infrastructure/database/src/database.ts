@@ -8,7 +8,6 @@ import {
   Context,
   Data,
   Effect,
-  Exit,
   Layer,
   Redacted,
   Scope,
@@ -59,20 +58,23 @@ export type DatabaseService = {
   ) => Effect.Effect<A, DatabaseError, R>;
 
   /**
-   * Opens a new database transaction on a freshly reserved connection and
-   * returns a {@link DatabaseTransactionHandle} to drive it.
+   * Opens a new database transaction on a connection reserved into the ambient
+   * {@link Scope} and returns a {@link DatabaseTransactionHandle} to drive it.
    *
    * Unlike {@link transaction} — a self-contained bracket that begins, commits
    * and rolls back around one effect — `beginTransaction` splits those steps so
-   * the commit/rollback can be deferred to a surrounding saga. It begins
-   * immediately, then hands back a transaction-bound `database` (whose queries
-   * all run on this transaction) plus `commit`/`rollback` (which finish it and
-   * release the connection). This lets the transaction take part in a saga as an
-   * opaque participant.
+   * the commit/rollback can be deferred to a surrounding saga. It reserves a
+   * connection into the caller's scope (so its release is a finalizer of that
+   * scope) and begins immediately, then hands back a transaction-bound
+   * `database` (whose queries all run on this transaction) plus `commit`/
+   * `rollback` (which finish it). The reserved connection is released when the
+   * scope closes — after commit or rollback has run — so a saga can extend that
+   * scope to keep the transaction open across its whole lifetime.
    */
   readonly beginTransaction: Effect.Effect<
     DatabaseTransactionHandle,
-    DatabaseError
+    DatabaseError,
+    Scope.Scope
   >;
 };
 
@@ -154,17 +156,13 @@ const createDatabaseService = Effect.gen(function* () {
 
   const beginTransaction: Effect.Effect<
     DatabaseTransactionHandle,
-    DatabaseError
+    DatabaseError,
+    Scope.Scope
   > = Effect.gen(function* () {
-    // Reserve a connection into a scope we own, so the transaction lives
-    // across the separate begin/commit steps and is released only once the
-    // surrounding saga finishes.
-    const scope = yield* Scope.make();
-    const connection = yield* Effect.provideService(
-      sql.reserve,
-      Scope.Scope,
-      scope,
-    ).pipe(
+    // Reserve a connection into the ambient scope. Its release is registered as
+    // a finalizer of that scope, so the connection lives until the scope closes
+    // — which, for a saga, is after commit/rollback has run.
+    const connection = yield* sql.reserve.pipe(
       Effect.mapError(
         (cause) =>
           new DatabaseError({
@@ -174,8 +172,6 @@ const createDatabaseService = Effect.gen(function* () {
       ),
     );
 
-    const closeScope = Scope.close(scope, Exit.void);
-
     yield* connection.executeUnprepared("BEGIN", [], undefined).pipe(
       Effect.mapError(
         (cause) =>
@@ -184,9 +180,6 @@ const createDatabaseService = Effect.gen(function* () {
             cause,
           }),
       ),
-      // If BEGIN fails there is nothing to roll back, but the reserved
-      // connection must still be released.
-      Effect.tapErrorCause(() => closeScope),
     );
 
     // Route every query the transaction-bound service runs onto this
@@ -209,13 +202,12 @@ const createDatabaseService = Effect.gen(function* () {
               cause,
             }),
         ),
-        Effect.ensuring(closeScope),
         Effect.asVoid,
       ),
 
       rollback: Effect.ignore(
         connection.executeUnprepared("ROLLBACK", [], undefined),
-      ).pipe(Effect.ensuring(closeScope)),
+      ),
     } satisfies DatabaseTransactionHandle;
   });
 

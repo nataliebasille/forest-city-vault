@@ -71,12 +71,8 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
     const db = yield* Database;
     const { requestId } = yield* RequestTrace;
     const receivedAt = yield* now;
-
     const appId = event.appId;
 
-    // Writes run on the request's saga transaction (provided by SagaMiddleware
-    // as the ambient `Database`), so every insert for this payload commits or
-    // rolls back atomically with the rest of the request.
     for (const [merchantId, cloverEvents] of Object.entries(event.merchants)) {
       for (const cloverEvent of cloverEvents) {
         const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;

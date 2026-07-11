@@ -1,14 +1,14 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Effect, Exit } from "effect";
-import { Database, tryDb } from "../../index";
+import { Database, databaseSagaScoped } from "../../index";
 import * as schema from "../../schema";
 import { DatabaseTest } from "../../testing";
 import { drain } from "./drain";
 
 const { inbox, errors } = schema.inboxes.payments;
 
-type InboxInsert = (typeof inbox)["$inferInsert"];
+type InboxInsert = (typeof inbox)["$inferSelect"];
 
 describe("drain", () => {
   test("returns an empty array when there are no received items", async () => {
@@ -16,7 +16,8 @@ describe("drain", () => {
       drain({
         inbox: "payments",
         requestId: "req-1",
-        action: (_sql, _msg) => Effect.void,
+        scoped: databaseSagaScoped,
+        action: () => Effect.void,
       }),
     );
     assert.deepEqual(result, []);
@@ -33,7 +34,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => Effect.void,
+          scoped: databaseSagaScoped,
+          action: () => Effect.void,
         });
 
         const [item] = yield* db.query((sql) => sql.select().from(inbox));
@@ -54,7 +56,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => Effect.fail(new Error("action failed")),
+          scoped: databaseSagaScoped,
+          action: () => Effect.fail(new Error("action failed")),
         });
 
         const [item] = yield* db.query((sql) => sql.select().from(inbox));
@@ -78,7 +81,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => Effect.fail(new Error("still failing")),
+          scoped: databaseSagaScoped,
+          action: () => Effect.fail(new Error("still failing")),
         });
 
         const [item] = yield* db.query((sql) => sql.select().from(inbox));
@@ -99,7 +103,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => Effect.fail(new Error("action failed")),
+          scoped: databaseSagaScoped,
+          action: () => Effect.fail(new Error("action failed")),
         });
 
         const errorRows = yield* db.query((sql) => sql.select().from(errors));
@@ -131,7 +136,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => {
+          scoped: databaseSagaScoped,
+          action: () => {
             callCount++;
             return Effect.void;
           },
@@ -142,7 +148,7 @@ describe("drain", () => {
     );
   });
 
-  test("rolls back the transaction when the action defects", async () => {
+  test("rolls back the saga when the action defects", async () => {
     await runWith(
       Effect.gen(function* () {
         const db = yield* Database;
@@ -150,14 +156,16 @@ describe("drain", () => {
           sql.insert(inbox).values([makeItem({ idempotencyKey: "k1" })]),
         );
 
-        // action writes a row inside the transaction, then defects
+        // action writes a row on the saga transaction, then defects
         const result = yield* Effect.exit(
           drain({
             inbox: "payments",
             requestId: "req-1",
-            action: (sql, _msg) =>
+            scoped: databaseSagaScoped,
+            action: () =>
               Effect.gen(function* () {
-                yield* tryDb(() =>
+                const txDb = yield* Database;
+                yield* txDb.query((sql) =>
                   sql
                     .insert(inbox)
                     .values([makeItem({ idempotencyKey: "side-effect" })]),
@@ -192,9 +200,11 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (sql, _msg) =>
+          scoped: databaseSagaScoped,
+          action: () =>
             Effect.gen(function* () {
-              yield* tryDb(() =>
+              const txDb = yield* Database;
+              yield* txDb.query((sql) =>
                 sql
                   .insert(inbox)
                   .values([makeItem({ idempotencyKey: "side-effect" })]),
@@ -212,29 +222,28 @@ describe("drain", () => {
     );
   });
 
-  test("does not roll back previously committed transactions when a later action defects", async () => {
+  test("does not roll back previously committed sagas when a later action defects", async () => {
     await runWith(
       Effect.gen(function* () {
         const db = yield* Database;
         yield* db.query((sql) =>
-          sql
-            .insert(inbox)
-            .values([
-              makeItem({
-                idempotencyKey: "k1",
-                receivedAt: new Date(0).toISOString(),
-              }),
-              makeItem({
-                idempotencyKey: "k2",
-                receivedAt: new Date(1).toISOString(),
-              }),
-            ]),
+          sql.insert(inbox).values([
+            makeItem({
+              idempotencyKey: "k1",
+              receivedAt: new Date(0),
+            }),
+            makeItem({
+              idempotencyKey: "k2",
+              receivedAt: new Date(1),
+            }),
+          ]),
         );
 
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, msg) =>
+          scoped: databaseSagaScoped,
+          action: (msg) =>
             msg.idempotencyKey === "k2"
               ? Effect.die(new Error("defect on second item"))
               : Effect.void,
@@ -270,7 +279,8 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          action: (_sql, _msg) => {
+          scoped: databaseSagaScoped,
+          action: () => {
             callCount++;
             return Effect.void;
           },
@@ -284,15 +294,18 @@ describe("drain", () => {
 
 function makeItem(overrides: Partial<InboxInsert> = {}): InboxInsert {
   return {
+    id: crypto.randomUUID(),
     requestId: "test-request",
     idempotencyKey: `key-${Math.random().toString(36).slice(2, 10)}`,
     status: "received",
-    receivedAt: new Date().toISOString(),
-    processedAt: "",
+    attempts: 0,
+    receivedAt: new Date(),
+    processedAt: null,
+    occurredAt: null,
     provider: "clover",
     providerEventId: "evt-1",
     providerObjectId: "ORDER:order-1",
-    eventType: "CREATE",
+    eventType: "payment",
     payloadJson: "{}",
     ...overrides,
   };

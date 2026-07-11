@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer } from "effect";
+import { Context, Data, Effect, Exit, Layer, Scope } from "effect";
 
 /**
  * Failure raised when a participant cannot commit the work run inside a saga.
@@ -9,7 +9,7 @@ import { Context, Data, Effect, Layer } from "effect";
  * commit failure in the error channel without ever depending on—or knowing
  * about—the infrastructure that actually ran the work.
  */
-export class SagaError extends Data.TaggedError("platform/SagaError")<{
+export class SagaError extends Data.TaggedError("application/SagaError")<{
   message: string;
   cause: unknown;
 }> {}
@@ -38,51 +38,82 @@ export type Participant = {
 };
 
 /**
- * The registry for the current saga.
+ * The handle to the current saga's {@link Scope}.
+ *
+ * A saga *is* a scope: {@link withSaga} opens a fresh {@link Scope} per saga and
+ * exposes it through this service so scoped services can bind their lifetime and
+ * their finalization to it.
  *
  * Scoped services that need commit/rollback semantics {@link Service.register}
- * themselves here when they are built. Flush-through buffers (e.g. the
- * `EventTracker`) do **not** register: their atomicity is inherited from a
- * transactional participant they drain into during the saga.
+ * themselves here when they are built, and run their setup through
+ * {@link Service.extend} so any resources they acquire (a reserved connection, a
+ * file handle, …) are released as finalizers when the saga's scope closes.
+ * Flush-through buffers (e.g. the `EventTracker`) do **not** register: their
+ * atomicity is inherited from a transactional participant they drain into during
+ * the saga.
  *
- * The boundary combinator ({@link withSaga}) provides a fresh registry per saga,
- * then drains {@link Saga.Service.participants} to drive commit or rollback once the
- * wrapped effect has settled.
+ * The boundary combinator ({@link withSaga}) provides a fresh service per saga,
+ * then closes the scope with the wrapped effect's `Exit` to drive commit or
+ * rollback once that effect has settled.
  */
-export class Saga extends Context.Tag("platform/Saga")<Saga, Saga.Service>() {}
+export class Saga extends Context.Tag("application/Saga")<
+  Saga,
+  Saga.Service
+>() {}
 
 export namespace Saga {
   export type Service = {
     /**
      * Registers a participant to be committed (on success) or rolled back (on
-     * failure) when the saga finishes. Participants are committed in
-     * registration order and rolled back in reverse.
+     * failure) when the saga finishes.
+     *
+     * `commit` runs in registration order in the value channel, so a commit
+     * failure surfaces as a typed error. `rollback` is installed as a
+     * finalizer on the saga's scope, so it runs in reverse registration order
+     * (and only when the saga does not succeed) when the scope is closed.
      */
     readonly register: (participant: Participant) => Effect.Effect<void>;
 
     /**
-     * The participants registered so far, in registration order. Drained by the
-     * combinator once the wrapped effect has settled.
+     * Runs `effect` with the saga's {@link Scope} provided, so any resource it
+     * acquires lives for the rest of the saga and is released as a finalizer
+     * when the scope closes — rather than being torn down the moment `effect`
+     * itself completes. This lets a participant split acquisition (now) from
+     * release (at saga end), e.g. reserving a database connection that must
+     * outlive the begin/commit boundary.
      */
-    readonly participants: Effect.Effect<readonly Participant[]>;
+    readonly extend: <A, E, R>(
+      effect: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E, Exclude<R, Scope.Scope>>;
   };
 
   /**
-   * Builds a fresh, in-memory registry. A new instance is created for each
-   * saga, so concurrent sagas never see each other's participants and any
-   * participant left unregistered simply disappears when the scope ends.
+   * Builds a saga service backed by an existing {@link Scope}. A new scope (and
+   * service) is created per saga by {@link withSaga}, so concurrent sagas never
+   * see each other's participants and every acquired resource is released when
+   * that saga's scope closes.
+   *
+   * `register` queues each participant's `commit` (drained by {@link withSaga}
+   * in registration order on success) and installs its `rollback` as an
+   * exit-aware finalizer that runs, best-effort, only when the scope closes with
+   * a failure.
    */
-  export const make = Layer.sync(Saga, () => {
-    const registered: Participant[] = [];
+  export const make = (
+    scope: Scope.Scope,
+    commits: Participant["commit"][],
+  ): Service => ({
+    register: (participant) =>
+      Effect.gen(function* () {
+        commits.push(participant.commit);
 
-    return {
-      register: (participant) =>
-        Effect.sync(() => {
-          registered.push(participant);
-        }),
+        yield* Scope.addFinalizerExit(scope, (exit) =>
+          Exit.isFailure(exit)
+            ? Effect.ignore(participant.rollback)
+            : Effect.void,
+        );
+      }),
 
-      participants: Effect.sync(() => [...registered]),
-    } satisfies Service;
+    extend: (effect) => Scope.extend(effect, scope),
   });
 }
 
@@ -97,6 +128,13 @@ export namespace Saga {
  * that both provides the service for the scope and registers its teardown with
  * the surrounding saga. {@link withSaga} then drives that commit/rollback
  * uniformly alongside every other participant's.
+ *
+ * `acquire` is run through {@link Saga.Service.extend}, so it may require a
+ * {@link Scope} and any resource it acquires there (a reserved connection, a
+ * file handle, …) lives for the rest of the saga and is released as a finalizer
+ * when the saga's scope closes — after `commit`/`rollback` have run. This is
+ * what lets a participant defer teardown to the saga boundary without hand-
+ * managing a scope of its own.
  *
  * This is the single seam every scoped resource uses to take part in a saga — a
  * database transaction, an event publisher, an outbox, etc. — so the
@@ -124,7 +162,7 @@ export const sagaScoped = <I, S, E, R>(
     tag,
     Effect.gen(function* () {
       const saga = yield* Saga;
-      const { service, commit, rollback } = yield* acquire;
+      const { service, commit, rollback } = yield* saga.extend(acquire);
 
       yield* saga.register({
         commit: commit ?? Effect.void,

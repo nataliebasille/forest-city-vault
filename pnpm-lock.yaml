@@ -257,6 +257,9 @@ importers:
 =======
   core/nextjs-effect:
     dependencies:
+      '@forest-city-vault/application-core':
+        specifier: workspace:*
+        version: link:../application
       effect:
         specifier: ^3.21.2
         version: 3.21.2

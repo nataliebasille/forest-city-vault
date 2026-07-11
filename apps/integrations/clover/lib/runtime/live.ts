@@ -1,50 +1,60 @@
 import { FetchHttpClient } from "@effect/platform";
-import { Saga } from "@forest-city-vault/application-core";
 import { SystemClock } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
 import { SystemIdGenerator } from "@forest-city-vault/core-id-generator";
 import {
   databaseSagaScoped,
   DatabaseLive,
-  RepositoriesLive,
 } from "@forest-city-vault/infrastructure-database";
 import { Layer } from "effect";
 
 /**
- * The per-request saga scope, expressed as a single layer.
- *
- * This is the one place `Saga.make` is called: it bundles the fresh {@link Saga}
- * registry together with {@link databaseSagaScoped} (which opens the request's
- * transaction, exposes a transaction-bound `Database` and registers that
- * transaction as a saga participant). Because it is an ordinary layer, it drops
- * into `AppLive` (and the test layer) alongside every other dependency, so a
- * caller of `runSaga`/`SagaMiddleware` never has to provide `Saga.make` — the
- * registry is already in the ambient context. It outputs a `Saga` and a
- * transaction-bound `Database` (which shadows the base one for the request) and
- * only requires a base `Database` to open the transaction on.
+ * Services shared by every Clover route, regardless of how the {@link Database}
+ * is provided. Kept separate so the transactional and pooled app layers below
+ * differ *only* in their database wiring.
  */
-export const SagaScopeLive = databaseSagaScoped.pipe(
-  Layer.provideMerge(Saga.make),
-);
-
-/**
- * The production dependency layer for the Clover integration.
- *
- * Every dependency lives here as a flat sibling — the repositories/event
- * store/event tracker (`RepositoriesLive`) and the {@link SagaScopeLive saga
- * scope} (the `Saga` registry plus the request's transaction-bound `Database`).
- * The repositories resolve `Database` at call time, so they run on whatever
- * `Database` is ambient; inside a request that is the saga's transaction-bound
- * `Database` provided here, so everything commits or rolls back together. The
- * base `Database` (`DatabaseLive`) is fed in underneath purely so the saga scope
- * has a connection to open its transaction on. `SagaMiddleware` then only has to
- * drive the ambient `Saga` — it provides nothing itself.
- */
-export const AppLive = Layer.mergeAll(
+const AppCommon = Layer.mergeAll(
   CloverConfig.Default,
   SystemClock,
   SystemIdGenerator,
   FetchHttpClient.layer,
-  RepositoriesLive,
-  SagaScopeLive,
-).pipe(Layer.provideMerge(DatabaseLive), Layer.orDie);
+);
+
+/**
+ * Production dependency layer for Clover routes.
+ *
+ * The {@link Database} is provided **saga-scoped**: `databaseSagaScoped` opens a
+ * transaction (on a connection from `DatabaseLive`'s pool) and exposes the
+ * transaction-bound `Database`, enlisting it as a participant of the ambient
+ * saga. Because every route runs inside `withSaga` (see `defineRoute`), this
+ * layer is built inside the request's saga — so each request gets its own
+ * transaction that the saga commits on success or rolls back on any failure,
+ * defect or interruption. Handlers simply `yield* Database` and get that
+ * transaction; the saga scoping is automatic and requires no route changes.
+ *
+ * The residual `Saga` requirement is satisfied by the `withSaga` wrapper inside
+ * `defineRoute`.
+ *
+ * Kept in its own module so tests can swap it via `mock.module` without ever
+ * constructing the production resources.
+ */
+export const AppLive = Layer.merge(
+  AppCommon,
+  databaseSagaScoped.pipe(Layer.provide(DatabaseLive)),
+).pipe(Layer.orDie);
+
+/**
+ * Dependency layer for routes that must **not** run inside one enclosing request
+ * transaction. The {@link Database} is the base pool database (not a saga
+ * participant), so `withSaga` has nothing to commit or roll back at the request
+ * level.
+ *
+ * Used by inbox drains: `drain` runs each message as its own saga (its own
+ * transaction) and, when a message rolls back, records the failure on a separate
+ * pooled connection that survives that rollback. Wrapping the whole request in a
+ * single transaction would nest those per-message transactions and defeat that
+ * guarantee, so drain-style routes use this pooled layer instead.
+ */
+export const AppLivePooled = Layer.merge(AppCommon, DatabaseLive).pipe(
+  Layer.orDie,
+);

@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
-    "@forest-city-vault/application-core": "workspace:*",
+    "@forest-city-vault/platform-saga": "workspace:*",
     "@forest-city-vault/core-clock": "workspace:*",
     "@forest-city-vault/core-config": "workspace:*",
     "@forest-city-vault/core-domain": "workspace:*",

@@ -1,7 +1,10 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
-import { route } from "@/runtime";
+import { pooledRoute } from "@/runtime";
 import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
-import { drain } from "@forest-city-vault/infrastructure-database";
+import {
+  drain,
+  RepositoriesSagaScoped,
+} from "@forest-city-vault/infrastructure-database";
 import { getCloverPayment } from "@/lib/integration/payments";
 import { Effect, Schema } from "effect";
 
@@ -13,12 +16,13 @@ const decodePaymentPayload = Schema.decodeUnknown(
   Schema.parseJson(PaymentPayloadSchema),
 );
 
-export const POST = route(() =>
+export const POST = pooledRoute(() =>
   Effect.gen(function* () {
     yield* drain({
       inbox: "payments",
       requestId: (yield* RequestTrace).requestId,
-      action: (_sql, message) =>
+      scoped: RepositoriesSagaScoped,
+      action: (message) =>
         Effect.gen(function* () {
           const { merchantId } = yield* decodePaymentPayload(
             message.payloadJson,

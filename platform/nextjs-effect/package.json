@@ -12,6 +12,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@forest-city-vault/platform-saga": "workspace:*",
     "effect": "^3.21.2"
   },
   "peerDependencies": {
