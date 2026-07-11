@@ -1,25 +1,14 @@
 import { mock } from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { Effect, Layer } from "effect";
+import { Layer } from "effect";
 import { FetchHttpClient } from "@effect/platform";
 
 import { staticClock } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
 import { staticIdGenerator } from "@forest-city-vault/core-id-generator";
-import {
-  Database,
-  DatabaseError,
-  type DatabaseService,
-  dbSchema,
-} from "@forest-city-vault/infrastructure-database";
-
-const MIGRATIONS_FOLDER = fileURLToPath(
-  new URL("../../../../infrastructure/database/drizzle", import.meta.url),
-);
+import { databaseSagaScoped } from "@forest-city-vault/infrastructure-database";
+import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
 
 export type TestDb = ReturnType<typeof drizzle>;
 
@@ -47,35 +36,9 @@ export async function makeRouteTest<T>(
   const webhookAuthCode = options.webhookAuthCode ?? "test-auth-code";
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
 
-  const client = new PGlite();
-  const testDb = drizzle(client);
-  const dbService: DatabaseService = {
-    schema: dbSchema,
-    query: (op, opts) =>
-      Effect.tryPromise({
-        try: () => op(testDb as never),
-        catch: (cause) =>
-          new DatabaseError({
-            message: opts?.errorMessage ?? "Query failed",
-            cause,
-          }),
-      }),
-    transaction: (op, opts) =>
-      Effect.tryPromise({
-        try: () =>
-          testDb.transaction((tx) =>
-            Effect.runPromise(op(tx as never) as never),
-          ),
-        catch: (cause) =>
-          new DatabaseError({
-            message: opts?.errorMessage ?? "Transaction failed",
-            cause,
-          }),
-      }),
-  };
+  const { layer: databaseLayer, db: testDb } = await makeDatabaseTestContext();
 
-  const testLayer = Layer.mergeAll(
-    Layer.succeed(Database, dbService),
+  const commonLayer = Layer.mergeAll(
     Layer.succeed(
       CloverConfig,
       CloverConfig.make({ appId, webhookAuthCode, url: "http://localhost" }),
@@ -85,11 +48,20 @@ export async function makeRouteTest<T>(
     staticIdGenerator("00000000-0000-7000-8000-000000000001"),
   );
 
-  mock.module(new URL("../runtime/live.ts", import.meta.url).href, {
-    namedExports: { AppLive: testLayer },
-  });
+  // Mirror the production `live.ts` compositions over the same test database:
+  // `AppLive` provides the saga-scoped (transactional) Database, `AppLivePooled`
+  // provides the base pool Database. Both back onto the same PGlite instance, so
+  // the returned `db` handle observes whichever the route under test uses.
+  const testLayer = Layer.merge(
+    commonLayer,
+    databaseSagaScoped.pipe(Layer.provide(databaseLayer)),
+  );
 
-  await migrate(testDb, { migrationsFolder: MIGRATIONS_FOLDER });
+  const testLayerPooled = Layer.merge(commonLayer, databaseLayer);
+
+  mock.module(new URL("../runtime/live.ts", import.meta.url).href, {
+    namedExports: { AppLive: testLayer, AppLivePooled: testLayerPooled },
+  });
 
   const moduleExported = (await import(
     new URL(relativePath, callerImportMetaUrl).href

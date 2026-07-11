@@ -88,19 +88,24 @@ class PGliteConnection implements Connection {
 }
 
 /**
- * Builds a SqlClient-providing Layer backed by an in-memory PGlite instance.
- * Runs migrations on startup. Provides Reactivity internally.
+ * Builds a SqlClient-providing Layer backed by a PGlite instance obtained from
+ * `acquireClient`. The client is created lazily when the layer is built, so each
+ * layer build gets its own isolated database. Runs migrations on startup and
+ * provides Reactivity internally.
  */
-const makePGliteClientLayer = (migrationsFolder: string) =>
+const makePGliteClientLayer = (
+  acquireClient: () => PGlite,
+  migrationsFolder: string,
+) =>
   Layer.effect(
     SqlClientModule.SqlClient,
     Effect.gen(function* () {
-      const pgClient = new PGlite();
-      const migrationDb = drizzle(pgClient);
+      const client = acquireClient();
+      const migrationDb = drizzle(client);
       yield* Effect.promise(() => migrate(migrationDb, { migrationsFolder }));
 
       return yield* SqlClientModule.make({
-        acquirer: Effect.succeed(new PGliteConnection(pgClient)),
+        acquirer: Effect.succeed(new PGliteConnection(client)),
         compiler: makeCompiler(),
         spanAttributes: [["db.system", "pglite"]],
       });
@@ -116,7 +121,33 @@ const makePGliteClientLayer = (migrationsFolder: string) =>
  *   Defaults to `packages/database/drizzle`.
  */
 export const makeDatabaseTest = (migrationsFolder = defaultMigrationsFolder) =>
-  DatabaseLayer.pipe(Layer.provide(makePGliteClientLayer(migrationsFolder)));
+  DatabaseLayer.pipe(
+    Layer.provide(makePGliteClientLayer(() => new PGlite(), migrationsFolder)),
+  );
+
+/**
+ * Builds a testing {@link Database} layer alongside a drizzle handle to the same
+ * in-memory PGlite instance.
+ *
+ * Migrations are run eagerly on `client` before returning, so a test can read
+ * and seed the database directly via `db` immediately — before any route or
+ * effect builds the `layer`. The returned `layer` provides the real
+ * {@link DatabaseService} (including a working `beginTransaction`, so saga-scoped
+ * code can run); its own migration step is an idempotent no-op on the
+ * already-migrated `client`.
+ */
+export const makeDatabaseTestContext = async (
+  migrationsFolder = defaultMigrationsFolder,
+) => {
+  const client = new PGlite();
+  const db = drizzle(client);
+  await migrate(db, { migrationsFolder });
+  const layer = DatabaseLayer.pipe(
+    Layer.provide(makePGliteClientLayer(() => client, migrationsFolder)),
+  );
+
+  return { layer, db, client };
+};
 
 /**
  * A ready-to-use in-memory database Layer for tests.

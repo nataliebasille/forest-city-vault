@@ -1,3 +1,4 @@
+import { Saga, withSaga } from "@forest-city-vault/application-core";
 import { Effect, Layer } from "effect";
 import { NextRequest } from "next/server";
 import { HttpResult, httpResultToResponse } from "../http/http-result";
@@ -25,6 +26,14 @@ export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
  * Creates a route factory bound to a dependency `layer` (and optional pure
  * `middleware`). The returned function wraps a handler into a Next.js route.
  *
+ * Every route runs as a single saga: the (optionally middleware-wrapped) handler
+ * is wrapped in {@link withSaga}, which opens one scope per request, provides the
+ * {@link Saga} service and drives commit/rollback from the request's outcome. A
+ * handler may therefore require `Saga` — and provide saga-scoped layers such as a
+ * database transaction — without it counting as a missing dependency; it is
+ * satisfied here. The saga is the outermost wrapper around the request, so
+ * `middleware` runs inside it.
+ *
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testRoute} without the production layer ever being constructed.
  */
@@ -34,7 +43,7 @@ export function defineRoute<LOut, LErr, LReq>(config: {
   action: (
     req: NextRequest,
   ) => Effect.Effect<A, E, R> &
-    MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
+    MustBeNever<Exclude<R, LOut | RequestStateDeps | Saga>>,
 ) => RouteHandler<LOut>;
 export function defineRoute<
   LOut,
@@ -55,7 +64,7 @@ export function defineRoute<
   action: (
     req: NextRequest,
   ) => Effect.Effect<AIn, EIn, RIn> &
-    MustBeNever<Exclude<ROut, LOut | RequestStateDeps>>,
+    MustBeNever<Exclude<ROut, LOut | RequestStateDeps | Saga>>,
 ) => RouteHandler<LOut>;
 export function defineRoute(config: {
   layer: Layer.Layer<unknown, unknown, unknown>;
@@ -76,6 +85,7 @@ export function defineRoute(config: {
         action(req).pipe(
           Effect.provide(layer),
           middleware,
+          withSaga,
           Effect.provide(buildRequestStateLayer("route", req)),
           Effect.match({
             onFailure: (error) =>
