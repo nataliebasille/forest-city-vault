@@ -3,8 +3,8 @@ name: advisor
 description: Hidden read-only senior engineering advisor.
 argument-hint: Analyze a feature, refactor, bug, or design decision.
 user-invocable: false
-model: ['Claude Opus 4.8 (copilot)', 'Claude Sonnet 4.6 (copilot)']
-tools: ['web/fetch', 'search/codebase', 'search/usages', 'read/problems']
+model: ["Claude Opus 4.8 (copilot)", "Claude Sonnet 4.6 (copilot)"]
+tools: ["web/fetch", "search/codebase", "search/usages", "read/problems"]
 agents: []
 ---
 

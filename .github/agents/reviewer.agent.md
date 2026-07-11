@@ -3,8 +3,13 @@ name: reviewer
 description: Hidden strict practical reviewer.
 argument-hint: Review current changes.
 user-invocable: false
-model: ['GPT-5.2 (copilot)', 'Claude Opus 4.5 (copilot)', 'Claude Sonnet 4.5 (copilot)']
-tools: ['search/changes', 'search/codebase', 'search/usages', 'read/problems']
+model:
+  [
+    "GPT-5.2 (copilot)",
+    "Claude Opus 4.5 (copilot)",
+    "Claude Sonnet 4.5 (copilot)",
+  ]
+tools: ["search/changes", "search/codebase", "search/usages", "read/problems"]
 agents: []
 ---
 
