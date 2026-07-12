@@ -36,12 +36,9 @@ export const POST = pooledRoute(() =>
             message.payloadJson,
           );
 
-          const accessToken = process.env.CLOVER_ACCESS_TOKEN || "";
-
           const cloverPayment = yield* getCloverPayment(
             merchantId,
             message.providerObjectId,
-            accessToken,
           );
 
           const saleItems = mapCloverPaymentToSaleItems(cloverPayment);

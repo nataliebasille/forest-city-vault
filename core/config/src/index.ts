@@ -17,8 +17,10 @@ export class CloverConfig extends Effect.Service<CloverConfig>()(
   {
     effect: Effect.all({
       appId: Config.string("CLOVER_APP_ID"),
+      secretCode: Config.string("CLOVER_SECRET_CODE"),
       webhookAuthCode: Config.string("CLOVER_WEBHOOK_AUTH_CODE"),
       url: Config.string("CLOVER_URL"),
     }),
   },
 ) {}
+

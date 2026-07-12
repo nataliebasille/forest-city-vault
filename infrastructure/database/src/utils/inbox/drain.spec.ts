@@ -92,6 +92,41 @@ describe("drain", () => {
     );
   });
 
+  test("drains both received and failed items", async () => {
+    await runWith(
+      Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.query((sql) =>
+          sql.insert(inbox).values([
+            makeItem({ idempotencyKey: "k1", status: "received", attempts: 0 }),
+            makeItem({ idempotencyKey: "k2", status: "failed", attempts: 2 }),
+          ]),
+        );
+
+        let callCount = 0;
+        yield* drain({
+          inbox: "payments",
+          requestId: "req-1",
+          scoped: databaseSagaScoped,
+          action: () => {
+            callCount++;
+            return Effect.void;
+          },
+        });
+
+        assert.equal(callCount, 2);
+
+        const items = yield* db.query((sql) =>
+          sql.select().from(inbox).orderBy(inbox.idempotencyKey),
+        );
+        assert.equal(items[0].status, "processed");
+        assert.equal(items[0].attempts, 1);
+        assert.equal(items[1].status, "processed");
+        assert.equal(items[1].attempts, 3);
+      }),
+    );
+  });
+
   test("records an entry in inbox_errors on action failure", async () => {
     await runWith(
       Effect.gen(function* () {
@@ -118,7 +153,7 @@ describe("drain", () => {
     );
   });
 
-  test("does not process items that are not in received status", async () => {
+  test("does not process items that are not in received or failed status", async () => {
     await runWith(
       Effect.gen(function* () {
         const db = yield* Database;
@@ -126,9 +161,8 @@ describe("drain", () => {
           sql
             .insert(inbox)
             .values([
-              makeItem({ idempotencyKey: "k1", status: "failed" }),
-              makeItem({ idempotencyKey: "k2", status: "processed" }),
-              makeItem({ idempotencyKey: "k3", status: "dead_letter" }),
+              makeItem({ idempotencyKey: "k1", status: "processed" }),
+              makeItem({ idempotencyKey: "k2", status: "dead_letter" }),
             ]),
         );
 
