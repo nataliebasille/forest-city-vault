@@ -140,13 +140,13 @@ const createDatabaseService = Effect.gen(function* () {
           )
           .pipe(
             Effect.mapError((err) =>
-              err instanceof DatabaseError
-                ? err
-                : new DatabaseError({
-                    message:
-                      options?.errorMessage ?? "Database transaction failed",
-                    cause: err,
-                  }),
+              err instanceof DatabaseError ? err : (
+                new DatabaseError({
+                  message:
+                    options?.errorMessage ?? "Database transaction failed",
+                  cause: err,
+                })
+              ),
             ),
           ),
       ),

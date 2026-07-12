@@ -47,7 +47,7 @@ describe("POST /api/process/payments", () => {
     // or it should be in the errors table
     const inboxRows = await db.select().from(dbSchema.inboxes.payments.inbox);
     assert.equal(inboxRows.length, 1);
-    
+
     // The message should either be processed (if API succeeds) or attempted
     assert.ok(
       inboxRows[0].attempts >= 1,

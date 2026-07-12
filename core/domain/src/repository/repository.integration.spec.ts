@@ -81,8 +81,8 @@ function makeAccountScope() {
       getById: (id) => {
         const found = snapshots.get(String(id));
 
-        return found
-          ? Effect.succeed(found)
+        return found ?
+            Effect.succeed(found)
           : Effect.fail(
               new AggregateNotFoundError({
                 aggType: "Account",
@@ -126,13 +126,18 @@ describe("Repository ↔ dispatcher ↔ tracker integration", () => {
 
         // Dispatch an update on the loaded aggregate: the dispatcher tracks the
         // Incremented event but nothing has been saved yet.
-        const incremented = yield* Account.actions.increment(loadedAfterCreate, {
-          by: 5,
-        });
+        const incremented = yield* Account.actions.increment(
+          loadedAfterCreate,
+          {
+            by: 5,
+          },
+        );
 
         // getById must replay the still-tracked Incremented event onto the
         // persisted (pre-update) snapshot.
-        const replayedBeforeSave = yield* Account.repository.getById(created.id);
+        const replayedBeforeSave = yield* Account.repository.getById(
+          created.id,
+        );
 
         yield* Account.repository.save(incremented);
 
@@ -150,7 +155,10 @@ describe("Repository ↔ dispatcher ↔ tracker integration", () => {
       }).pipe(Effect.provide(scope.layer)),
     );
 
-    expect(result.created).toMatchObject({ version: 1, snapshot: { value: 10 } });
+    expect(result.created).toMatchObject({
+      version: 1,
+      snapshot: { value: 10 },
+    });
     expect(result.loadedAfterCreate).toMatchObject({
       version: 1,
       snapshot: { value: 10 },
@@ -261,7 +269,10 @@ describe("EventTracker isolation across scoped processes", () => {
     const scopeA = makeAccountScope();
     const scopeB = makeAccountScope();
 
-    const runScope = (scope: ReturnType<typeof makeAccountScope>, value: number) =>
+    const runScope = (
+      scope: ReturnType<typeof makeAccountScope>,
+      value: number,
+    ) =>
       Effect.runSync(
         Effect.gen(function* () {
           const created = yield* Account.actions.create(

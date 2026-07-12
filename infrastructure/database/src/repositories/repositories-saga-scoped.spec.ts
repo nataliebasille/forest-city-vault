@@ -75,8 +75,9 @@ describe("RepositoriesSagaScoped", () => {
     );
 
     assert.ok(Exit.isFailure(exit), "the saga should fail");
-    const error = Exit.isFailure(exit)
-      ? Option.getOrUndefined(Cause.failureOption(exit.cause))
+    const error =
+      Exit.isFailure(exit) ?
+        Option.getOrUndefined(Cause.failureOption(exit.cause))
       : undefined;
     assert.ok(error instanceof BoomError, "original BoomError is preserved");
 

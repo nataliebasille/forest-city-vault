@@ -35,8 +35,9 @@ class PGliteConnection implements Connection {
         const { rows } = await this.client.query(sql, params as unknown[]);
         const typed = rows as ReadonlyArray<{ [k: string]: unknown }>;
         return (
-          transformRows ? transformRows(typed) : typed
-        ) as ReadonlyArray<never>;
+          transformRows ?
+            transformRows(typed)
+          : typed) as ReadonlyArray<never>;
       },
       catch: (cause) =>
         new SqlError({ cause, message: "Failed to execute statement" }),

@@ -6,7 +6,7 @@
     "dev": "next dev -p 3102",
     "build": "next build",
     "start": "next start -p 3102",
-    "lint": "eslint",
+    "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -22,8 +22,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
     "prettier": "^3.8.3",
     "tailwindcss": "^4",
     "turbopack-inline-svg-loader": "^1.0.3",

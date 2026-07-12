@@ -43,24 +43,28 @@ export type Create_Events_From_EventDefinitions<
   Schema extends AnyStruct,
   ED extends EventDefinitions<Schema>,
 > = {
-  [K in keyof ED]: ED[K] extends {
-    schema: infer PayloadSchema extends AnyStruct;
-    handler: (payload: any) => Schema["Type"];
-  }
-    ? AggregateEvent<K & string, PayloadSchema["Type"]>
-    : never;
+  [K in keyof ED]: ED[K] extends (
+    {
+      schema: infer PayloadSchema extends AnyStruct;
+      handler: (payload: any) => Schema["Type"];
+    }
+  ) ?
+    AggregateEvent<K & string, PayloadSchema["Type"]>
+  : never;
 }[keyof ED];
 
 export type Update_Events_From_EventDefinitions<
   Schema extends AnyStruct,
   ED extends EventDefinitions<Schema>,
 > = {
-  [K in keyof ED]: ED[K] extends {
-    schema: infer PayloadSchema extends AnyStruct;
-    handler: (snapshot: Schema["Type"], payload: any) => Schema["Type"];
-  }
-    ? AggregateEvent<K & string, PayloadSchema["Type"]>
-    : never;
+  [K in keyof ED]: ED[K] extends (
+    {
+      schema: infer PayloadSchema extends AnyStruct;
+      handler: (snapshot: Schema["Type"], payload: any) => Schema["Type"];
+    }
+  ) ?
+    AggregateEvent<K & string, PayloadSchema["Type"]>
+  : never;
 }[keyof ED];
 
 export type All_Events_From_EventDefinitions<

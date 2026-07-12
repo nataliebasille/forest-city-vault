@@ -13,7 +13,10 @@ export const aggregateEvents = fcvTable(
     createdAt,
   },
   (table) => [
-    index("aggregate_events_stream_idx").on(table.aggregateType, table.aggregateId),
+    index("aggregate_events_stream_idx").on(
+      table.aggregateType,
+      table.aggregateId,
+    ),
     uniqueIndex("aggregate_events_stream_version_uidx").on(
       table.aggregateType,
       table.aggregateId,

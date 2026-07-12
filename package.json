@@ -14,6 +14,7 @@
     "db:studio": "pnpm --filter @forest-city-vault/infrastructure-database run db:studio"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
     "prettier": "^3.8.3",
     "supabase": "^2.101.0"
   },

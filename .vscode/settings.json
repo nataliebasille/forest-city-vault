@@ -2,14 +2,8 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
+    "source.fixAll.biome": "explicit"
   },
-  "eslint.useFlatConfig": true,
-  "eslint.run": "onSave",
-  "eslint.codeActionsOnSave.mode": "problems",
-  "eslint.workingDirectories": [
-    {
-      "mode": "auto"
-    }
-  ]
+  "biome.enabled": true,
+  "biome.requireConfiguration": true
 }

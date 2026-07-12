@@ -107,9 +107,9 @@ export namespace Saga {
         commits.push(participant.commit);
 
         yield* Scope.addFinalizerExit(scope, (exit) =>
-          Exit.isFailure(exit)
-            ? Effect.ignore(participant.rollback)
-            : Effect.void,
+          Exit.isFailure(exit) ?
+            Effect.ignore(participant.rollback)
+          : Effect.void,
         );
       }),
 

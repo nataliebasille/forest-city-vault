@@ -53,56 +53,63 @@ export type AggregateType<
   Actions extends ActionDefinitions<Schema, Events>,
 > = ReturnType<typeof defineAggregateType<Name, Id, Schema, Events, Actions>>;
 
-export type EnsureAggregateType<AT> = [AT] extends [never]
-  ? never
-  : AT extends { [AggregateMetadata]: AnyAggregateMetadata }
-    ? AT
-    : never;
+export type EnsureAggregateType<AT> =
+  [AT] extends [never] ? never
+  : AT extends { [AggregateMetadata]: AnyAggregateMetadata } ? AT
+  : never;
 
-export type AggregateType_GetMetadata<AT> = AT extends {
-  [AggregateMetadata]: infer Metadata;
-}
-  ? Metadata
+export type AggregateType_GetMetadata<AT> =
+  AT extends (
+    {
+      [AggregateMetadata]: infer Metadata;
+    }
+  ) ?
+    Metadata
   : never;
 
 export type AggregateType_GetName<AT> =
-  IsNever<AggregateType_GetMetadata<AT>> extends true
-    ? never
-    : AggregateType_GetMetadata<AT> extends {
-          name: infer Name extends string;
-        }
-      ? Name
-      : never;
+  IsNever<AggregateType_GetMetadata<AT>> extends true ? never
+  : AggregateType_GetMetadata<AT> extends (
+    {
+      name: infer Name extends string;
+    }
+  ) ?
+    Name
+  : never;
 
 export type AggregateType_GetId<AT> =
-  IsNever<AggregateType_GetMetadata<AT>> extends true
-    ? never
-    : AggregateType_GetMetadata<AT> extends {
-          id: infer Id extends AnyAggregateId;
-        }
-      ? Id
-      : never;
+  IsNever<AggregateType_GetMetadata<AT>> extends true ? never
+  : AggregateType_GetMetadata<AT> extends (
+    {
+      id: infer Id extends AnyAggregateId;
+    }
+  ) ?
+    Id
+  : never;
 
 export type AggregateType_GetSnapshot<AT> =
-  IsNever<AggregateType_GetMetadata<AT>> extends true
-    ? never
-    : AggregateType_GetMetadata<AT> extends {
-          snapshot: infer Snapshot extends Record<string, unknown>;
-        }
-      ? Snapshot
-      : never;
+  IsNever<AggregateType_GetMetadata<AT>> extends true ? never
+  : AggregateType_GetMetadata<AT> extends (
+    {
+      snapshot: infer Snapshot extends Record<string, unknown>;
+    }
+  ) ?
+    Snapshot
+  : never;
 
 export type AggregateType_GetEvents<AT> =
-  AggregateType_GetMetadata<AT> extends {
-    readonly schema: infer Schema;
-    readonly events: infer Events;
-  }
-    ? Schema extends AnyStruct
-      ? Events extends EventDefinitions<Schema>
-        ? All_Events_From_EventDefinitions<Schema, Events>
-        : never
+  AggregateType_GetMetadata<AT> extends (
+    {
+      readonly schema: infer Schema;
+      readonly events: infer Events;
+    }
+  ) ?
+    Schema extends AnyStruct ?
+      Events extends EventDefinitions<Schema> ?
+        All_Events_From_EventDefinitions<Schema, Events>
       : never
-    : never;
+    : never
+  : never;
 
 export type AggregateType_GetInstance<AT> = AggregateRoot<
   AggregateType_GetId<AT>,
@@ -110,25 +117,31 @@ export type AggregateType_GetInstance<AT> = AggregateRoot<
 >;
 
 export type AggregateType_GetSchema<AT> =
-  AggregateType_GetMetadata<AT> extends {
-    readonly schema: infer Schema extends AnyStruct;
-  }
-    ? Schema
-    : never;
+  AggregateType_GetMetadata<AT> extends (
+    {
+      readonly schema: infer Schema extends AnyStruct;
+    }
+  ) ?
+    Schema
+  : never;
 
 export type AggregateType_GetEventDefinitions<AT> =
-  AggregateType_GetMetadata<AT> extends {
-    readonly events: infer EventDefs extends EventDefinitions<any>;
-  }
-    ? EventDefs
-    : never;
+  AggregateType_GetMetadata<AT> extends (
+    {
+      readonly events: infer EventDefs extends EventDefinitions<any>;
+    }
+  ) ?
+    EventDefs
+  : never;
 
 export type AggregateType_GetActionDefinitions<AT> =
-  AggregateType_GetMetadata<AT> extends {
-    readonly actions: infer Actions extends ActionDefinitions<any, any>;
-  }
-    ? Actions
-    : never;
+  AggregateType_GetMetadata<AT> extends (
+    {
+      readonly actions: infer Actions extends ActionDefinitions<any, any>;
+    }
+  ) ?
+    Actions
+  : never;
 
 // Domain Factory
 type DefineAggregateTypeOptions<

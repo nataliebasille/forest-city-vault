@@ -26,9 +26,9 @@ export const RequestTraceMiddleware = <A, E, R>(next: Effect.Effect<A, E, R>) =>
     const requestIdHeader = headers.get(REQUEST_ID_HEADER);
 
     const requestId =
-      typeof requestIdHeader === "string" && isValidRequestId(requestIdHeader)
-        ? requestIdHeader
-        : crypto.randomUUID();
+      typeof requestIdHeader === "string" && isValidRequestId(requestIdHeader) ?
+        requestIdHeader
+      : crypto.randomUUID();
 
     const requestIdSource: RequestIdSource =
       requestId === requestIdHeader ? "incoming" : "generated";

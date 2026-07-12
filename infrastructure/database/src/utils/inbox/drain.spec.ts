@@ -244,9 +244,9 @@ describe("drain", () => {
           requestId: "req-1",
           scoped: databaseSagaScoped,
           action: (msg) =>
-            msg.idempotencyKey === "k2"
-              ? Effect.die(new Error("defect on second item"))
-              : Effect.void,
+            msg.idempotencyKey === "k2" ?
+              Effect.die(new Error("defect on second item"))
+            : Effect.void,
         }).pipe(Effect.exit);
 
         const items = yield* db.query((sql) =>

@@ -51,23 +51,23 @@ export type Reducer<M extends WithAggregateMetadata<AnyAggregateMetadata>> =
       AggregateType_GetSchema<M>,
       AggregateType_GetEventDefinitions<M>
     >
-  > extends true
-    ? IsNever<
-        Update_Events_From_EventDefinitions<
-          AggregateType_GetSchema<M>,
-          AggregateType_GetEventDefinitions<M>
-        >
-      > extends true
-      ? never
-      : UpdatingReducer<M>
-    : IsNever<
-          Update_Events_From_EventDefinitions<
-            AggregateType_GetSchema<M>,
-            AggregateType_GetEventDefinitions<M>
-          >
-        > extends true
-      ? InitializingReducer<M>
-      : InitializingReducer<M> & UpdatingReducer<M>;
+  > extends true ?
+    IsNever<
+      Update_Events_From_EventDefinitions<
+        AggregateType_GetSchema<M>,
+        AggregateType_GetEventDefinitions<M>
+      >
+    > extends true ?
+      never
+    : UpdatingReducer<M>
+  : IsNever<
+    Update_Events_From_EventDefinitions<
+      AggregateType_GetSchema<M>,
+      AggregateType_GetEventDefinitions<M>
+    >
+  > extends true ?
+    InitializingReducer<M>
+  : InitializingReducer<M> & UpdatingReducer<M>;
 
 export function createReducer<
   M extends WithAggregateMetadata<AnyAggregateMetadata>,
@@ -83,8 +83,9 @@ export function createReducer<
     const eventType = event.type as keyof E;
     const handler = events[eventType].handler;
 
-    const nextSnapshot = isPristineAggregateRoot(agg)
-      ? (handler as (payload: Payload) => Snapshot)(event.payload)
+    const nextSnapshot =
+      isPristineAggregateRoot(agg) ?
+        (handler as (payload: Payload) => Snapshot)(event.payload)
       : (handler as (snapshot: Snapshot, payload: Payload) => Snapshot)(
           (agg as Extract<typeof agg, { snapshot: unknown }>).snapshot,
           event.payload,

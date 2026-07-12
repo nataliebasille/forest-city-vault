@@ -55,12 +55,8 @@
           "name": "fcv_payment_inbox_errors_inbox_id_fcv_payment_inbox_id_fk",
           "tableFrom": "fcv_payment_inbox_errors",
           "tableTo": "fcv_payment_inbox",
-          "columnsFrom": [
-            "inbox_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inbox_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -68,10 +64,7 @@
       "compositePrimaryKeys": {
         "fcv_payment_inbox_errors_inbox_id_attempt_number_pk": {
           "name": "fcv_payment_inbox_errors_inbox_id_attempt_number_pk",
-          "columns": [
-            "inbox_id",
-            "attempt_number"
-          ]
+          "columns": ["inbox_id", "attempt_number"]
         }
       },
       "uniqueConstraints": {},
@@ -441,12 +434,8 @@
           "name": "fcv_sales_line_items_sale_id_fcv_sales_id_fk",
           "tableFrom": "fcv_sales_line_items",
           "tableTo": "fcv_sales",
-          "columnsFrom": [
-            "sale_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sale_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -454,12 +443,8 @@
           "name": "fcv_sales_line_items_vendor_id_fcv_vendors_id_fk",
           "tableFrom": "fcv_sales_line_items",
           "tableTo": "fcv_vendors",
-          "columnsFrom": [
-            "vendor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["vendor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -541,26 +526,17 @@
     "public.inbox_status": {
       "name": "inbox_status",
       "schema": "public",
-      "values": [
-        "received",
-        "processed",
-        "failed",
-        "dead_letter"
-      ]
+      "values": ["received", "processed", "failed", "dead_letter"]
     },
     "public.payment_provider": {
       "name": "payment_provider",
       "schema": "public",
-      "values": [
-        "clover"
-      ]
+      "values": ["clover"]
     },
     "public.sales_source": {
       "name": "sales_source",
       "schema": "public",
-      "values": [
-        "clover"
-      ]
+      "values": ["clover"]
     }
   },
   "schemas": {},

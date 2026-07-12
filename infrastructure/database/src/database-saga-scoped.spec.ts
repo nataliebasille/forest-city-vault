@@ -62,8 +62,9 @@ describe("databaseSagaScoped", () => {
     );
 
     assert.ok(Exit.isFailure(exit), "the effect should fail");
-    const error = Exit.isFailure(exit)
-      ? Option.getOrUndefined(Cause.failureOption(exit.cause))
+    const error =
+      Exit.isFailure(exit) ?
+        Option.getOrUndefined(Cause.failureOption(exit.cause))
       : undefined;
     // the caller's typed error survives the transaction boundary unchanged
     assert.ok(error instanceof BoomError, "original BoomError is preserved");
@@ -95,8 +96,9 @@ describe("databaseSagaScoped", () => {
     );
 
     assert.ok(Exit.isFailure(exit), "the effect should die");
-    const defect = Exit.isFailure(exit)
-      ? Option.getOrUndefined(Cause.dieOption(exit.cause))
+    const defect =
+      Exit.isFailure(exit) ?
+        Option.getOrUndefined(Cause.dieOption(exit.cause))
       : undefined;
     assert.ok(defect instanceof Error, "original defect is preserved");
     assert.equal((defect as Error).message, "unexpected defect");

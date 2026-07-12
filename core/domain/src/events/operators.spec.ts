@@ -53,15 +53,17 @@ const materialized: AggregateRoot_MaterializedVariant<
 };
 
 type EnsureAgg<AggType> =
-  AggType extends AggregateType<
-    infer IdSchema,
-    infer Name,
-    infer Schema,
-    infer Events,
-    infer Actions
-  >
-    ? AggregateType<IdSchema, Name, Schema, Events, Actions>
-    : never;
+  AggType extends (
+    AggregateType<
+      infer IdSchema,
+      infer Name,
+      infer Schema,
+      infer Events,
+      infer Actions
+    >
+  ) ?
+    AggregateType<IdSchema, Name, Schema, Events, Actions>
+  : never;
 
 // ─── Functional tests ─────────────────────────────────────────────────────────
 

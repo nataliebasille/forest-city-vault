@@ -20,9 +20,9 @@ export function buildRequestStateLayer(
   ...args: [type: "route", request: NextRequest] | [type: "page"]
 ) {
   const layers =
-    args[0] === "route"
-      ? REQUEST_STATE_DEPS.map((Tag) => Tag.fromRequest(args[1]))
-      : REQUEST_STATE_DEPS.map((Tag) => Tag.forPage());
+    args[0] === "route" ?
+      REQUEST_STATE_DEPS.map((Tag) => Tag.fromRequest(args[1]))
+    : REQUEST_STATE_DEPS.map((Tag) => Tag.forPage());
 
   return mergeLayers(layers);
 }

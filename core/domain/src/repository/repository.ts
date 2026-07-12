@@ -167,13 +167,13 @@ export function createRepository<
         }
       }).pipe(
         Effect.mapError((error) =>
-          error instanceof RepositoryError
-            ? error
-            : new RepositoryError({
-                aggType: name,
-                aggId: String(aggregate.id),
-                error,
-              }),
+          error instanceof RepositoryError ? error : (
+            new RepositoryError({
+              aggType: name,
+              aggId: String(aggregate.id),
+              error,
+            })
+          ),
         ),
       ),
   });
@@ -207,8 +207,9 @@ export function createRepository<
       RepositoryTag,
       Effect.gen(function* () {
         const eventStore = yield* EventStore;
-        const service = Effect.isEffect(serviceOrEffect)
-          ? yield* serviceOrEffect
+        const service =
+          Effect.isEffect(serviceOrEffect) ?
+            yield* serviceOrEffect
           : serviceOrEffect;
 
         return withEventTracking(service, eventStore);

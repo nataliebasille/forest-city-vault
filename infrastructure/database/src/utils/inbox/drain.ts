@@ -6,9 +6,8 @@ import { Database, DatabaseError, tryDb } from "../..";
 import { InboxErrorTable } from "../../schema/inboxes";
 
 type Inbox = {
-  [K in keyof typeof inboxes as (typeof inboxes)[K] extends { inbox: any }
-    ? K
-    : never]: (typeof inboxes)[K];
+  [K in keyof typeof inboxes as (typeof inboxes)[K] extends { inbox: any } ? K
+  : never]: (typeof inboxes)[K];
 };
 
 type InboxKeys = keyof Inbox;
@@ -107,9 +106,9 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
           requestId,
           attemptNumber,
           error: serializeError(
-            outcome.left instanceof DatabaseError
-              ? outcome.left.cause
-              : outcome.left,
+            outcome.left instanceof DatabaseError ?
+              outcome.left.cause
+            : outcome.left,
           ),
         } satisfies InboxErrorTable["$inferInsert"];
 

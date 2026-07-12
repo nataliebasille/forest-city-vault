@@ -58,17 +58,16 @@ export type ActionDispatcher<
   A extends AggregateType_GetActionDefinitions<M>,
 > = {
   [K in keyof A]: A[K] extends (
-    ...args: infer Args
-  ) => Effect.Effect<any, infer E, infer R>
-    ? Args extends [payload: infer Payload]
-      ? InitializingActionDispatcher<M, Payload, E, R>
-      : Args extends [
-            snapshot: AggregateType_GetSnapshot<M>,
-            payload: infer Payload,
-          ]
-        ? UpdatingActionDispatcher<M, Payload, E, R>
-        : never
-    : never;
+    (...args: infer Args) => Effect.Effect<any, infer E, infer R>
+  ) ?
+    Args extends [payload: infer Payload] ?
+      InitializingActionDispatcher<M, Payload, E, R>
+    : Args extends (
+      [snapshot: AggregateType_GetSnapshot<M>, payload: infer Payload]
+    ) ?
+      UpdatingActionDispatcher<M, Payload, E, R>
+    : never
+  : never;
 };
 
 export function createActionDispatchers<
@@ -86,8 +85,9 @@ export function createActionDispatchers<
 
             const handlerEvents = yield* handler(...handlerArgs);
             const eventsToApply = (
-              Array.isArray(handlerEvents) ? handlerEvents : [handlerEvents]
-            ) as AggregateType_GetEvents<M>[];
+              Array.isArray(handlerEvents) ? handlerEvents : (
+                [handlerEvents]
+              )) as AggregateType_GetEvents<M>[];
 
             const reduceEvents = (
               previous: AggregateType_GetInstance<M>,

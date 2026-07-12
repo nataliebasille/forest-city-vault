@@ -15,7 +15,7 @@
     "db:generate": "pnpm db:generate:drizzle-schema && drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "lint": "eslint",
+    "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

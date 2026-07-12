@@ -7,7 +7,9 @@ import { Database } from "./index";
  * @param migrationsFolder Path to the drizzle migrations folder.
  *   Defaults to `packages/database/drizzle`.
  */
-export declare const makeDatabaseTest: (migrationsFolder?: string) => Layer.Layer<Database, never, never>;
+export declare const makeDatabaseTest: (
+  migrationsFolder?: string,
+) => Layer.Layer<Database, never, never>;
 /**
  * A ready-to-use in-memory database Layer for tests.
  * Each Layer instantiation gets a fresh, isolated PGlite database.
