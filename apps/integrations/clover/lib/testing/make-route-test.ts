@@ -9,11 +9,13 @@ import { CloverConfig } from "@forest-city-vault/core-config";
 import { staticIdGenerator } from "@forest-city-vault/core-id-generator";
 import { databaseSagaScoped } from "@forest-city-vault/infrastructure-database";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
+import { CloverAuthToken } from "../integration/auth";
 
 export type TestDb = ReturnType<typeof drizzle>;
 
 export interface MakeRouteTestOptions {
   appId?: string;
+  secretCode?: string;
   webhookAuthCode?: string;
   fixedTime?: Date;
 }
@@ -33,6 +35,7 @@ export async function makeRouteTest<T>(
   options: MakeRouteTestOptions = {},
 ): Promise<Testing<T>> {
   const appId = options.appId ?? "test-app-id";
+  const secretCode = options.secretCode ?? "test-app-secret";
   const webhookAuthCode = options.webhookAuthCode ?? "test-auth-code";
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
 
@@ -41,9 +44,15 @@ export async function makeRouteTest<T>(
   const commonLayer = Layer.mergeAll(
     Layer.succeed(
       CloverConfig,
-      CloverConfig.make({ appId, webhookAuthCode, url: "http://localhost" }),
+      CloverConfig.make({
+        appId,
+        secretCode,
+        webhookAuthCode,
+        url: "http://localhost",
+      }),
     ),
     FetchHttpClient.layer,
+    CloverAuthToken.Default,
     staticClock(fixedTime),
     staticIdGenerator("00000000-0000-7000-8000-000000000001"),
   );
@@ -73,6 +82,7 @@ export async function makeRouteTest<T>(
     config: {
       clover: CloverConfig.make({
         appId,
+        secretCode,
         webhookAuthCode,
         url: "http://localhost",
       }),
@@ -80,3 +90,4 @@ export async function makeRouteTest<T>(
     module: moduleExported,
   };
 }
+

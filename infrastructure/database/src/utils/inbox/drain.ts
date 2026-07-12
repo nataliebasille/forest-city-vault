@@ -1,6 +1,6 @@
 import { Saga, withSaga } from "@forest-city-vault/platform-saga";
 import { Effect, Either, Layer } from "effect";
-import { eq } from "drizzle-orm/sql/expressions/conditions";
+import { eq, or } from "drizzle-orm/sql/expressions/conditions";
 import * as inboxes from "../../schema/inboxes";
 import { Database, DatabaseError, tryDb } from "../..";
 import { InboxErrorTable } from "../../schema/inboxes";
@@ -15,8 +15,8 @@ type InboxKeys = keyof Inbox;
 const MAX_ATTEMPTS = 5;
 
 /**
- * Processes up to 30 `received` items from an inbox, running each one as its own
- * saga.
+ * Processes up to 30 `received` or `failed` items from an inbox, running each one
+ * as its own saga.
  *
  * Every message is a self-contained unit of work:
  *
@@ -62,7 +62,7 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
       sql
         .select()
         .from(inbox)
-        .where(eq(inbox.status, "received"))
+        .where(or(eq(inbox.status, "received"), eq(inbox.status, "failed")))
         .orderBy(inbox.receivedAt)
         .limit(30),
     );

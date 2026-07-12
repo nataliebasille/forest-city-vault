@@ -1,11 +1,6 @@
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-} from "@effect/platform";
-import { Schema } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 import { makeRequest } from "./make-request";
-import { Effect } from "effect";
+import { CloverAuthToken } from "./auth";
 
 export const CloverPaymentSchema = Schema.Struct({
   id: Schema.String,
@@ -32,15 +27,17 @@ export const CloverPaymentSchema = Schema.Struct({
 
 export type CloverPayment = typeof CloverPaymentSchema.Type;
 
-export function getCloverPayment(
-  merchantId: string,
-  paymentId: string,
-  accessToken: string,
-) {
-  return makeRequest({
-    method: "GET",
-    path: `/v3/merchants/${merchantId}/payments/${paymentId}`,
-    accessToken,
-    responseSchema: CloverPaymentSchema,
+export function getCloverPayment(merchantId: string, paymentId: string) {
+  return Effect.gen(function* () {
+    const { getAccessToken } = yield* CloverAuthToken;
+    const redactedToken = yield* getAccessToken;
+    const accessToken = Redacted.value(redactedToken);
+
+    return yield* makeRequest({
+      method: "GET",
+      path: `/v3/merchants/${merchantId}/payments/${paymentId}`,
+      accessToken,
+      responseSchema: CloverPaymentSchema,
+    });
   });
 }
