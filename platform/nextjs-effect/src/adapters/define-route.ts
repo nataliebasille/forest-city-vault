@@ -80,13 +80,45 @@ export function defineRoute(config: {
     const run = (
       req: NextRequest,
       layer: Layer.Layer<unknown, unknown, never>,
-    ) =>
-      Effect.runPromise(
+    ) => {
+      const requestStartedAt = Date.now();
+      const requestContext = {
+        httpMethod: req.method,
+        routePath: req.nextUrl.pathname,
+      };
+
+      return Effect.runPromise(
         action(req).pipe(
           Effect.provide(layer),
           middleware,
           withSaga,
           Effect.provide(buildRequestStateLayer("route", req)),
+          Effect.tapBoth({
+            onFailure: (error) => {
+              const result = failureToHttpResult(error);
+              const durationMs = Date.now() - requestStartedAt;
+              const log = result.status >= 500 ? Effect.logError : Effect.logWarning;
+
+              return log("route.request.failed", {
+                ...requestContext,
+                status: result.status,
+                durationMs,
+                failureDisposition:
+                  result.status >= 500 ? "unexpected_defect" : "expected_terminal",
+                error: toSafeErrorDetails(result.cause ?? error),
+              });
+            },
+            onSuccess: (value) => {
+              const result = successToHttpResult(value);
+              const durationMs = Date.now() - requestStartedAt;
+
+              return Effect.logInfo("route.request.completed", {
+                ...requestContext,
+                status: getHttpStatus(result),
+                durationMs,
+              });
+            },
+          }),
           Effect.match({
             onFailure: (error) =>
               httpResultToResponse(failureToHttpResult(error)),
@@ -96,6 +128,7 @@ export function defineRoute(config: {
           }),
         ) as unknown as Effect.Effect<Response, never, never>,
       );
+    };
 
     const routeFn = ((req: NextRequest) =>
       run(
@@ -145,4 +178,35 @@ export function failureToHttpResult(error: unknown) {
     message: "Internal Server Error",
     cause: error,
   });
+}
+
+function getHttpStatus(result: HttpResult<unknown>) {
+  if (HttpResult.$is("NoContent")(result)) {
+    return 204;
+  }
+
+  if (HttpResult.$is("Error")(result)) {
+    return result.status;
+  }
+
+  return 200;
+}
+
+function toSafeErrorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  if (typeof error === "object" && error !== null && "_tag" in error) {
+    return {
+      tag: String((error as { _tag?: unknown })._tag),
+    };
+  }
+
+  return {
+    type: typeof error,
+  };
 }

@@ -18,9 +18,17 @@ const decodePaymentPayload = Schema.decodeUnknown(
 
 export const POST = pooledRoute(() =>
   Effect.gen(function* () {
-    yield* drain({
+    const { requestId } = yield* RequestTrace;
+
+    yield* Effect.logInfo("clover.payments.drain.begin", {
+      requestId,
+      workflowStage: "drain_inbox",
       inbox: "payments",
-      requestId: (yield* RequestTrace).requestId,
+    });
+
+    const processed = yield* drain({
+      inbox: "payments",
+      requestId,
       scoped: RepositoriesSagaScoped,
       action: (message) =>
         Effect.gen(function* () {
@@ -56,6 +64,13 @@ export const POST = pooledRoute(() =>
 
           yield* Sales.repository.save(sale);
         }),
+    });
+
+    yield* Effect.logInfo("clover.payments.drain.completed", {
+      requestId,
+      workflowStage: "completed",
+      inbox: "payments",
+      processedCount: processed.length,
     });
 
     return true;

@@ -27,6 +27,14 @@ export const makeRequest = <A, I, R>({
   body,
 }: MakeRequestOptions<A, I, R>) =>
   Effect.gen(function* () {
+    yield* Effect.logInfo("clover.api.request.begin", {
+      workflowStage: "send_request",
+      method,
+      path,
+      hasBody: body !== undefined,
+      urlParamCount: Object.keys(urlParams ?? {}).length,
+    });
+
     const client = yield* HttpClient.HttpClient;
     const { url: baseUrl } = yield* CloverConfig;
 
@@ -44,9 +52,53 @@ export const makeRequest = <A, I, R>({
     }
 
     const response = yield* client.execute(request);
-    const okResponse = yield* HttpClientResponse.filterStatusOk(response);
+    yield* Effect.logInfo("clover.api.request.received_response", {
+      workflowStage: "receive_response",
+      method,
+      path,
+      status: response.status,
+    });
 
-    return yield* HttpClientResponse.schemaBodyJson(responseSchema, {
+    const okResponse = yield* HttpClientResponse.filterStatusOk(response);
+    const payload = yield* HttpClientResponse.schemaBodyJson(responseSchema, {
       errors: "all",
     })(okResponse);
-  });
+
+    yield* Effect.logInfo("clover.api.request.completed", {
+      workflowStage: "decode_response",
+      method,
+      path,
+      status: okResponse.status,
+    });
+
+    return payload;
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logWarning("clover.api.request.failed", {
+        workflowStage: "failed",
+        method,
+        path,
+        failureDisposition: "retryable_or_terminal",
+        error: toSafeErrorDetails(error),
+      }),
+    ),
+  );
+
+function toSafeErrorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  if (typeof error === "object" && error !== null && "_tag" in error) {
+    return {
+      tag: String((error as { _tag?: unknown })._tag),
+    };
+  }
+
+  return {
+    type: typeof error,
+  };
+}

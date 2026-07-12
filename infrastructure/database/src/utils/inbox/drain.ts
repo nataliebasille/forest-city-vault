@@ -67,9 +67,27 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
         .limit(30),
     );
 
-    return yield* Effect.forEach(toProcess, (item) =>
+    yield* Effect.logInfo("inbox.drain.batch.loaded", {
+      inbox: inboxKey,
+      requestId,
+      batchSize: toProcess.length,
+      workflowStage: "load_batch",
+    });
+
+    const processed = yield* Effect.forEach(toProcess, (item) =>
       Effect.gen(function* () {
         const attemptNumber = item.attempts + 1;
+
+        yield* Effect.logInfo("inbox.message.processing.started", {
+          inbox: inboxKey,
+          requestId,
+          inboxId: String(item.id),
+          idempotencyKey: item.idempotencyKey,
+          providerEventId: item.providerEventId,
+          providerObjectId: item.providerObjectId,
+          attemptNumber,
+          workflowStage: "process_message",
+        });
 
         // Run the message as a saga: the action plus the `processed` status
         // update commit or roll back atomically on the saga's transaction.
@@ -92,6 +110,18 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
         if (Either.isRight(outcome)) {
           item.attempts = attemptNumber;
           item.status = "processed";
+
+          yield* Effect.logInfo("inbox.message.processing.succeeded", {
+            inbox: inboxKey,
+            requestId,
+            inboxId: String(item.id),
+            idempotencyKey: item.idempotencyKey,
+            providerEventId: item.providerEventId,
+            providerObjectId: item.providerObjectId,
+            attemptNumber,
+            status: item.status,
+          });
+
           return { id: item.id, status: item.status };
         }
 
@@ -124,9 +154,32 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
           }),
         );
 
+        yield* Effect.logWarning("inbox.message.processing.failed", {
+          inbox: inboxKey,
+          requestId,
+          inboxId: String(item.id),
+          idempotencyKey: item.idempotencyKey,
+          providerEventId: item.providerEventId,
+          providerObjectId: item.providerObjectId,
+          attemptNumber,
+          maxAttempts: MAX_ATTEMPTS,
+          status,
+          failureDisposition: status === "dead_letter" ? "terminal" : "retryable",
+          error: toSafeErrorDetails(outcome.left),
+        });
+
         return { id: item.id, status };
       }),
     );
+
+    yield* Effect.logInfo("inbox.drain.batch.completed", {
+      inbox: inboxKey,
+      requestId,
+      processedCount: processed.length,
+      workflowStage: "complete_batch",
+    });
+
+    return processed;
   });
 }
 
@@ -170,5 +223,24 @@ function createErrorReplacer() {
     }
 
     return value;
+  };
+}
+
+function toSafeErrorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  if (typeof error === "object" && error !== null && "_tag" in error) {
+    return {
+      tag: String((error as { _tag?: unknown })._tag),
+    };
+  }
+
+  return {
+    type: typeof error,
   };
 }

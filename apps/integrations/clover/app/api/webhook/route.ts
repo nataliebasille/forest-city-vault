@@ -40,6 +40,12 @@ const CLOVER_AUTH_HEADER = "x-clover-auth";
 const handler = (request: NextRequest) =>
   Effect.gen(function* () {
     const { webhookAuthCode } = yield* CloverConfig;
+    const { requestId } = yield* RequestTrace;
+
+    yield* Effect.logInfo("clover.webhook.received", {
+      requestId,
+      workflowStage: "decode_payload",
+    });
 
     const body = yield* Either.match(yield* parseBody(CloverWebhookPayload), {
       onLeft: (error) => badRequest("Invalid request body", error),
@@ -47,8 +53,9 @@ const handler = (request: NextRequest) =>
     });
 
     if ("verificationCode" in body) {
-      yield* Effect.log("Received Clover webhook verification request", {
-        verificationCode: body.verificationCode,
+      yield* Effect.logInfo("clover.webhook.verification.received", {
+        requestId,
+        workflowStage: "verification",
       });
 
       return true;
@@ -56,10 +63,22 @@ const handler = (request: NextRequest) =>
 
     const actualAuthCode = request.headers.get(CLOVER_AUTH_HEADER);
     if (!actualAuthCode || !safeEqual(actualAuthCode, webhookAuthCode)) {
+      yield* Effect.logWarning("clover.webhook.authentication.rejected", {
+        requestId,
+        workflowStage: "authenticate",
+        authHeaderPresent: Boolean(actualAuthCode),
+        failureDisposition: "expected_terminal",
+      });
+
       return yield* unauthorized("Missing or invalid Clover auth header");
     }
 
     yield* recordWebhookEvents(body);
+
+    yield* Effect.logInfo("clover.webhook.accepted", {
+      requestId,
+      workflowStage: "completed",
+    });
 
     return true;
   });
@@ -72,12 +91,27 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
     const { requestId } = yield* RequestTrace;
     const receivedAt = yield* now;
     const appId = event.appId;
+    const merchants = Object.entries(event.merchants);
+    let insertedPayments = 0;
+    let skippedNonPaymentEvents = 0;
+    let totalEvents = 0;
 
-    for (const [merchantId, cloverEvents] of Object.entries(event.merchants)) {
+    yield* Effect.logInfo("clover.webhook.persist.begin", {
+      requestId,
+      appId: event.appId,
+      merchantCount: merchants.length,
+      workflowStage: "persist_inbox",
+    });
+
+    for (const [merchantId, cloverEvents] of merchants) {
       for (const cloverEvent of cloverEvents) {
+        totalEvents++;
         const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
         const [eventType, paymentId] = cloverEvent.objectId.split(":");
-        if (eventType !== "P") continue;
+        if (eventType !== "P") {
+          skippedNonPaymentEvents++;
+          continue;
+        }
         const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
           {
             requestId,
@@ -100,8 +134,18 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
               target: db.schema.inboxes.payments.inbox.idempotencyKey,
             }),
         );
+        insertedPayments++;
       }
     }
+
+    yield* Effect.logInfo("clover.webhook.persist.completed", {
+      requestId,
+      appId: event.appId,
+      workflowStage: "persist_inbox",
+      totalEvents,
+      insertedPayments,
+      skippedNonPaymentEvents,
+    });
   });
 }
 
