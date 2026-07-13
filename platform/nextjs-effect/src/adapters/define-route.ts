@@ -37,8 +37,8 @@ export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testRoute} without the production layer ever being constructed.
  */
-export function defineRoute<LOut, LErr, LReq>(config: {
-  layer: Layer.Layer<LOut, LErr, LReq>;
+export function defineRoute<LOut, LErr>(config: {
+  layer: Layer.Layer<LOut, LErr, Saga>;
 }): <A, E, R>(
   action: (
     req: NextRequest,
@@ -48,7 +48,6 @@ export function defineRoute<LOut, LErr, LReq>(config: {
 export function defineRoute<
   LOut,
   LErr,
-  LReq,
   AIn,
   EIn,
   RIn,
@@ -56,7 +55,7 @@ export function defineRoute<
   EOut,
   ROut,
 >(config: {
-  layer: Layer.Layer<LOut, LErr, LReq>;
+  layer: Layer.Layer<LOut, LErr, Saga>;
   middleware: (
     self: Effect.Effect<AIn, EIn, RIn>,
   ) => Effect.Effect<AOut, EOut, ROut>;

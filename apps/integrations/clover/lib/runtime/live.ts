@@ -7,7 +7,6 @@ import {
   DatabaseLive,
 } from "@forest-city-vault/infrastructure-database";
 import { Layer } from "effect";
-import { CloverAuthToken } from "../integration/auth";
 
 /**
  * Services shared by every Clover route, regardless of how the {@link Database}
@@ -19,7 +18,6 @@ const AppCommon = Layer.mergeAll(
   SystemClock,
   SystemIdGenerator,
   FetchHttpClient.layer,
-  CloverAuthToken.Default,
 );
 
 /**

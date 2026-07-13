@@ -9,7 +9,6 @@ import { CloverConfig } from "@forest-city-vault/core-config";
 import { staticIdGenerator } from "@forest-city-vault/core-id-generator";
 import { databaseSagaScoped } from "@forest-city-vault/infrastructure-database";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
-import { CloverAuthToken } from "../integration/auth";
 
 export type TestDb = ReturnType<typeof drizzle>;
 
@@ -52,7 +51,6 @@ export async function makeRouteTest<T>(
       }),
     ),
     FetchHttpClient.layer,
-    CloverAuthToken.Default,
     staticClock(fixedTime),
     staticIdGenerator("00000000-0000-7000-8000-000000000001"),
   );

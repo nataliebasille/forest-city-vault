@@ -29,8 +29,7 @@ export type CloverPayment = typeof CloverPaymentSchema.Type;
 
 export function getCloverPayment(merchantId: string, paymentId: string) {
   return Effect.gen(function* () {
-    const { getAccessToken } = yield* CloverAuthToken;
-    const redactedToken = yield* getAccessToken;
+    const redactedToken = yield* CloverAuthToken;
     const accessToken = Redacted.value(redactedToken);
 
     return yield* makeRequest({
