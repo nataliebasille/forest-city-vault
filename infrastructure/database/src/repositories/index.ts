@@ -5,6 +5,7 @@ import { databaseSagaScoped } from "../database-saga-scoped";
 import { SalesRepositoryLive } from "./sales";
 
 export * from "./sales";
+export * from "./clover-tokens";
 
 /**
  * App-level repository stack bound to the base (pool) {@link Database}. Built

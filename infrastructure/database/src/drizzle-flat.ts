@@ -4,6 +4,7 @@
 import { dbSchema } from "..";
 
 export const aggregateEvents = dbSchema.aggregateEvents;
+export const cloverMerchantTokens = dbSchema.cloverMerchantTokens;
 export const inboxes_eventType = dbSchema.inboxes.eventType;
 export const inboxes_inboxStatus = dbSchema.inboxes.inboxStatus;
 export const inboxes_payments_inbox = dbSchema.inboxes.payments.inbox;

@@ -1,6 +1,6 @@
 import { Effect, Redacted, Schema } from "effect";
 import { makeRequest } from "./make-request";
-import { CloverAuthToken } from "./auth";
+import { getMerchantAccessToken } from "./auth";
 
 export const CloverPaymentSchema = Schema.Struct({
   id: Schema.String,
@@ -29,7 +29,7 @@ export type CloverPayment = typeof CloverPaymentSchema.Type;
 
 export function getCloverPayment(merchantId: string, paymentId: string) {
   return Effect.gen(function* () {
-    const redactedToken = yield* CloverAuthToken;
+    const redactedToken = yield* getMerchantAccessToken(merchantId);
     const accessToken = Redacted.value(redactedToken);
 
     return yield* makeRequest({

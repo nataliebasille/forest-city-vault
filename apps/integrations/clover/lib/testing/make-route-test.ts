@@ -1,7 +1,7 @@
 import { mock } from "node:test";
 
 import { drizzle } from "drizzle-orm/pglite";
-import { Layer } from "effect";
+import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "@effect/platform";
 
 import { staticClock } from "@forest-city-vault/core-clock";
@@ -16,6 +16,7 @@ export interface MakeRouteTestOptions {
   appId?: string;
   secretCode?: string;
   webhookAuthCode?: string;
+  tokenEncryptionKey?: string;
   fixedTime?: Date;
 }
 
@@ -36,20 +37,22 @@ export async function makeRouteTest<T>(
   const appId = options.appId ?? "test-app-id";
   const secretCode = options.secretCode ?? "test-app-secret";
   const webhookAuthCode = options.webhookAuthCode ?? "test-auth-code";
+  const tokenEncryptionKey =
+    options.tokenEncryptionKey ?? "test-token-encryption-key";
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
 
   const { layer: databaseLayer, db: testDb } = await makeDatabaseTestContext();
 
+  const cloverConfig = CloverConfig.make({
+    appId,
+    secretCode,
+    webhookAuthCode,
+    url: "http://localhost",
+    tokenEncryptionKey: Redacted.make(tokenEncryptionKey),
+  });
+
   const commonLayer = Layer.mergeAll(
-    Layer.succeed(
-      CloverConfig,
-      CloverConfig.make({
-        appId,
-        secretCode,
-        webhookAuthCode,
-        url: "http://localhost",
-      }),
-    ),
+    Layer.succeed(CloverConfig, cloverConfig),
     FetchHttpClient.layer,
     staticClock(fixedTime),
     staticIdGenerator("00000000-0000-7000-8000-000000000001"),
@@ -78,12 +81,7 @@ export async function makeRouteTest<T>(
     db: testDb,
     time: fixedTime,
     config: {
-      clover: CloverConfig.make({
-        appId,
-        secretCode,
-        webhookAuthCode,
-        url: "http://localhost",
-      }),
+      clover: cloverConfig,
     },
     module: moduleExported,
   };
