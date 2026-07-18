@@ -159,6 +159,7 @@ export function successToHttpResult<A>(value: A): HttpResult<A> {
   if (
     HttpResult.$is("Ok")(value) ||
     HttpResult.$is("Error")(value) ||
+    HttpResult.$is("Redirect")(value) ||
     HttpResult.$is("NoContent")(value)
   ) {
     return value as HttpResult<A>;
@@ -182,6 +183,10 @@ export function failureToHttpResult(error: unknown) {
 function getHttpStatus(result: HttpResult<unknown>) {
   if (HttpResult.$is("NoContent")(result)) {
     return 204;
+  }
+
+  if (HttpResult.$is("Redirect")(result)) {
+    return result.status;
   }
 
   if (HttpResult.$is("Error")(result)) {

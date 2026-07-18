@@ -28,6 +28,7 @@ const config = CloverConfig.make({
   secretCode: "test-app-secret",
   webhookAuthCode: "test-auth-code",
   url: "http://clover.test",
+  oauthUrl: "http://oauth.clover.test",
   tokenEncryptionKey: Redacted.make(ENCRYPTION_KEY),
 });
 
@@ -181,16 +182,13 @@ describe("exchangeCodeForTokens", () => {
 /**
  * A stub HttpClient that returns `responseBody` as JSON for any request and
  * records the requests it saw, so tests can assert on the outgoing OAuth call.
+ * The OAuth params are sent as a JSON body, so they are read from there.
  */
 function stubHttpClient(responseBody: unknown, captured: CapturedRequest[]) {
   const client = HttpClient.make((request) => {
     captured.push({
       url: request.url,
-      params: new URLSearchParams(
-        request.urlParams.map(
-          ([key, value]) => [key, value] as [string, string],
-        ),
-      ),
+      params: bodyToParams(request.body),
     });
     return Effect.succeed(
       HttpClientResponse.fromWeb(
@@ -204,6 +202,32 @@ function stubHttpClient(responseBody: unknown, captured: CapturedRequest[]) {
   });
 
   return Layer.succeed(HttpClient.HttpClient, client);
+}
+
+/** Parses an HttpBody carrying a JSON object into URLSearchParams. */
+function bodyToParams(body: {
+  readonly _tag: string;
+  readonly body?: unknown;
+}): URLSearchParams {
+  const params = new URLSearchParams();
+  if (body._tag === "Empty") {
+    return params;
+  }
+
+  const raw = body.body;
+  const text =
+    typeof raw === "string" ? raw
+    : raw instanceof Uint8Array ? new TextDecoder().decode(raw)
+    : undefined;
+
+  if (text !== undefined) {
+    const json = JSON.parse(text) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(json)) {
+      params.set(key, String(value));
+    }
+  }
+
+  return params;
 }
 
 async function makeContext(responseBody: unknown = {}) {

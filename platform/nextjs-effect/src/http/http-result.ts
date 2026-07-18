@@ -11,6 +11,11 @@ export type HttpResult<A> = Data.TaggedEnum<{
     readonly cause?: unknown;
   };
 
+  Redirect: {
+    readonly location: string;
+    readonly status: number;
+  };
+
   NoContent: {};
 }>;
 
@@ -48,6 +53,15 @@ export function noContent() {
   return Effect.succeed(HttpResult.NoContent());
 }
 
+/**
+ * Succeeds with a browser redirect to `location`. Defaults to 302 (Found), the
+ * standard status for redirecting after a GET such as an OAuth authorize hop.
+ * `location` must be an absolute URL when redirecting to a third-party host.
+ */
+export function redirect(location: string, status = 302) {
+  return Effect.succeed(HttpResult.Redirect({ location, status }));
+}
+
 export const httpResultToResponse = HttpResult.$match({
   Ok: ({ body }) =>
     Response.json(body, {
@@ -67,6 +81,12 @@ export const httpResultToResponse = HttpResult.$match({
         status,
       },
     ),
+
+  Redirect: ({ location, status }) =>
+    new Response(null, {
+      status,
+      headers: { location },
+    }),
 
   NoContent: () =>
     new Response(null, {

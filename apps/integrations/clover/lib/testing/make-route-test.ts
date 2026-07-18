@@ -16,6 +16,8 @@ export interface MakeRouteTestOptions {
   appId?: string;
   secretCode?: string;
   webhookAuthCode?: string;
+  url?: string;
+  oauthUrl?: string;
   tokenEncryptionKey?: string;
   fixedTime?: Date;
 }
@@ -37,6 +39,8 @@ export async function makeRouteTest<T>(
   const appId = options.appId ?? "test-app-id";
   const secretCode = options.secretCode ?? "test-app-secret";
   const webhookAuthCode = options.webhookAuthCode ?? "test-auth-code";
+  const url = options.url ?? "http://localhost";
+  const oauthUrl = options.oauthUrl ?? "http://oauth.localhost";
   const tokenEncryptionKey =
     options.tokenEncryptionKey ?? "test-token-encryption-key";
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
@@ -47,7 +51,8 @@ export async function makeRouteTest<T>(
     appId,
     secretCode,
     webhookAuthCode,
-    url: "http://localhost",
+    url,
+    oauthUrl,
     tokenEncryptionKey: Redacted.make(tokenEncryptionKey),
   });
 

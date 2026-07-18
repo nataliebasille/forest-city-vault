@@ -20,6 +20,7 @@ export class CloverConfig extends Effect.Service<CloverConfig>()(
       secretCode: Config.string("CLOVER_SECRET_CODE"),
       webhookAuthCode: Config.string("CLOVER_WEBHOOK_AUTH_CODE"),
       url: Config.string("CLOVER_URL"),
+      oauthUrl: Config.string("CLOVER_OAUTH_URL"),
       tokenEncryptionKey: Config.redacted("CLOVER_TOKEN_ENCRYPTION_KEY"),
     }),
   },

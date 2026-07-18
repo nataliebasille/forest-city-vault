@@ -23,6 +23,9 @@ import { decryptToken, encryptToken } from "./token-crypto";
  * Endpoints (base URL from `CLOVER_URL`):
  * - `POST /oauth/v2/token`   — exchange an authorization `code` for tokens.
  * - `POST /oauth/v2/refresh` — exchange a `refresh_token` for new tokens.
+ *
+ * Both endpoints expect the parameters as a JSON request body (Clover rejects a
+ * query-string/form-encoded body with `415 Unsupported Media Type`).
  */
 
 /** Refresh this many milliseconds before the access token actually expires. */
@@ -85,12 +88,15 @@ function unixSecondsToDate(seconds: number | undefined): Date | null {
 }
 
 /**
- * POSTs to a Clover OAuth v2 endpoint with the given query params and decodes
- * the token response. Shared by the code-exchange and refresh flows.
+ * POSTs to a Clover OAuth v2 endpoint with the given params as a JSON body and
+ * decodes the token response. Shared by the code-exchange and refresh flows.
+ *
+ * The params must go in the JSON body: Clover's auth-token service rejects a
+ * form-encoded/query-string body with `415 Unsupported Media Type`.
  */
 function requestTokens(
   endpoint: "/oauth/v2/token" | "/oauth/v2/refresh",
-  urlParams: Record<string, string>,
+  params: Record<string, string>,
   logContext: Record<string, unknown>,
 ) {
   return Effect.gen(function* () {
@@ -103,10 +109,9 @@ function requestTokens(
       ...logContext,
     });
 
-    const request = HttpClientRequest.post(new URL(endpoint, baseUrl), {
-      urlParams,
-      acceptJson: true,
-    });
+    const request = yield* HttpClientRequest.post(
+      new URL(endpoint, baseUrl),
+    ).pipe(HttpClientRequest.acceptJson, HttpClientRequest.bodyJson(params));
 
     const response = yield* client.execute(request);
 
@@ -142,6 +147,35 @@ function requestTokens(
       }),
     ),
   );
+}
+
+/**
+ * Builds the Clover OAuth v2 authorize URL to which an unauthorized merchant is
+ * redirected. Clover shows the merchant the authorization screen and then
+ * redirects back to the app's Site URL with a single-use `code`.
+ *
+ * The authorize endpoint lives on Clover's **merchant-facing web host**
+ * (`CLOVER_OAUTH_URL`, e.g. `sandbox.dev.clover.com`), which is a different host
+ * from the API host used for token exchange/refresh (`CLOVER_URL`, e.g.
+ * `apisandbox.dev.clover.com`). Sending the merchant to the API host instead
+ * bounces them back to login in a loop.
+ *
+ * `merchantId` is optional: Clover includes it on the redirect back regardless,
+ * but passing it here lets Clover skip merchant selection when it is known.
+ */
+export function buildAuthorizeUrl(merchantId?: string) {
+  return Effect.gen(function* () {
+    const { appId, oauthUrl } = yield* CloverConfig;
+
+    const authorizeUrl = new URL("/oauth/v2/authorize", oauthUrl);
+    authorizeUrl.searchParams.set("client_id", appId);
+    authorizeUrl.searchParams.set("response_type", "code");
+    if (merchantId) {
+      authorizeUrl.searchParams.set("merchant_id", merchantId);
+    }
+
+    return authorizeUrl.toString();
+  });
 }
 
 /**

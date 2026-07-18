@@ -15,13 +15,34 @@ const {
 );
 
 describe("GET /api/oauth/callback", () => {
-  test("returns 400 when merchant_id is missing", async () => {
-    const response = await GET(callbackRequest({ code: "abc" }));
-    assert.equal(response.status, 400);
+  test("redirects to Clover authorize when code is missing", async () => {
+    const response = await GET(callbackRequest({ merchant_id: "m-1" }));
+
+    assert.equal(response.status, 302);
+    const location = response.headers.get("location");
+    assert.ok(location, "expected a Location header");
+    const authorizeUrl = new URL(location);
+    // Authorize must target the merchant-facing web host, not the API host.
+    assert.equal(authorizeUrl.host, "oauth.localhost");
+    assert.equal(authorizeUrl.pathname, "/oauth/v2/authorize");
+    assert.equal(authorizeUrl.searchParams.get("client_id"), "test-app-id");
+    assert.equal(authorizeUrl.searchParams.get("response_type"), "code");
+    assert.equal(authorizeUrl.searchParams.get("merchant_id"), "m-1");
   });
 
-  test("returns 400 when code is missing", async () => {
-    const response = await GET(callbackRequest({ merchant_id: "m-1" }));
+  test("redirects to Clover authorize even without a merchant_id", async () => {
+    const response = await GET(callbackRequest({}));
+
+    assert.equal(response.status, 302);
+    const location = response.headers.get("location");
+    assert.ok(location, "expected a Location header");
+    const authorizeUrl = new URL(location);
+    assert.equal(authorizeUrl.pathname, "/oauth/v2/authorize");
+    assert.equal(authorizeUrl.searchParams.has("merchant_id"), false);
+  });
+
+  test("returns 400 when a code is present but merchant_id is missing", async () => {
+    const response = await GET(callbackRequest({ code: "abc" }));
     assert.equal(response.status, 400);
   });
 

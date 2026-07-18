@@ -13,6 +13,7 @@ import {
   forbidden,
   notFound,
   noContent,
+  redirect,
 } from "../http/http-result";
 import { defineRoute, testRoute } from "./define-route";
 
@@ -407,5 +408,47 @@ describe("app.route - noContent", () => {
       }),
     )(mockRequest());
     expect(response.status).toBe(204);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// redirect tests
+// ---------------------------------------------------------------------------
+
+describe("app.route - redirect", () => {
+  test("redirect produces a 302 with a Location header by default", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      redirect("https://clover.test/oauth/v2/authorize"),
+    )(mockRequest());
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://clover.test/oauth/v2/authorize",
+    );
+    expect(response.body).toBeNull();
+  });
+
+  test("redirect honors a custom status", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      redirect("https://clover.test/next", 307),
+    )(mockRequest());
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://clover.test/next");
+  });
+
+  test("redirect from a service is returned correctly", async () => {
+    const route = defineRoute({
+      layer: Layer.succeed(CounterService, { value: 0 }),
+    });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        const counter = yield* CounterService;
+        if (counter.value === 0) return yield* redirect("https://clover.test/go");
+        return counter.value;
+      }),
+    )(mockRequest());
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://clover.test/go");
   });
 });
