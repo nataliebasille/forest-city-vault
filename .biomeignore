@@ -1,7 +1,13 @@
 .next
+**/.next
 out
+**/out
 build
+**/build
 dist
+**/dist
 coverage
+**/coverage
 node_modules
+**/node_modules
 **/*.svg

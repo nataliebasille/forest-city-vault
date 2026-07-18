@@ -1,7 +1,16 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/.next/**",
+      "!**/out/**",
+      "!**/build/**",
+      "!**/dist/**",
+      "!**/coverage/**",
+      "!**/node_modules/**"
+    ]
   },
   "css": {
     "parser": {

@@ -2,16 +2,13 @@
 @import "@nataliebasille/natcore-design-system/css";
 
 @theme static {
-  --theme-primary: #b35f1b;
-  --theme-secondary: #4f493d;
-  --theme-accent: #bd9566;
+  --theme-primary: #af5f1d;
+  --theme-secondary: #4c4639;
+  --theme-accent: #be996d;
 
-  --theme-surface-50: #f7f3ec;
-  --theme-surface-500: #8a8173;
-  --theme-surface-950: #17130f;
-
-  --theme-success: #4f7a56;
-  --theme-danger: #a9473f;
+  --theme-surface-50: #ffffff;
+  --theme-surface-500: #be996d;
+  --theme-surface-950: #4c4639;
 }
 
 :root {
@@ -20,6 +17,46 @@
   --lightningcss-dark: ;
 }
 
+.font-heading {
+  font-family: var(--font-heading), serif;
+}
+
+.font-subheading {
+  font-family: var(--font-subheading), serif;
+}
+
+.font-body {
+  font-family: var(--font-body), serif;
+}
+
+.vault-paper {
+  background:
+    radial-gradient(
+      circle at 10% -10%,
+      rgba(190, 153, 109, 0.28),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(175, 95, 29, 0.18),
+      transparent 40%
+    ),
+    #ffffff;
+}
+
+.vault-glow {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(190, 153, 109, 0.25), transparent 42%),
+    radial-gradient(circle at 80% 80%, rgba(175, 95, 29, 0.2), transparent 46%),
+    #ffffff;
+}
+
+html,
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+body {
+  font-family: var(--font-body), Georgia, serif;
 }

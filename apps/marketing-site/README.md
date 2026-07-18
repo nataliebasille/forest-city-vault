@@ -1,22 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Forest City Vault marketing site
 
-## Getting Started
+This app is the public-facing marketing site for **Forest City Vault: a community marketplace**.
 
-First, run the development server:
+### Development
+
+From the repository root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm --filter marketing-site dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm --filter marketing-site build
+```
+
+### Lint
+
+```bash
+pnpm --filter marketing-site lint
+```
+
+### Branding + design system notes
+
+- Natcore design system is imported in `src/app/globals.css`.
+- Theme roles are mapped to Forest City Vault brand colors.
+- Brand logos are in `public/branding`.
+- Free Google Fonts are used as license-safe substitutes for brand typography.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
