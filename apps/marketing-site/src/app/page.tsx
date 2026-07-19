@@ -1,17 +1,22 @@
 import Image from "next/image";
-import { MapPinIcon } from "@/components/icons";
+import { ArrowUpRightIcon, MapPinIcon } from "@/components/icons";
+import { HeroSearch } from "@/components/hero/HeroSearch";
+
+const MAP_URL =
+  "https://maps.google.com/?q=2808+Church+Ave,+Cleveland,+OH+44113";
 
 export default function Home() {
   return (
     <main className="vault-paper">
-      <header className="sticky top-0 z-40 border-b border-surface-600/20 bg-surface-50/95 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 md:h-20 tablet:px-10">
+      <header className="sticky top-0 z-40 border-b border-surface-950/10 bg-surface-50/90 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 md:h-20 md:px-10">
           <a href="#top" className="flex items-center gap-3">
             <Image
               src="/branding/fcv-monogram.png"
               alt="Forest City Vault logo"
               width={1296}
               height={684}
+              priority
               className="h-auto max-h-10 w-16 md:hidden"
             />
             <Image
@@ -19,80 +24,129 @@ export default function Home() {
               alt="Forest City Vault logo"
               width={160}
               height={90}
+              priority
               className="hidden h-auto max-h-12 w-28 md:inline-block md:w-32"
             />
-            <span className="font-subheading hidden text-xs tracking-[0.2em] text-secondary-500 uppercase md:inline">
-              A community marketplace
-            </span>
           </a>
-          <nav className="flex items-center gap-2">
+          <nav className="hidden items-center gap-8 md:flex">
             <a
-              href="https://maps.google.com/?q=2808+Church+Ave,+Cleveland,+OH+44113"
+              href="#discover"
+              className="nav-link font-subheading text-sm font-medium text-secondary-500"
+            >
+              <span className="nav-underline">Browse</span>
+            </a>
+            <a
+              href="#makers"
+              className="nav-link font-subheading text-sm font-medium text-secondary-500"
+            >
+              <span className="nav-underline">Vendors</span>
+            </a>
+            <a
+              href={MAP_URL}
               target="_blank"
               rel="noreferrer"
-              className="nav-link text-sm font-medium text-secondary-500"
+              className="nav-link font-subheading text-sm font-medium text-secondary-500"
             >
-              <span className="inline-flex items-center gap-2">
-                <MapPinIcon className="h-4 w-4" />
-                <span className="nav-underline">
-                  Ohio City, Cleveland, Ohio
-                </span>
-              </span>
+              <span className="nav-underline">Visit</span>
+            </a>
+            <a
+              href="#makers"
+              className="btn btn-outline/primary font-subheading text-sm font-semibold"
+            >
+              Become a vendor
             </a>
           </nav>
+          <a
+            href="#makers"
+            className="btn btn-outline/primary btn-size-sm font-subheading font-semibold md:hidden"
+          >
+            Become a vendor
+          </a>
         </div>
       </header>
 
       <section
         id="top"
-        className="relative min-h-[calc(100svh-4rem)] overflow-hidden text-surface-50 md:min-h-[calc(100svh-5rem)]"
+        className="relative overflow-hidden bg-gradient-to-b from-accent-50/45 via-surface-50 to-surface-50"
       >
-        <Image
-          src="/images/fvc-hero.jpeg"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[32%_65%] md:object-center"
-        />
-        <div className="absolute inset-0 bg-secondary-500/70" />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/26 via-secondary-500/70 to-secondary-500/88 md:bg-gradient-to-r" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_45%,rgba(255,255,255,0.2),transparent_40%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_23%_76%,rgba(255,255,255,0.34),transparent_38%)]" />
-        <div className="absolute left-0 top-0 h-full w-full opacity-25">
-          <div className="absolute -left-20 top-10 h-64 w-64 rounded-full bg-primary-500 blur-3xl" />
-          <div className="absolute bottom-0 right-10 h-72 w-72 rounded-full bg-accent-500 blur-3xl" />
-        </div>
-        <div className="relative mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-7xl gap-1 px-4 py-6 md:min-h-[calc(100svh-5rem)] md:grid-cols-[0.95fr_1.05fr] md:items-center md:gap-10 md:px-10 md:py-12 desktop:py-20">
-          <div className="flex items-center justify-center md:justify-start">
-            <Image
-              src="/branding/primary logo w tag.svg"
-              alt="Forest City Vault with tagline"
-              width={640}
-              height={360}
-              priority
-              className="mx-auto h-auto w-full max-w-[26rem] drop-shadow-[0_2px_2px_rgba(255,255,255,0.35)] drop-shadow-[0_14px_30px_rgba(0,0,0,0.72)] md:max-w-[28rem] lg:max-w-none"
-            />
-          </div>
-          <div className="space-y-4 md:space-y-6">
-            <p className="font-subheading text-xs tracking-[0.28em] text-accent-50 uppercase">
-              Forest City Vault: a community marketplace
+        <div className="relative mx-auto grid w-full max-w-7xl items-stretch gap-10 px-6 py-14 md:px-10 md:py-16 lg:min-h-[640px] lg:grid-cols-2 lg:gap-14 lg:py-20">
+          <div className="flex flex-col justify-center gap-6 lg:gap-7">
+            <p className="flex items-center gap-3 font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
+              <span className="h-px w-8 bg-primary-500" aria-hidden="true" />A
+              curated marketplace in Ohio City
             </p>
-            <h1 className="font-heading text-4xl leading-tight tablet:text-6xl desktop:text-7xl">
-              A place to discover.
+            <h1 className="font-heading text-4xl leading-[1.05] text-secondary-500 sm:text-5xl lg:text-6xl xl:text-7xl">
+              Find your next{" "}
+              <span className="italic text-primary-500">favorite</span> thing.
             </h1>
-            <p className="max-w-xl text-base/8 tracking-wide text-surface-50/90 tablet:text-xl/9">
-              Forest City Vault is a community-driven marketplace where local makers sell,
-              collaborate, and grow while customers discover goods they will not find
-              anywhere else.
+            <p className="max-w-xl text-lg/8 text-on-surface-50/80">
+              Explore locally made art, vintage finds, apparel, home goods,
+              gifts, and one-of-a-kind pieces from independent Cleveland
+              vendors.
             </p>
-            <div className="flex flex-wrap gap-3">
-              <a href="#discover" className="btn btn-solid/primary">
-                See what&apos;s inside
+
+            <HeroSearch />
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <a
+                href="#makers"
+                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
+              >
+                <span className="nav-underline">Browse all vendors</span>
+                <ArrowUpRightIcon className="h-4 w-4 text-primary-500" />
               </a>
-              <a href="#makers" className="btn btn-outline/surface">
-                Become a vendor
+              <a
+                href={MAP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
+              >
+                <span className="nav-underline">Plan your visit</span>
+                <ArrowUpRightIcon className="h-4 w-4 text-primary-500" />
               </a>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-surface-950/10 pt-5 text-sm text-secondary-500/80">
+              <a
+                href={MAP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="nav-link inline-flex items-center gap-2"
+              >
+                <MapPinIcon className="h-4 w-4 text-primary-500" />
+                <span className="nav-underline">Ohio City, Cleveland</span>
+              </a>
+              <span
+                className="hidden h-1 w-1 rounded-full bg-secondary-500/40 sm:inline-block"
+                aria-hidden="true"
+              />
+              <span>Locally made · Independently owned</span>
+            </div>
+          </div>
+
+          <div className="relative h-full">
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-surface-950/10 shadow-[0_35px_80px_-45px_rgba(76,70,57,0.7)] sm:aspect-[16/10] lg:aspect-auto lg:h-full lg:min-h-[32rem]">
+              <Image
+                src="/images/fvc-hero.jpeg"
+                alt="The Forest City Vault marketplace shelves filled with locally made goods in Ohio City, Cleveland"
+                fill
+                priority
+                sizes="(min-width: 1024px) 45vw, 100vw"
+                className="object-cover object-center"
+              />
+            </div>
+            <div className="absolute top-4 right-4 rounded-full border border-surface-950/10 bg-surface-50/90 px-4 py-1.5 font-subheading text-[0.7rem] font-semibold tracking-[0.18em] text-secondary-500 uppercase shadow-sm backdrop-blur">
+              New finds weekly
+            </div>
+            <div className="absolute bottom-4 left-4 max-w-[15rem] rounded-2xl border border-surface-950/10 bg-surface-50/95 px-4 py-3 shadow-lg backdrop-blur">
+              <p className="font-subheading text-[0.65rem] font-semibold tracking-[0.22em] text-primary-500 uppercase">
+                Inside the vault
+              </p>
+              <p className="font-heading text-lg text-secondary-500">
+                Made locally.
+                <br />
+                Found here.
+              </p>
             </div>
           </div>
         </div>
@@ -108,8 +162,8 @@ export default function Home() {
               Explore first. Buy second.
             </h2>
             <p className="text-lg/8 text-on-surface-50/80">
-              Browse slowly, discover intentionally, and find locally made pieces worth the
-              price because they carry craft and character.
+              Browse slowly, discover intentionally, and find locally made
+              pieces worth the price because they carry craft and character.
             </p>
             <ul className="space-y-2 text-base/7 text-on-surface-50/75">
               <li>Inviting and unhurried</li>
@@ -125,8 +179,8 @@ export default function Home() {
               Hidden in plain sight.
             </h2>
             <p className="text-lg/8 text-on-surface-50/80">
-              The vault is a feeling: a collection of things worth finding. Subtle intrigue,
-              never a literal theme.
+              The vault is a feeling: a collection of things worth finding.
+              Subtle intrigue, never a literal theme.
             </p>
             <div className="space-y-2">
               <p className="rounded-lg bg-primary-50/65 px-4 py-3 text-sm text-on-primary-50">
@@ -189,8 +243,8 @@ export default function Home() {
               Low ego, high ownership.
             </h2>
             <p className="max-w-2xl text-lg/8 text-on-surface-50/80">
-              Join a collaborative marketplace where you can sell, collaborate, and grow as
-              part of something shared.
+              Join a collaborative marketplace where you can sell, collaborate,
+              and grow as part of something shared.
             </p>
             <div className="flex flex-wrap gap-3">
               <a href="#" className="btn btn-solid/primary">
