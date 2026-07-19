@@ -79,6 +79,7 @@ const OTHER_VENDORS = FEATURED_VENDORS.filter((vendor) => !vendor.isNew);
 export function FeaturedVendors() {
   return (
     <section
+      id="vendors"
       aria-labelledby="featured-vendors-heading"
       className="border-t border-surface-500/25 bg-surface-50 py-16 md:py-20"
     >
@@ -126,8 +127,8 @@ export function FeaturedVendors() {
           <div
             className={
               NEW_VENDORS.length > 0 ?
-                "border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0"
-              : ""
+                "min-w-0 border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0"
+              : "min-w-0"
             }
           >
             {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
