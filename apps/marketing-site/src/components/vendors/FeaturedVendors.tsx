@@ -1,6 +1,7 @@
 import { ArrowRightIcon } from "@/components/icons";
 import { FeaturedVendorCard, type FeaturedVendor } from "./FeaturedVendorCard";
 import { NewThisWeekSpotlight } from "./NewThisWeekSpotlight";
+import { RotatingVendorCarousel } from "./RotatingVendorCarousel";
 
 // TODO(temporary-image): Every vendor currently reuses the single existing
 // marketplace photo (`/images/fvc-hero.jpeg`) with a different crop position.
@@ -107,35 +108,48 @@ export function FeaturedVendors() {
           </button>
         </div>
 
-        <div className="mt-8 flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,2fr)_1px_minmax(0,1fr)] lg:gap-10">
-          <div className="flex flex-col gap-4">
-            <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
-              Featured vendors
-            </p>
-            <ul className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:snap-none md:grid-cols-3 md:gap-6 md:overflow-visible md:pb-0">
-              {OTHER_VENDORS.map((vendor) => (
-                <li
-                  key={vendor.slug}
-                  className="group w-[84%] shrink-0 sm:w-[46%] md:w-auto md:shrink"
-                >
-                  <FeaturedVendorCard vendor={vendor} />
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Vertical divider — separates the featured vendors from the rotating
-              spotlight on desktop; collapses to a top border when stacked. */}
-          <div
-            aria-hidden="true"
-            className="hidden bg-surface-500/25 lg:block"
-          />
-
+        <div className="mt-8 flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,2fr)] lg:gap-10">
           {NEW_VENDORS.length > 0 ?
-            <div className="border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0">
-              <NewThisWeekSpotlight vendors={NEW_VENDORS} />
-            </div>
+            <NewThisWeekSpotlight vendors={NEW_VENDORS} />
           : null}
+
+          {/* Vertical divider — separates the rotating spotlight from the
+              featured vendors on desktop; collapses to a top border when
+              stacked. */}
+          {NEW_VENDORS.length > 0 ?
+            <div
+              aria-hidden="true"
+              className="hidden bg-surface-500/25 lg:block"
+            />
+          : null}
+
+          <div
+            className={
+              NEW_VENDORS.length > 0 ?
+                "border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0"
+              : ""
+            }
+          >
+            {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
+            <RotatingVendorCarousel
+              vendors={OTHER_VENDORS}
+              label="Featured vendors"
+              className="md:hidden"
+            />
+
+            <div className="hidden flex-col gap-4 md:flex">
+              <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
+                Featured vendors
+              </p>
+              <ul className="grid grid-cols-3 gap-6">
+                {OTHER_VENDORS.map((vendor) => (
+                  <li key={vendor.slug} className="group">
+                    <FeaturedVendorCard vendor={vendor} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
 
         {/* TODO(vendor-routes): Link to the vendor directory (e.g. `/vendors`)
