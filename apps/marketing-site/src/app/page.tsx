@@ -8,22 +8,22 @@ const MAP_URL =
 export default function Home() {
   return (
     <main className="vault-paper">
-      <header className="sticky top-0 z-40 border-b border-surface-950/10 bg-surface-50/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-surface-50/10 bg-secondary-500/95 text-surface-50 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 md:h-20 md:px-10">
           <a href="#top" className="flex items-center gap-3">
             <Image
-              src="/branding/fcv-monogram.png"
+              src="/branding/fcv-monogram reverse.png"
               alt="Forest City Vault logo"
-              width={1296}
-              height={684}
+              width={1152}
+              height={768}
               priority
               className="h-auto max-h-10 w-16 md:hidden"
             />
             <Image
-              src="/branding/primary logo no tag.svg"
+              src="/branding/primary logo no tag reverse.png"
               alt="Forest City Vault logo"
-              width={160}
-              height={90}
+              width={994}
+              height={768}
               priority
               className="hidden h-auto max-h-12 w-28 md:inline-block md:w-32"
             />
@@ -31,13 +31,13 @@ export default function Home() {
           <nav className="hidden items-center gap-8 md:flex">
             <a
               href="#discover"
-              className="nav-link font-subheading text-sm font-medium text-secondary-500"
+              className="nav-link font-subheading text-sm font-medium text-surface-50"
             >
               <span className="nav-underline">Browse</span>
             </a>
             <a
               href="#makers"
-              className="nav-link font-subheading text-sm font-medium text-secondary-500"
+              className="nav-link font-subheading text-sm font-medium text-surface-50"
             >
               <span className="nav-underline">Vendors</span>
             </a>
@@ -45,20 +45,20 @@ export default function Home() {
               href={MAP_URL}
               target="_blank"
               rel="noreferrer"
-              className="nav-link font-subheading text-sm font-medium text-secondary-500"
+              className="nav-link font-subheading text-sm font-medium text-surface-50"
             >
               <span className="nav-underline">Visit</span>
             </a>
             <a
               href="#makers"
-              className="btn btn-outline/primary font-subheading text-sm font-semibold"
+              className="btn btn-outline/primary font-subheading text-sm font-semibold text-current"
             >
               Become a vendor
             </a>
           </nav>
           <a
             href="#makers"
-            className="btn btn-outline/primary btn-size-sm font-subheading font-semibold md:hidden"
+            className="btn btn-outline/primary btn-size-sm font-subheading font-semibold text-current md:hidden"
           >
             Become a vendor
           </a>
