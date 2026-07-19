@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { ArrowRightIcon, SearchIcon } from "@/components/icons";
 
 const POPULAR_CATEGORIES = [
@@ -12,24 +13,30 @@ const POPULAR_CATEGORIES = [
   "Gifts",
 ] as const;
 
-// Until marketplace search exists, both the mobile browse control and the
-// category chips point here — the featured vendors section — so they perform a
-// real navigation instead of a no-op.
-const BROWSE_TARGET = "#vendors";
+// The vault directory lives at /vendors; searching hands off to the dedicated
+// server-rendered results route at /vendors/search?q=…
+const BROWSE_TARGET = "/vendors";
 
 export function HeroSearch() {
-  const [query, setQuery] = useState("");
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Fires on both the "Search the vault" button and pressing Enter in the input
+  // (native form submission), so keyboard users get the same behavior. The
+  // input is uncontrolled — we read its current value straight from the ref.
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // TODO: Connect to marketplace search once search infrastructure exists.
-    // Intentionally a no-op for now so the form never navigates to a dead route.
+    const trimmed = inputRef.current?.value.trim() ?? "";
+    router.push(
+      trimmed ? `/vendors/search?q=${encodeURIComponent(trimmed)}` : "/vendors",
+    );
   };
 
   const applyCategory = (category: string) => {
-    setQuery(category);
-    inputRef.current?.focus();
+    if (inputRef.current) {
+      inputRef.current.value = category;
+      inputRef.current.focus();
+    }
   };
 
   return (
@@ -59,6 +66,8 @@ export function HeroSearch() {
       {/* Desktop: full search form (functional behavior retained). */}
       <form
         role="search"
+        action="/vendors/search"
+        method="get"
         onSubmit={handleSubmit}
         className="group hidden flex-col gap-3 rounded-2xl border border-surface-950/10 bg-surface-50/90 p-2 shadow-[0_18px_45px_-24px_rgba(76,70,57,0.55)] backdrop-blur transition-colors focus-within:border-primary-500/60 sm:flex-row sm:items-center md:flex"
       >
@@ -75,8 +84,6 @@ export function HeroSearch() {
             ref={inputRef}
             type="search"
             name="q"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
             placeholder="Search products, categories, or vendors"
             autoComplete="off"
             className="w-full border-0 bg-transparent px-0 py-2 text-base text-on-surface-50 placeholder:text-secondary-500/60 focus:outline-none"
