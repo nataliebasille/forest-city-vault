@@ -29,6 +29,29 @@
   font-family: var(--font-body), serif;
 }
 
+.nav-underline {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.125rem;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 120ms ease-out;
+}
+
+.nav-link:hover .nav-underline::after,
+.nav-underline:hover::after {
+  transform: scaleX(1);
+}
+
 .vault-paper {
   background:
     radial-gradient(

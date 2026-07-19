@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { MapPinIcon } from "@/components/icons";
 
 export default function Home() {
   return (
@@ -11,25 +12,32 @@ export default function Home() {
               alt="Forest City Vault logo"
               width={1296}
               height={684}
-              className="h-auto w-16 md:hidden"
+              className="h-auto max-h-10 w-16 md:hidden"
             />
             <Image
               src="/branding/primary logo no tag.svg"
               alt="Forest City Vault logo"
               width={160}
               height={90}
-              className="hidden h-auto w-28 md:inline-block md:w-32"
+              className="hidden h-auto max-h-12 w-28 md:inline-block md:w-32"
             />
             <span className="font-subheading hidden text-xs tracking-[0.2em] text-secondary-500 uppercase md:inline">
               A community marketplace
             </span>
           </a>
           <nav className="flex items-center gap-2">
-            <a href="#customers" className="btn btn-ghost/surface btn-size-sm">
-              Customers
-            </a>
-            <a href="#makers" className="btn btn-solid/primary btn-size-sm">
-              Makers
+            <a
+              href="https://maps.google.com/?q=2808+Church+Ave,+Cleveland,+OH+44113"
+              target="_blank"
+              rel="noreferrer"
+              className="nav-link text-sm font-medium text-secondary-500"
+            >
+              <span className="inline-flex items-center gap-2">
+                <MapPinIcon className="h-4 w-4" />
+                <span className="nav-underline">
+                  Ohio City, Cleveland, Ohio
+                </span>
+              </span>
             </a>
           </nav>
         </div>
