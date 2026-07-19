@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { ArrowUpRightIcon, MapPinIcon } from "@/components/icons";
 import { HeroSearch } from "@/components/hero/HeroSearch";
+import { FeaturedVendors } from "@/components/vendors/FeaturedVendors";
 
 const MAP_URL =
   "https://maps.google.com/?q=2808+Church+Ave,+Cleveland,+OH+44113";
@@ -67,7 +68,7 @@ export default function Home() {
 
       <section
         id="top"
-        className="relative overflow-hidden bg-gradient-to-b from-accent-50/45 via-surface-50 to-surface-50"
+        className="relative overflow-hidden bg-gradient-to-b from-accent-50/45 via-accent-50/20 to-accent-50/35"
       >
         <div className="relative mx-auto grid w-full max-w-7xl items-stretch gap-10 px-6 py-14 md:px-10 md:py-16 lg:min-h-[640px] lg:grid-cols-2 lg:gap-14 lg:py-20">
           <div className="flex flex-col justify-center gap-6 lg:gap-7">
@@ -152,111 +153,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="discover" className="bg-surface-50 py-16 tablet:py-20">
-        <div className="mx-auto grid w-full max-w-7xl gap-10 px-6 tablet:px-10 desktop:grid-cols-2">
-          <div id="customers" className="space-y-5">
-            <p className="font-subheading text-xs tracking-[0.28em] text-primary-500 uppercase">
-              For customers
-            </p>
-            <h2 className="font-heading text-4xl leading-tight text-secondary-500 tablet:text-5xl">
-              Explore first. Buy second.
-            </h2>
-            <p className="text-lg/8 text-on-surface-50/80">
-              Browse slowly, discover intentionally, and find locally made
-              pieces worth the price because they carry craft and character.
-            </p>
-            <ul className="space-y-2 text-base/7 text-on-surface-50/75">
-              <li>Inviting and unhurried</li>
-              <li>Rewarding the deeper you look</li>
-              <li>Different from typical retail</li>
-            </ul>
-          </div>
-          <div className="space-y-5 border-t border-surface-600/20 pt-8 desktop:border-l desktop:border-t-0 desktop:pl-10 desktop:pt-0">
-            <p className="font-subheading text-xs tracking-[0.28em] text-secondary-500 uppercase">
-              The role of “vault”
-            </p>
-            <h2 className="font-heading text-4xl leading-tight text-secondary-500 tablet:text-5xl">
-              Hidden in plain sight.
-            </h2>
-            <p className="text-lg/8 text-on-surface-50/80">
-              The vault is a feeling: a collection of things worth finding.
-              Subtle intrigue, never a literal theme.
-            </p>
-            <div className="space-y-2">
-              <p className="rounded-lg bg-primary-50/65 px-4 py-3 text-sm text-on-primary-50">
-                “See what&apos;s inside.”
-              </p>
-              <p className="rounded-lg border border-surface-600/20 px-4 py-3 text-sm text-on-surface-50">
-                “Just added to the vault.”
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-primary-500 py-14 text-surface-50 tablet:py-16">
-        <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 tablet:grid-cols-3 tablet:px-10">
-          <article>
-            <p className="font-subheading text-xs tracking-[0.24em] text-accent-50 uppercase">
-              01 Curate
-            </p>
-            <h3 className="font-heading mt-2 text-3xl">Intentional mix</h3>
-            <p className="mt-2 text-base/7 text-surface-50/90">
-              Makers selected for quality, fit, and shared values.
-            </p>
-          </article>
-          <article>
-            <p className="font-subheading text-xs tracking-[0.24em] text-accent-50 uppercase">
-              02 Connect
-            </p>
-            <h3 className="font-heading mt-2 text-3xl">Shared energy</h3>
-            <p className="mt-2 text-base/7 text-surface-50/90">
-              Community over competition for both vendors and customers.
-            </p>
-          </article>
-          <article>
-            <p className="font-subheading text-xs tracking-[0.24em] text-accent-50 uppercase">
-              03 Evolve
-            </p>
-            <h3 className="font-heading mt-2 text-3xl">Always fresh</h3>
-            <p className="mt-2 text-base/7 text-surface-50/90">
-              New drops and discoveries keep every visit different.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section id="makers" className="bg-accent-50 py-16 tablet:py-20">
-        <div className="mx-auto grid w-full max-w-7xl gap-10 px-6 tablet:px-10 desktop:grid-cols-[auto_1fr] desktop:items-center">
-          <Image
-            src="/branding/secondary logo.png"
-            alt="FCV secondary logo"
-            width={340}
-            height={240}
-            className="h-auto w-full max-w-[18rem]"
-          />
-          <div className="space-y-5">
-            <p className="font-subheading text-xs tracking-[0.28em] text-primary-500 uppercase">
-              For makers
-            </p>
-            <h2 className="font-heading text-4xl leading-tight text-secondary-500 tablet:text-5xl">
-              Low ego, high ownership.
-            </h2>
-            <p className="max-w-2xl text-lg/8 text-on-surface-50/80">
-              Join a collaborative marketplace where you can sell, collaborate,
-              and grow as part of something shared.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <a href="#" className="btn btn-solid/primary">
-                Apply as a maker
-              </a>
-              <a href="#" className="btn btn-ghost/surface">
-                Plan a visit
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FeaturedVendors />
     </main>
   );
 }
