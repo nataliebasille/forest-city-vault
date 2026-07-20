@@ -1,28 +1,19 @@
-import type { ReactNode } from "react";
-import type { Vendor } from "@/lib/vendors/types";
+import type { VendorMatch } from "@/lib/vendors/search";
 import { VendorCard } from "./VendorCard";
 
 /**
  * Presentational grid of vendor cards. Server-renderable: it takes an
- * already-resolved list of vendors and has no client-side state, which keeps
- * both the directory and the search results page in the static/server HTML.
+ * already-resolved, already-ranked list of matches and has no client-side
+ * state, so the directory stays in the server-rendered HTML. Each entry carries
+ * the product names that matched the query, which the card surfaces as a
+ * "Matches: …" hint.
  */
-export function VendorGrid({
-  vendors,
-  emptyState = null,
-}: {
-  vendors: Vendor[];
-  emptyState?: ReactNode;
-}) {
-  if (vendors.length === 0) {
-    return <>{emptyState}</>;
-  }
-
+export function VendorGrid({ results }: { results: VendorMatch[] }) {
   return (
     <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {vendors.map((vendor) => (
+      {results.map(({ vendor, matchedItems }) => (
         <li key={vendor.slug}>
-          <VendorCard vendor={vendor} />
+          <VendorCard vendor={vendor} matchedItems={matchedItems} />
         </li>
       ))}
     </ul>

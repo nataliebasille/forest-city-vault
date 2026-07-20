@@ -160,6 +160,7 @@ function toVendor(name: string, items: RawItem[]): Vendor {
     itemCount: items.length,
     priceRange,
     sampleItems: uniqueItemNames.slice(0, MAX_SAMPLE_ITEMS),
+    items: uniqueItemNames,
   };
 }
 

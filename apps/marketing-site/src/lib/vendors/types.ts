@@ -21,6 +21,12 @@ export type Vendor = {
   priceRange: PriceRange | null;
   /** A few example item names, for display on cards. */
   sampleItems: string[];
+  /**
+   * All unique item names for this vendor. Server-side only — used to rank
+   * search matches and to surface *which* products matched a query. Never sent
+   * to the browser wholesale; the UI renders at most a couple of matched names.
+   */
+  items: string[];
 };
 
 export type VendorData = {

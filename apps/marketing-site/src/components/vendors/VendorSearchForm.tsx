@@ -1,24 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { SearchIcon } from "@/components/icons";
+import { CloseIcon, SearchIcon } from "@/components/icons";
 
 /**
- * Search entry point used on both the directory and the search results page.
+ * Directory search control.
  *
- * Submitting navigates to `/vendors/search?q=…` so the results page can filter
- * server-side from the URL (shareable, no hydration flash). An empty query goes
- * back to the directory. Seed `defaultValue` from the current `q` on the
- * results page — pair it with `key={q}` at the call site so the field re-syncs
- * when the URL changes (back/forward navigation).
+ * Progressive enhancement: the form is a native `GET` to `/vendors`, so it works
+ * without hydration (submitting reloads `/vendors?q=…`). Once hydrated, submit
+ * is intercepted for a soft navigation via {@link useRouter}, keeping the page
+ * server-rendered while preserving shareable URLs and back/forward history.
+ *
+ * Seed `defaultValue` from the current `q`; pair with `key={q}` at the call site
+ * so the field re-syncs on back/forward navigation. No `autoFocus`: focus must
+ * not jump after navigation (especially on mobile).
  */
 export function VendorSearchForm({
   defaultValue = "",
-  autoFocus = false,
 }: {
   defaultValue?: string;
-  autoFocus?: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(defaultValue);
@@ -27,36 +29,59 @@ export function VendorSearchForm({
     event.preventDefault();
     const trimmed = query.trim();
     router.push(
-      trimmed ? `/vendors/search?q=${encodeURIComponent(trimmed)}` : "/vendors",
+      trimmed ? `/vendors?q=${encodeURIComponent(trimmed)}` : "/vendors",
     );
   }
+
+  const hasQuery = query.trim().length > 0;
 
   return (
     <form
       role="search"
-      action="/vendors/search"
+      action="/vendors"
       method="get"
       onSubmit={handleSubmit}
-      className="flex items-center gap-3 rounded-2xl border border-surface-950/10 bg-surface-50 px-4 py-2 shadow-[0_18px_45px_-24px_rgba(76,70,57,0.55)] focus-within:border-primary-500/60"
+      className="flex items-center gap-2 rounded-2xl border border-surface-950/10 bg-surface-50 p-2 shadow-[0_18px_45px_-24px_rgba(76,70,57,0.55)] focus-within:border-primary-500/60"
     >
       <label htmlFor="vendor-search" className="sr-only">
-        Search vendors
+        Search products, categories, or vendors
       </label>
-      <SearchIcon
-        className="h-5 w-5 shrink-0 text-secondary-500/70"
-        aria-hidden="true"
-      />
-      <input
-        id="vendor-search"
-        type="search"
-        name="q"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search vendors and products"
-        autoComplete="off"
-        autoFocus={autoFocus}
-        className="w-full border-0 bg-transparent py-2 text-base text-on-surface-50 placeholder:text-secondary-500/60 focus:outline-none"
-      />
+      <div className="flex flex-1 items-center gap-3 px-2">
+        <SearchIcon
+          className="h-5 w-5 shrink-0 text-secondary-500/70"
+          aria-hidden="true"
+        />
+        <input
+          id="vendor-search"
+          type="search"
+          name="q"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search products, categories, or vendors"
+          autoComplete="off"
+          enterKeyHint="search"
+          className="w-full border-0 bg-transparent py-2 text-base text-on-surface-50 placeholder:text-secondary-500/60 focus:outline-none"
+        />
+      </div>
+
+      {hasQuery ?
+        <Link
+          href="/vendors"
+          onClick={() => setQuery("")}
+          aria-label="Clear search"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-secondary-500/70 transition-colors hover:bg-surface-500/15 hover:text-secondary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+        >
+          <CloseIcon className="h-5 w-5" />
+        </Link>
+      : null}
+
+      <button
+        type="submit"
+        className="btn btn-solid/primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+      >
+        <SearchIcon className="h-4 w-4 md:hidden" aria-hidden="true" />
+        <span>Search</span>
+      </button>
     </form>
   );
 }

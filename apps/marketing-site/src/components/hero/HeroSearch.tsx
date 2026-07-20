@@ -1,75 +1,21 @@
-"use client";
+import Link from "next/link";
+import { SearchIcon } from "@/components/icons";
+import { VENDOR_CATEGORIES, categoryHref } from "@/lib/vendors/categories";
 
-import { useRouter } from "next/navigation";
-import { useRef } from "react";
-import { ArrowRightIcon, SearchIcon } from "@/components/icons";
-
-const POPULAR_CATEGORIES = [
-  "Vintage",
-  "Jewelry",
-  "Art",
-  "Apparel",
-  "Home goods",
-  "Gifts",
-] as const;
-
-// The vault directory lives at /vendors; searching hands off to the dedicated
-// server-rendered results route at /vendors/search?q=…
-const BROWSE_TARGET = "/vendors";
-
+/**
+ * Homepage hero search. A native `GET` form pointed at the vendor directory, so
+ * it works before (and without) hydration: pressing Enter or the button
+ * navigates to `/vendors?q=…`. Category chips are plain links to pre-filtered
+ * directory results, e.g. `/vendors?q=jewelry`.
+ */
 export function HeroSearch() {
-  const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Fires on both the "Search the vault" button and pressing Enter in the input
-  // (native form submission), so keyboard users get the same behavior. The
-  // input is uncontrolled — we read its current value straight from the ref.
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = inputRef.current?.value.trim() ?? "";
-    router.push(
-      trimmed ? `/vendors/search?q=${encodeURIComponent(trimmed)}` : "/vendors",
-    );
-  };
-
-  const applyCategory = (category: string) => {
-    if (inputRef.current) {
-      inputRef.current.value = category;
-      inputRef.current.focus();
-    }
-  };
-
   return (
     <div className="space-y-4 md:space-y-5">
-      {/* Mobile: one compact browse control. No text input is exposed because
-          there is no search route yet; activating it jumps to Featured Vendors. */}
-      <a
-        href={BROWSE_TARGET}
-        aria-label="Browse the vault — jump to featured vendors"
-        className="flex items-center gap-3 rounded-full border border-surface-950/10 bg-surface-50/90 py-2 pr-2 pl-4 shadow-[0_10px_30px_-20px_rgba(76,70,57,0.55)] backdrop-blur transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 md:hidden"
-      >
-        <SearchIcon
-          className="h-5 w-5 shrink-0 text-secondary-500/70"
-          aria-hidden="true"
-        />
-        <span className="flex-1 text-base text-secondary-500/70">
-          Browse the vault
-        </span>
-        <span
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-surface-50"
-          aria-hidden="true"
-        >
-          <ArrowRightIcon className="h-4 w-4" />
-        </span>
-      </a>
-
-      {/* Desktop: full search form (functional behavior retained). */}
       <form
         role="search"
-        action="/vendors/search"
+        action="/vendors"
         method="get"
-        onSubmit={handleSubmit}
-        className="group hidden flex-col gap-3 rounded-2xl border border-surface-950/10 bg-surface-50/90 p-2 shadow-[0_18px_45px_-24px_rgba(76,70,57,0.55)] backdrop-blur transition-colors focus-within:border-primary-500/60 sm:flex-row sm:items-center md:flex"
+        className="flex flex-col gap-2 rounded-2xl border border-surface-950/10 bg-surface-50/90 p-2 shadow-[0_18px_45px_-24px_rgba(76,70,57,0.55)] backdrop-blur transition-colors focus-within:border-primary-500/60 sm:flex-row sm:items-center"
       >
         <label htmlFor="hero-search" className="sr-only">
           Search products, categories, or vendors
@@ -81,7 +27,6 @@ export function HeroSearch() {
           />
           <input
             id="hero-search"
-            ref={inputRef}
             type="search"
             name="q"
             placeholder="Search products, categories, or vendors"
@@ -91,7 +36,7 @@ export function HeroSearch() {
         </div>
         <button
           type="submit"
-          className="btn btn-solid/primary inline-flex shrink-0 items-center justify-center font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+          className="btn btn-solid/primary inline-flex min-h-11 shrink-0 items-center justify-center font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           Search the vault
         </button>
@@ -101,15 +46,15 @@ export function HeroSearch() {
           fade hints that more chips are available offscreen. */}
       <div className="relative md:hidden">
         <ul className="flex flex-nowrap gap-2 overflow-x-auto pr-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {POPULAR_CATEGORIES.map((category) => (
+          {VENDOR_CATEGORIES.map((category) => (
             <li key={category} className="shrink-0">
-              <a
-                href={BROWSE_TARGET}
+              <Link
+                href={categoryHref(category)}
                 aria-label={`Browse ${category} vendors`}
                 className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-2 text-sm whitespace-nowrap text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               >
                 {category}
-              </a>
+              </Link>
             </li>
           ))}
         </ul>
@@ -119,21 +64,21 @@ export function HeroSearch() {
         />
       </div>
 
-      {/* Desktop: wrapping category chips that seed the search input. */}
+      {/* Desktop: wrapping category chips that link straight to filtered results. */}
       <div className="hidden space-y-3 md:block">
         <p className="font-subheading text-xs tracking-[0.24em] text-secondary-500/80 uppercase">
           Popular right now
         </p>
         <ul className="flex flex-wrap gap-2">
-          {POPULAR_CATEGORIES.map((category) => (
+          {VENDOR_CATEGORIES.map((category) => (
             <li key={category}>
-              <button
-                type="button"
-                onClick={() => applyCategory(category)}
-                className="rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-1.5 text-sm text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+              <Link
+                href={categoryHref(category)}
+                aria-label={`Browse ${category} vendors`}
+                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-1.5 text-sm text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               >
                 {category}
-              </button>
+              </Link>
             </li>
           ))}
         </ul>

@@ -1,18 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, MenuIcon } from "@/components/icons";
+import { NAV_ITEMS } from "@/components/site/nav";
 
-type MenuItem = {
-  label: string;
-  href: string;
-  external?: boolean;
-  cta?: boolean;
-};
-
-export function MobileNav({ mapUrl }: { mapUrl: string }) {
+export function MobileNav() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -20,11 +15,7 @@ export function MobileNav({ mapUrl }: { mapUrl: string }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const items: MenuItem[] = [
-    { label: "Browse vendors", href: "#vendors" },
-    { label: "Plan your visit", href: mapUrl, external: true },
-    { label: "Become a vendor", href: "#vendors", cta: true },
-  ];
+  const items = NAV_ITEMS;
 
   const close = (returnFocus = true) => {
     setOpen(false);
@@ -214,24 +205,24 @@ export function MobileNav({ mapUrl }: { mapUrl: string }) {
                           className="border-surface-50/15"
                           aria-hidden="true"
                         />
-                        <a
+                        <Link
                           {...linkProps}
                           className="btn btn-solid/primary justify-center font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
                         >
                           {item.label}
-                        </a>
+                        </Link>
                       </div>
                     );
                   }
 
                   return (
-                    <a
+                    <Link
                       key={item.label}
                       {...linkProps}
                       className="rounded-lg px-4 py-3 font-subheading text-base font-medium text-surface-50 transition-colors hover:bg-surface-50/10 focus-visible:bg-surface-50/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
                     >
                       {item.label}
-                    </a>
+                    </Link>
                   );
                 })}
               </nav>

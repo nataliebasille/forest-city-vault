@@ -1,66 +1,15 @@
 import Image from "next/image";
+import Link from "next/link";
 import { ArrowUpRightIcon, MapPinIcon } from "@/components/icons";
 import { HeroSearch } from "@/components/hero/HeroSearch";
-import { MobileNav } from "@/components/nav/MobileNav";
+import { SiteHeader } from "@/components/site/SiteHeader";
+import { MAP_URL } from "@/components/site/nav";
 import { FeaturedVendors } from "@/components/vendors/FeaturedVendors";
-
-const MAP_URL =
-  "https://maps.google.com/?q=2808+Church+Ave,+Cleveland,+OH+44113";
 
 export default function Home() {
   return (
     <main className="vault-paper">
-      <header className="sticky top-0 z-40 border-b border-surface-50/10 bg-secondary-500/95 text-surface-50 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 md:h-20 md:px-10">
-          <a href="#top" className="flex items-center gap-3">
-            <Image
-              src="/branding/fcv-monogram reverse.png"
-              alt="Forest City Vault logo"
-              width={1152}
-              height={768}
-              priority
-              className="h-auto max-h-10 w-16 md:hidden"
-            />
-            <Image
-              src="/branding/primary logo no tag reverse.png"
-              alt="Forest City Vault logo"
-              width={994}
-              height={768}
-              priority
-              className="hidden h-auto max-h-12 w-28 md:inline-block md:w-32"
-            />
-          </a>
-          <nav className="hidden items-center gap-8 md:flex">
-            <a
-              href="#vendors"
-              className="nav-link font-subheading text-sm font-medium text-surface-50"
-            >
-              <span className="nav-underline">Browse</span>
-            </a>
-            <a
-              href="#vendors"
-              className="nav-link font-subheading text-sm font-medium text-surface-50"
-            >
-              <span className="nav-underline">Vendors</span>
-            </a>
-            <a
-              href={MAP_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="nav-link font-subheading text-sm font-medium text-surface-50"
-            >
-              <span className="nav-underline">Visit</span>
-            </a>
-            <a
-              href="#vendors"
-              className="btn btn-outline/primary font-subheading text-sm font-semibold text-current"
-            >
-              Become a vendor
-            </a>
-          </nav>
-          <MobileNav mapUrl={MAP_URL} />
-        </div>
-      </header>
+      <SiteHeader />
 
       <section
         id="top"
@@ -89,13 +38,13 @@ export default function Home() {
             <HeroSearch />
 
             <div className="hidden flex-wrap items-center gap-x-6 gap-y-3 md:flex">
-              <a
-                href="#vendors"
+              <Link
+                href="/vendors"
                 className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
               >
                 <span className="nav-underline">Browse all vendors</span>
                 <ArrowUpRightIcon className="h-4 w-4 text-primary-500" />
-              </a>
+              </Link>
               <a
                 href={MAP_URL}
                 target="_blank"

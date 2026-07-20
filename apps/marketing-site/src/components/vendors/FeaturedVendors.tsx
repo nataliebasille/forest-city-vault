@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowRightIcon } from "@/components/icons";
 import { FeaturedVendorCard, type FeaturedVendor } from "./FeaturedVendorCard";
 import { NewThisWeekSpotlight } from "./NewThisWeekSpotlight";
@@ -97,16 +98,14 @@ export function FeaturedVendors() {
             </h2>
           </div>
 
-          {/* TODO(vendor-routes): Link to the vendor directory (e.g. `/vendors`)
-              once that route exists. Hidden on mobile; the mobile copy renders
-              after the cards below. */}
-          <button
-            type="button"
+          {/* Links to the full vendor directory. */}
+          <Link
+            href="/vendors"
             className="group/browse hidden w-fit shrink-0 items-center gap-1.5 font-subheading text-sm font-semibold text-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 md:inline-flex"
           >
             <span className="nav-underline">Browse all vendors</span>
             <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 ease-out group-hover/browse:translate-x-0.5" />
-          </button>
+          </Link>
         </div>
 
         <div className="mt-8 flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,2fr)] lg:gap-10">
@@ -153,15 +152,14 @@ export function FeaturedVendors() {
           </div>
         </div>
 
-        {/* TODO(vendor-routes): Link to the vendor directory (e.g. `/vendors`)
-            once that route exists. Mobile-only copy of the header action. */}
-        <button
-          type="button"
+        {/* Mobile-only copy of the directory link. */}
+        <Link
+          href="/vendors"
           className="group/browse mt-6 inline-flex w-fit items-center gap-1.5 font-subheading text-sm font-semibold text-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 md:hidden"
         >
           <span className="nav-underline">Browse all vendors</span>
           <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 ease-out group-hover/browse:translate-x-0.5" />
-        </button>
+        </Link>
       </div>
     </section>
   );
