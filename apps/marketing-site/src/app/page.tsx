@@ -2,8 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRightIcon, MapPinIcon } from "@/components/icons";
 import { HeroSearch } from "@/components/hero/HeroSearch";
-import { SiteHeader } from "@/components/site/SiteHeader";
-import { MAP_URL } from "@/components/site/nav";
+import { SiteHeader } from "@/components/nav/SiteHeader";
+import { MAP_URL } from "@/components/nav/nav";
 import { FeaturedVendors } from "@/components/vendors/FeaturedVendors";
 
 export default function Home() {

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { Metadata } from "next";
-import { SiteHeader } from "@/components/site/SiteHeader";
+import { SiteHeader } from "@/components/nav/SiteHeader";
 import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import type { VendorSort } from "@/components/vendors/VendorResultsToolbar";
 import { getVendorData } from "@/lib/vendors/data";

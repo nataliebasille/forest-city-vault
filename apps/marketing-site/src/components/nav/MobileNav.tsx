@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, MenuIcon } from "@/components/icons";
-import { NAV_ITEMS } from "@/components/site/nav";
+import { NAV_ITEMS } from "@/components/nav/nav";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);

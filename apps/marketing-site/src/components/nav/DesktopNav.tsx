@@ -19,7 +19,7 @@ export function DesktopNav() {
               key={item.label}
               href={item.href}
               {...externalProps}
-              className="btn btn-outline/primary font-subheading text-sm font-semibold text-current"
+              className="btn btn-solid/primary font-subheading text-sm font-semibold text-current"
             >
               {item.label}
             </Link>

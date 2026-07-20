@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { MobileNav } from "@/components/nav/MobileNav";
+import { MobileNav } from "./MobileNav";
 import { DesktopNav } from "./DesktopNav";
 
 /**
