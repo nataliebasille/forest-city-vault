@@ -14,12 +14,9 @@ export type NavItem = {
 /**
  * Single source of truth for the marketing site's primary navigation, shared by
  * the desktop nav and the mobile drawer so the two never drift.
- *
- * "Become a vendor" has no application route yet, so it keeps a placeholder
- * destination (the homepage featured section) rather than a dead link.
  */
 export const NAV_ITEMS: NavItem[] = [
   { label: "Shop vendors", href: "/vendors" },
   { label: "Visit the store", href: MAP_URL, external: true },
-  { label: "Become a vendor", href: "/#vendors", cta: true },
+  { label: "Become a vendor", href: "/become-a-vendor", cta: true },
 ];

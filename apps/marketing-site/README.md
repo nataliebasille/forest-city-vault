@@ -29,6 +29,23 @@ pnpm --filter marketing-site lint
 - Brand logos are in `public/branding`.
 - Free Google Fonts are used as license-safe substitutes for brand typography.
 
+### "Become a vendor" application emails
+
+The `/become-a-vendor` page submits applications through a Server Action
+(`src/app/become-a-vendor/actions.ts`) that emails the shop via
+[Resend](https://resend.com). Configure these environment variables:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `RESEND_API_KEY` | Yes | API key from your Resend dashboard. |
+| `VENDOR_APPLICATION_TO_EMAIL` | Yes | Where applications are delivered. |
+| `VENDOR_APPLICATION_FROM_EMAIL` | No | Sender address; defaults to `onboarding@resend.dev` for testing. Use an address on a domain verified in Resend for production. |
+
+If `RESEND_API_KEY` or `VENDOR_APPLICATION_TO_EMAIL` is missing, the form
+validates input but fails gracefully with a user-friendly message instead of
+crashing.
+
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More
