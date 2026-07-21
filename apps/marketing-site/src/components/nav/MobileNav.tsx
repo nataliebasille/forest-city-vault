@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/cn";
 import { CloseIcon, MenuIcon } from "@/components/icons";
 import { NAV_ITEMS } from "@/components/nav/nav";
 
@@ -147,9 +148,11 @@ export function MobileNav() {
               tabIndex={-1}
               aria-hidden="true"
               onClick={() => close(false)}
-              className={`fixed inset-0 z-[100] bg-secondary-950/50 backdrop-blur-sm ${
-                reducedMotion ? "" : "transition-opacity duration-300"
-              } ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
+              className={cn(
+                "fixed inset-0 z-[100] bg-secondary-950/50 backdrop-blur-sm",
+                !reducedMotion && "transition-opacity duration-300",
+                open ? "opacity-100" : "pointer-events-none opacity-0",
+              )}
             />
 
             {/* Sidebar drawer */}
@@ -160,11 +163,11 @@ export function MobileNav() {
               aria-modal="true"
               aria-label="Site menu"
               onKeyDown={handlePanelKeyDown}
-              className={`fixed inset-y-0 right-0 z-[101] flex w-72 max-w-[80vw] flex-col bg-secondary-500 text-surface-50 shadow-[-20px_0_45px_-20px_rgba(0,0,0,0.6)] ${
-                reducedMotion ? "" : (
-                  "transition-transform duration-300 ease-out"
-                )
-              } ${open ? "translate-x-0" : "pointer-events-none translate-x-full"}`}
+              className={cn(
+                "fixed inset-y-0 right-0 z-[101] flex w-72 max-w-[80vw] flex-col bg-secondary-500 text-surface-50 shadow-[-20px_0_45px_-20px_rgba(0,0,0,0.6)]",
+                !reducedMotion && "transition-transform duration-300 ease-out",
+                open ? "translate-x-0" : "pointer-events-none translate-x-full",
+              )}
             >
               <div className="flex h-16 items-center justify-between gap-4 border-b border-surface-50/10 px-6">
                 <Image

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 
 export type VendorSort = "relevance" | "az";
 
@@ -65,11 +66,12 @@ export function VendorResultsToolbar({
                 key={option.value}
                 href={buildHref(query, option.value)}
                 aria-current={isActive ? "true" : undefined}
-                className={`inline-flex items-center rounded-full px-3 py-1 font-subheading transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 ${
+                className={cn(
+                  "inline-flex items-center rounded-full px-3 py-1 font-subheading transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500",
                   isActive ?
                     "bg-primary-500 text-on-primary-500"
-                  : "text-secondary-500/80 hover:text-secondary-500"
-                }`}
+                  : "text-secondary-500/80 hover:text-secondary-500",
+                )}
               >
                 {option.label}
               </Link>

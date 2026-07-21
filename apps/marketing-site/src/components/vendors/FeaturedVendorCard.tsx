@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { cn } from "@/lib/cn";
 import { ArrowRightIcon } from "@/components/icons";
 
 export type FeaturedVendor = {
@@ -30,11 +31,12 @@ export function FeaturedVendorCard({
   return (
     <article className="flex h-full snap-start flex-col overflow-hidden rounded-xl border border-surface-500/30 bg-surface-50">
       <div
-        className={`relative w-full overflow-hidden ${
+        className={cn(
+          "relative w-full overflow-hidden",
           fillHeight ?
             "aspect-[4/3] lg:aspect-auto lg:min-h-0 lg:flex-1"
-          : "aspect-[4/3]"
-        }`}
+          : "aspect-[4/3]",
+        )}
       >
         <Image
           src={vendor.imageSrc}

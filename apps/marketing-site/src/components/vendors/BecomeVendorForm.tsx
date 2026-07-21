@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useId, useState } from "react";
+import { cn } from "@/lib/cn";
 import { VENDOR_CATEGORIES } from "@/lib/vendors/categories";
 import {
   initialVendorApplicationState,
@@ -54,7 +55,7 @@ function Field(props: FieldProps) {
   } as const;
 
   return (
-    <div className={`form-control${error ? " form-control-error" : ""}${className ? ` ${className}` : ""}`}>
+    <div className={cn("form-control", error && "form-control-error", className)}>
       <label htmlFor={id} className="flex-row flex-wrap items-baseline gap-x-1">
         {label}
         {required ? <span className="text-primary-500">*</span> : null}
@@ -229,11 +230,12 @@ export function BecomeVendorForm() {
               return (
                 <label
                   key={category}
-                  className={`cursor-pointer rounded-full border px-4 py-2 font-subheading text-sm font-semibold transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-500 ${
-                    active
-                      ? "border-primary-500 bg-primary-500 text-surface-50"
-                      : "border-surface-500/55 bg-surface-50 text-secondary-500 hover:border-primary-500/50"
-                  }`}
+                  className={cn(
+                    "cursor-pointer rounded-full border px-4 py-2 font-subheading text-sm font-semibold transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-500",
+                    active ?
+                      "border-primary-500 bg-primary-500 text-surface-50"
+                    : "border-surface-500/55 bg-surface-50 text-secondary-500 hover:border-primary-500/50",
+                  )}
                 >
                   <input
                     type="checkbox"

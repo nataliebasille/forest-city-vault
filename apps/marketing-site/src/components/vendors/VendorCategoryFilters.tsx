@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 import {
   VENDOR_CATEGORIES,
   categoryHref,
@@ -41,9 +42,11 @@ export function VendorCategoryFilters({ query }: { query: string }) {
               <Link
                 href={chip.href}
                 aria-current={isActive ? "true" : undefined}
-                className={`${CHIP_BASE} whitespace-nowrap ${
-                  isActive ? CHIP_ACTIVE : CHIP_INACTIVE
-                }`}
+                className={cn(
+                  CHIP_BASE,
+                  "whitespace-nowrap",
+                  isActive ? CHIP_ACTIVE : CHIP_INACTIVE,
+                )}
               >
                 {chip.label}
               </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 import { FeaturedVendorCard, type FeaturedVendor } from "./FeaturedVendorCard";
 
 const ROTATE_INTERVAL_MS = 5000;
@@ -106,7 +107,7 @@ export function RotatingVendorCarousel({
 
   return (
     <div
-      className={`flex flex-col gap-4 ${className}`}
+      className={cn("flex flex-col gap-4", className)}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -130,11 +131,12 @@ export function RotatingVendorCarousel({
                   className="group/dot inline-flex items-center justify-center p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
                 >
                   <span
-                    className={`h-1.5 rounded-full transition-all duration-200 ${
-                      isActive ? "w-5 bg-primary-500" : (
-                        "w-1.5 bg-surface-500/40 group-hover/dot:bg-surface-500/70"
-                      )
-                    }`}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all duration-200",
+                      isActive ?
+                        "w-5 bg-primary-500"
+                      : "w-1.5 bg-surface-500/40 group-hover/dot:bg-surface-500/70",
+                    )}
                   />
                 </button>
               );
@@ -144,11 +146,12 @@ export function RotatingVendorCarousel({
       </div>
 
       <div
-        className={`group w-full touch-pan-y overflow-hidden ${
+        className={cn(
+          "group w-full touch-pan-y overflow-hidden",
           fillHeight ?
             "max-w-md lg:max-w-none lg:min-h-0 lg:flex-1"
-          : "max-w-md"
-        }`}
+          : "max-w-md",
+        )}
         aria-live="polite"
         aria-atomic="true"
         onPointerDown={handlePointerDown}
@@ -158,9 +161,11 @@ export function RotatingVendorCarousel({
         onPointerLeave={handlePointerEnd}
       >
         <div
-          className={`flex ${fillHeight ? "lg:h-full" : ""} ${
-            reducedMotion ? "" : "transition-transform duration-500 ease-in-out"
-          }`}
+          className={cn(
+            "flex",
+            fillHeight && "lg:h-full",
+            !reducedMotion && "transition-transform duration-500 ease-in-out",
+          )}
           style={{ transform: `translateX(-${safeIndex * 100}%)` }}
         >
           {vendors.map((vendor, cardIndex) => {
@@ -169,7 +174,7 @@ export function RotatingVendorCarousel({
               <div
                 key={vendor.slug}
                 inert={!isActive}
-                className={`w-full shrink-0 ${fillHeight ? "lg:h-full" : ""}`}
+                className={cn("w-full shrink-0", fillHeight && "lg:h-full")}
               >
                 <FeaturedVendorCard vendor={vendor} fillHeight={fillHeight} />
               </div>
