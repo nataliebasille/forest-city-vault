@@ -1,14 +1,7 @@
+import Link from "next/link";
 import { ArrowRightIcon } from "@/components/icons";
+import { formatPrice } from "@/lib/vendors/format";
 import type { Vendor } from "@/lib/vendors/types";
-
-function formatPrice(value: number): string {
-  return value.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function priceLabel(vendor: Vendor): string | null {
   if (!vendor.priceRange) {
@@ -40,8 +33,8 @@ const BAND_BACKGROUND =
  * few sample products under a "Known for" label; the search state swaps that for
  * explicit matched-item pills under "Matches your search" so a result explains
  * why it matched. A price range and item count anchor the footer, and a "Browse"
- * affordance slides in on hover. There is no vendor detail route yet, so the
- * card is intentionally not a link.
+ * affordance slides in on hover. The whole card links to the vendor's collection
+ * page at `/vendors/[slug]`.
  */
 export function VendorCard({
   vendor,
@@ -55,7 +48,11 @@ export function VendorCard({
   const featuredProducts = vendor.sampleItems.slice(0, 2);
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-surface-500/30 bg-surface-50 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-500/50 hover:shadow-[0_24px_50px_-30px_rgba(76,70,57,0.65)]">
+    <Link
+      href={`/vendors/${vendor.slug}`}
+      aria-label={`View ${vendor.name}'s collection`}
+      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-surface-500/30 bg-surface-50 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-500/50 hover:shadow-[0_24px_50px_-30px_rgba(76,70,57,0.65)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+    >
       <div
         className="relative flex h-[88px] items-end px-5 pb-4"
         style={{ background: BAND_BACKGROUND }}
@@ -137,6 +134,6 @@ export function VendorCard({
           </span>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

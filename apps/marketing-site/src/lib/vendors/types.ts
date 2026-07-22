@@ -3,6 +3,14 @@ export type PriceRange = {
   max: number;
 };
 
+/** A single product (Clover item) attributed to a vendor. */
+export type Product = {
+  /** Display name of the item. */
+  name: string;
+  /** Item price in dollars, or null when unpriced / "ask in store". */
+  price: number | null;
+};
+
 export type Vendor = {
   /** Display name, taken from the Clover category name. */
   name: string;
@@ -27,6 +35,11 @@ export type Vendor = {
    * to the browser wholesale; the UI renders at most a couple of matched names.
    */
   items: string[];
+  /**
+   * The vendor's full product collection (name + price), de-duplicated by name.
+   * Surfaced on the vendor detail page (`/vendors/[slug]`).
+   */
+  products: Product[];
 };
 
 export type VendorData = {

@@ -46,6 +46,18 @@ export const getVendors: Effect.Effect<Vendor[], VendorDataError> = Effect.map(
   ({ vendors }) => vendors,
 );
 
+/**
+ * A single vendor by slug, or `undefined` when no vendor matches. Derived from
+ * the same indefinitely-cached {@link getVendorData}, so the vendor detail page
+ * shares the one workbook parse with the directory.
+ */
+export const getVendorBySlug = (
+  slug: string,
+): Effect.Effect<Vendor | undefined, VendorDataError> =>
+  Effect.map(getVendors, (vendors) =>
+    vendors.find((vendor) => vendor.slug === slug),
+  );
+
 const FEATURED_COUNT = 3;
 const FOUR_HOURS_IN_SECONDS = 60 * 60 * 4;
 

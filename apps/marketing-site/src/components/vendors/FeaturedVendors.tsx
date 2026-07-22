@@ -1,83 +1,33 @@
+import { Effect } from "effect";
 import Link from "next/link";
 import { ArrowRightIcon } from "@/components/icons";
-import { FeaturedVendorCard, type FeaturedVendor } from "./FeaturedVendorCard";
-import { NewThisWeekSpotlight } from "./NewThisWeekSpotlight";
+import { getFeaturedVendors } from "@/lib/vendors/data";
+import type { Vendor } from "@/lib/vendors/types";
+import { type FeaturedVendor, FeaturedVendorCard } from "./FeaturedVendorCard";
 import { RotatingVendorCarousel } from "./RotatingVendorCarousel";
 
-// TODO(temporary-image): Every vendor currently reuses the single existing
-// marketplace photo (`/images/fvc-hero.jpeg`) with a different crop position.
-// Swap each `imageSrc` for dedicated vendor/product/booth photography when it
-// lands, and drop the `imagePosition` crop hints in FeaturedVendorCard.
-const FEATURED_VENDORS: FeaturedVendor[] = [
-  {
-    name: "Rust Belt Revival",
-    slug: "rust-belt-revival",
-    description: "Vintage furniture and decor with soul.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "A styled arrangement of vintage furniture and decor inside the Forest City Vault marketplace",
-    imagePosition: "center 30%",
-    categories: ["Vintage", "Home goods"],
-  },
-  {
-    name: "Modern Relics",
-    slug: "modern-relics",
-    description: "Curated vintage jewelry and accessories.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "A curated display of vintage jewelry and accessories at the Forest City Vault marketplace",
-    imagePosition: "left center",
-    categories: ["Jewelry", "Vintage"],
-    isNew: true,
-  },
-  {
-    name: "Reside Art Studio",
-    slug: "reside-art-studio",
-    description: "Original prints and paintings by local artists.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "Original prints and paintings by local artists shown at the Forest City Vault marketplace",
-    imagePosition: "right center",
-    categories: ["Art", "Home goods"],
-    isNew: true,
-  },
-  {
-    name: "Field & Thread",
-    slug: "field-and-thread",
-    description: "Thoughtful apparel and goods for everyday life.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "Thoughtfully made apparel and everyday goods displayed at the Forest City Vault marketplace",
-    imagePosition: "center 70%",
-    categories: ["Apparel", "Lifestyle"],
-    isNew: true,
-  },
-  {
-    name: "Hearth & Hand",
-    slug: "hearth-and-hand",
-    description: "Handmade home goods for cozy living.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "Handmade home goods for cozy living arranged at the Forest City Vault marketplace",
-    imagePosition: "center 85%",
-    categories: ["Home goods", "Gifts"],
-  },
-  {
-    name: "Paper Crane Press",
-    slug: "paper-crane-press",
-    description: "Hand-pressed cards, prints, and paper goods.",
-    imageSrc: "/images/fvc-hero.jpeg",
-    imageAlt:
-      "Hand-pressed cards, prints, and paper goods displayed at the Forest City Vault marketplace",
-    imagePosition: "left top",
-    categories: ["Art", "Gifts"],
-  },
-];
+// TODO(temporary-image): Every featured vendor currently reuses the single
+// existing marketplace photo (`/images/fvc-hero.jpeg`). Swap for dedicated
+// vendor/product photography when it lands.
+const PLACEHOLDER_IMAGE = "/images/fvc-hero.jpeg";
 
-const NEW_VENDORS = FEATURED_VENDORS.filter((vendor) => vendor.isNew);
-const OTHER_VENDORS = FEATURED_VENDORS.filter((vendor) => !vendor.isNew);
+/**
+ * Homepage "Featured in the Vault" section. Server component: it runs the cached
+ * {@link getFeaturedVendors} Effect to pick a rotating set of *real* workbook
+ * vendors, so each card's "View their collection" link resolves to that vendor's
+ * `/vendors/[slug]` page. Falls back to rendering nothing if the vendor data is
+ * unavailable, so a data hiccup never breaks the homepage.
+ */
+export async function FeaturedVendors() {
+  const vendors = await Effect.runPromise(
+    getFeaturedVendors.pipe(Effect.orElseSucceed(() => [] as Vendor[])),
+  );
+  const featured = vendors.map(toFeaturedVendor);
 
-export function FeaturedVendors() {
+  if (featured.length === 0) {
+    return null;
+  }
+
   return (
     <section
       id="vendors"
@@ -108,47 +58,25 @@ export function FeaturedVendors() {
           </Link>
         </div>
 
-        <div className="mt-8 flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,2fr)] lg:gap-10">
-          {NEW_VENDORS.length > 0 ?
-            <NewThisWeekSpotlight vendors={NEW_VENDORS} />
-          : null}
+        <div className="mt-8">
+          {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
+          <RotatingVendorCarousel
+            vendors={featured}
+            label="Featured vendors"
+            className="md:hidden"
+          />
 
-          {/* Vertical divider — separates the rotating spotlight from the
-              featured vendors on desktop; collapses to a top border when
-              stacked. */}
-          {NEW_VENDORS.length > 0 ?
-            <div
-              aria-hidden="true"
-              className="hidden bg-surface-500/25 lg:block"
-            />
-          : null}
-
-          <div
-            className={
-              NEW_VENDORS.length > 0 ?
-                "min-w-0 border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0"
-              : "min-w-0"
-            }
-          >
-            {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
-            <RotatingVendorCarousel
-              vendors={OTHER_VENDORS}
-              label="Featured vendors"
-              className="md:hidden"
-            />
-
-            <div className="hidden flex-col gap-4 md:flex">
-              <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
-                Featured vendors
-              </p>
-              <ul className="grid grid-cols-3 gap-6">
-                {OTHER_VENDORS.map((vendor) => (
-                  <li key={vendor.slug} className="group">
-                    <FeaturedVendorCard vendor={vendor} />
-                  </li>
-                ))}
-              </ul>
-            </div>
+          <div className="hidden flex-col gap-4 md:flex">
+            <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
+              Featured vendors
+            </p>
+            <ul className="grid grid-cols-3 gap-6">
+              {featured.map((vendor) => (
+                <li key={vendor.slug} className="group">
+                  <FeaturedVendorCard vendor={vendor} />
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
@@ -163,4 +91,31 @@ export function FeaturedVendors() {
       </div>
     </section>
   );
+}
+
+/**
+ * Adapt a workbook-derived {@link Vendor} into the {@link FeaturedVendor} card
+ * shape. Real vendors have no curated description, imagery, or categories yet, so
+ * we derive a "Known for …" blurb from sample items and reuse the shared
+ * marketplace photo. The important part is the `slug`, which now matches the
+ * directory/detail route so "View their collection" resolves.
+ */
+function toFeaturedVendor(vendor: Vendor): FeaturedVendor {
+  return {
+    name: vendor.name,
+    slug: vendor.slug,
+    description: describeVendor(vendor),
+    imageSrc: PLACEHOLDER_IMAGE,
+    imageAlt: `A selection of products from ${vendor.name} at the Forest City Vault marketplace`,
+    categories: [],
+  };
+}
+
+/** Short blurb derived from a vendor's sample items. */
+function describeVendor(vendor: Vendor): string {
+  const highlights = vendor.sampleItems.slice(0, 3);
+  if (highlights.length === 0) {
+    return "An independent vendor inside the Vault.";
+  }
+  return `Known for ${highlights.join(", ")}.`;
 }

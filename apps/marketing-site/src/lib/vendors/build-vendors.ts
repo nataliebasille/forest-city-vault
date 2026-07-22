@@ -29,7 +29,7 @@ import { join } from "node:path";
 import { Data, Effect } from "effect";
 import ExcelJS from "exceljs";
 import { buildSearchKey, slugify } from "./normalize";
-import type { PriceRange, Vendor, VendorData } from "./types";
+import type { PriceRange, Product, Vendor, VendorData } from "./types";
 
 const SOURCE_FILE = "vendor-data.xlsx";
 const SOURCE_PATH = join(process.cwd(), "src/lib/vendors", SOURCE_FILE);
@@ -161,7 +161,26 @@ function toVendor(name: string, items: RawItem[]): Vendor {
     priceRange,
     sampleItems: uniqueItemNames.slice(0, MAX_SAMPLE_ITEMS),
     items: uniqueItemNames,
+    products: dedupeProducts(items),
   };
+}
+
+/**
+ * Collapse a vendor's raw items into a unique product list keyed by name. The
+ * first-seen price wins; a later priced occurrence backfills a price only when
+ * the earlier one was unknown. Order follows first appearance in the sheet.
+ */
+function dedupeProducts(items: RawItem[]): Product[] {
+  const byName = new Map<string, Product>();
+  for (const item of items) {
+    const existing = byName.get(item.name);
+    if (!existing) {
+      byName.set(item.name, { name: item.name, price: item.price });
+    } else if (existing.price === null && item.price !== null) {
+      existing.price = item.price;
+    }
+  }
+  return [...byName.values()];
 }
 
 /**

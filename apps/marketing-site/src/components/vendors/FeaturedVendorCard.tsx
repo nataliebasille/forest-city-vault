@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { ArrowRightIcon } from "@/components/icons";
 
@@ -61,27 +62,26 @@ export function FeaturedVendorCard({
           {vendor.description}
         </p>
 
-        <ul className="flex flex-wrap gap-2">
-          {vendor.categories.map((category) => (
-            <li
-              key={category}
-              className="rounded-md border border-surface-500/40 px-2.5 py-1 font-subheading text-xs text-secondary-500/80"
-            >
-              {category}
-            </li>
-          ))}
-        </ul>
+        {vendor.categories.length > 0 ?
+          <ul className="flex flex-wrap gap-2">
+            {vendor.categories.map((category) => (
+              <li
+                key={category}
+                className="rounded-md border border-surface-500/40 px-2.5 py-1 font-subheading text-xs text-secondary-500/80"
+              >
+                {category}
+              </li>
+            ))}
+          </ul>
+        : null}
 
-        {/* TODO(vendor-routes): Link to `/vendors/${vendor.slug}` once vendor
-            profile routes exist. No route exists yet, so this is a non-navigating
-            button to avoid a dead link. */}
-        <button
-          type="button"
+        <Link
+          href={`/vendors/${vendor.slug}`}
           className="group/link mt-auto inline-flex w-fit items-center gap-1.5 pt-1 font-subheading text-sm font-semibold text-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           <span className="nav-underline">View their collection</span>
           <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 ease-out group-hover/link:translate-x-0.5" />
-        </button>
+        </Link>
       </div>
     </article>
   );
