@@ -16,7 +16,7 @@ export type NavItem = {
  * the desktop nav and the mobile drawer so the two never drift.
  */
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Shop vendors", href: "/vendors" },
+  { label: "Browse vendors", href: "/vendors" },
   { label: "Visit the store", href: MAP_URL, external: true },
   { label: "Become a vendor", href: "/become-a-vendor", cta: true },
 ];

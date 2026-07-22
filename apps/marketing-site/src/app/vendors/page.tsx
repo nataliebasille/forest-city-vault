@@ -7,7 +7,7 @@ import { getVendorData } from "@/lib/vendors/data";
 import { searchVendors } from "@/lib/vendors/search";
 
 export const metadata: Metadata = {
-  title: "Shop the Vault · Forest City Vault",
+  title: "Browse the Vault · Forest City Vault",
   description:
     "Browse and search the independent makers and vendors inside Forest City Vault.",
 };

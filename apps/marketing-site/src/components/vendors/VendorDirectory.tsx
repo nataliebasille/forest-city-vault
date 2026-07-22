@@ -31,7 +31,7 @@ export function VendorDirectory({
           The Vault Directory
         </p>
         <h1 className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl">
-          Shop the Vault
+          Browse the Vault
         </h1>
         <p className="font-body text-base/7 text-on-surface-50/80">
           Discover products from {totalCount} independent vendors in Ohio City.
