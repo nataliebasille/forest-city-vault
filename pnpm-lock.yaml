@@ -118,9 +118,18 @@ importers:
 
   apps/marketing-site:
     dependencies:
+      '@forest-city-vault/core-email':
+        specifier: workspace:*
+        version: link:../../core/email
+      '@forest-city-vault/platform-nextjs-effect':
+        specifier: workspace:*
+        version: link:../../platform/nextjs-effect
       '@nataliebasille/natcore-design-system':
         specifier: ^2.0.3
         version: 2.0.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.3.0)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       effect:
         specifier: ^3.21.2
         version: 3.21.2
@@ -136,9 +145,6 @@ importers:
       react-dom:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
-      resend:
-        specifier: ^6.17.2
-        version: 6.17.2
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -152,12 +158,21 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.2.3(@types/react@19.2.15)
+      expect:
+        specifier: ^29.0.0
+        version: 29.7.0
+      expect-type:
+        specifier: ^1.3.0
+        version: 1.3.0
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
       tailwindcss:
         specifier: ^4
         version: 4.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
       typescript:
         specifier: ^5
         version: 5.9.3
@@ -215,6 +230,34 @@ importers:
       tsx:
         specifier: ^4.22.3
         version: 4.22.3
+
+  core/email:
+    dependencies:
+      '@forest-city-vault/core-config':
+        specifier: workspace:*
+        version: link:../config
+      effect:
+        specifier: ^3.21.2
+        version: 3.21.2
+      resend:
+        specifier: ^6.17.2
+        version: 6.17.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.41
+      expect:
+        specifier: ^29.0.0
+        version: 29.7.0
+      expect-type:
+        specifier: ^1.3.0
+        version: 1.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   core/id-generator:
     dependencies:

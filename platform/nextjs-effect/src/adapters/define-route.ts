@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import { NextRequest } from "next/server";
 import { HttpResult, httpResultToResponse } from "../http/http-result";
 import { MustBeNever } from "../types.internal";
+import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
@@ -194,23 +195,4 @@ function getHttpStatus(result: HttpResult<unknown>) {
   }
 
   return 200;
-}
-
-function toSafeErrorDetails(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-
-  if (typeof error === "object" && error !== null && "_tag" in error) {
-    return {
-      tag: String((error as { _tag?: unknown })._tag),
-    };
-  }
-
-  return {
-    type: typeof error,
-  };
 }

@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import path from "path";
+import { config as loadEnv } from "dotenv";
+
+// Every app loads environment variables from the repository-root `.env`, so the
+// marketing site reads the same file (two levels up from `apps/marketing-site`).
+loadEnv({ path: path.resolve(__dirname, "../../.env"), override: false });
 
 const nextConfig: NextConfig = {
   // exceljs relies on Node built-ins; keep it as a runtime dependency instead

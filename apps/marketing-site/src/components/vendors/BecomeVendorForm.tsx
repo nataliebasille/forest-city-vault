@@ -2,11 +2,11 @@
 
 import { useActionState, useCallback, useId, useState } from "react";
 import { VENDOR_CATEGORIES } from "@/lib/vendors/categories";
+import { submitVendorApplication } from "@/app/become-a-vendor/actions";
 import {
   initialVendorApplicationState,
-  submitVendorApplication,
   type VendorApplicationState,
-} from "@/app/become-a-vendor/actions";
+} from "@/app/become-a-vendor/state";
 
 type FieldProps = {
   id: string;
@@ -19,7 +19,13 @@ type FieldProps = {
   placeholder?: string;
   className?: string;
 } & (
-  | { multiline: true; rows?: number; type?: never; inputMode?: never; autoComplete?: never }
+  | {
+      multiline: true;
+      rows?: number;
+      type?: never;
+      inputMode?: never;
+      autoComplete?: never;
+    }
   | {
       multiline?: false;
       rows?: never;
@@ -35,8 +41,17 @@ type FieldProps = {
  * and error styling. Adding `form-control-error` turns the borders red.
  */
 function Field(props: FieldProps) {
-  const { id, name, label, required, optional, defaultValue, error, placeholder, className } =
-    props;
+  const {
+    id,
+    name,
+    label,
+    required,
+    optional,
+    defaultValue,
+    error,
+    placeholder,
+    className,
+  } = props;
   const errorId = error ? `${id}-error` : undefined;
 
   const shared = {
@@ -54,29 +69,32 @@ function Field(props: FieldProps) {
   } as const;
 
   return (
-    <div className={`form-control${error ? " form-control-error" : ""}${className ? ` ${className}` : ""}`}>
+    <div
+      className={`form-control${error ? " form-control-error" : ""}${className ? ` ${className}` : ""}`}
+    >
       <label htmlFor={id} className="flex-row flex-wrap items-baseline gap-x-1">
         {label}
-        {required ? <span className="text-primary-500">*</span> : null}
-        {optional ? (
+        {required ?
+          <span className="text-primary-500">*</span>
+        : null}
+        {optional ?
           <span className="text-secondary-500/60">(optional)</span>
-        ) : null}
+        : null}
       </label>
-      {props.multiline ? (
+      {props.multiline ?
         <textarea {...shared} rows={props.rows ?? 5} className="resize-y" />
-      ) : (
-        <input
+      : <input
           {...shared}
           type={props.type ?? "text"}
           inputMode={props.inputMode}
           autoComplete={props.autoComplete}
         />
-      )}
-      {error ? (
+      }
+      {error ?
         <span id={errorId} className="form-control-hint text-red-600">
           {error}
         </span>
-      ) : null}
+      : null}
     </div>
   );
 }
@@ -103,9 +121,9 @@ export function BecomeVendorForm() {
 
   const toggleCategory = useCallback((category: string) => {
     setSelectedCategories((current) =>
-      current.includes(category)
-        ? current.filter((c) => c !== category)
-        : [...current, category],
+      current.includes(category) ?
+        current.filter((c) => c !== category)
+      : [...current, category],
     );
   }, []);
 
@@ -149,14 +167,14 @@ export function BecomeVendorForm() {
         />
       </div>
 
-      {state.status === "error" && state.message ? (
+      {state.status === "error" && state.message ?
         <p
           role="alert"
           className="mb-6 rounded-xl border border-primary-500/30 bg-primary-50/60 px-4 py-3 text-sm font-medium text-primary-500"
         >
           {state.message}
         </p>
-      ) : null}
+      : null}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <Field
@@ -220,8 +238,8 @@ export function BecomeVendorForm() {
           </span>
           <p className="-mt-1 text-sm text-secondary-500/70">
             These are just to help us get a feel for your work — your products
-            don&apos;t have to fit any of them. Pick any that apply, or skip this
-            and tell us more below.
+            don&apos;t have to fit any of them. Pick any that apply, or skip
+            this and tell us more below.
           </p>
           <div className="flex flex-wrap gap-2.5">
             {VENDOR_CATEGORIES.map((category) => {
@@ -230,9 +248,9 @@ export function BecomeVendorForm() {
                 <label
                   key={category}
                   className={`cursor-pointer rounded-full border px-4 py-2 font-subheading text-sm font-semibold transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-500 ${
-                    active
-                      ? "border-primary-500 bg-primary-500 text-surface-50"
-                      : "border-surface-500/55 bg-surface-50 text-secondary-500 hover:border-primary-500/50"
+                    active ?
+                      "border-primary-500 bg-primary-500 text-surface-50"
+                    : "border-surface-500/55 bg-surface-50 text-secondary-500 hover:border-primary-500/50"
                   }`}
                 >
                   <input
