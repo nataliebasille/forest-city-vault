@@ -39,7 +39,7 @@ describe("submitVendorApplication", () => {
 
     expect(sent).toHaveLength(1);
     const email = sent[0];
-    expect(email.subject).toBe("Vendor application — Acme Goods");
+    expect(email.subject).toBe("Vendor Application — Acme Goods");
     expect(email.replyTo).toBe(VALID_FIELDS.email);
     expect(email.text).toContain("Business / brand name: Acme Goods");
     expect(email.text).toContain("Contact name: Jamie Rivera");

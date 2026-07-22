@@ -221,7 +221,7 @@ function buildEmail(values: VendorApplicationValues): EmailMessage {
   `;
 
   return {
-    subject: `Vendor application — ${values.businessName}`,
+    subject: `Vendor Application — ${values.businessName}`,
     text,
     html,
     replyTo: values.email,
