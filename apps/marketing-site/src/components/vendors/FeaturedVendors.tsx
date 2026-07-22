@@ -3,30 +3,43 @@ import Link from "next/link";
 import { ArrowRightIcon } from "@/components/icons";
 import { getFeaturedVendors } from "@/lib/vendors/data";
 import type { Vendor } from "@/lib/vendors/types";
-import { type FeaturedVendor, FeaturedVendorCard } from "./FeaturedVendorCard";
+import { NewThisWeekSpotlight } from "./NewThisWeekSpotlight";
 import { RotatingVendorCarousel } from "./RotatingVendorCarousel";
+import { VendorCard, type VendorCardVendor } from "./VendorCard";
 
 // TODO(temporary-image): Every featured vendor currently reuses the single
 // existing marketplace photo (`/images/fvc-hero.jpeg`). Swap for dedicated
 // vendor/product photography when it lands.
 const PLACEHOLDER_IMAGE = "/images/fvc-hero.jpeg";
 
+// How many of the featured vendors rotate through the "New this week" spotlight
+// column; the rest fill the featured grid beside it.
+const SPOTLIGHT_COUNT = 3;
+
 /**
  * Homepage "Featured in the Vault" section. Server component: it runs the cached
  * {@link getFeaturedVendors} Effect to pick a rotating set of *real* workbook
- * vendors, so each card's "View their collection" link resolves to that vendor's
- * `/vendors/[slug]` page. Falls back to rendering nothing if the vendor data is
- * unavailable, so a data hiccup never breaks the homepage.
+ * vendors, then splits them into a "New this week" spotlight column and a
+ * "Featured vendors" grid — each card's "View collection" link resolves to that
+ * vendor's `/vendors/[slug]` page. Falls back to rendering nothing if the vendor
+ * data is unavailable, so a data hiccup never breaks the homepage.
+ *
+ * The cards are the same unified {@link VendorCard} used by the directory, so
+ * the homepage and search results share one look and feel.
  */
 export async function FeaturedVendors() {
   const vendors = await Effect.runPromise(
     getFeaturedVendors.pipe(Effect.orElseSucceed(() => [] as Vendor[])),
   );
-  const featured = vendors.map(toFeaturedVendor);
+  const featured = vendors.map(toCardVendor);
 
   if (featured.length === 0) {
     return null;
   }
+
+  const spotlightVendors = featured.slice(0, SPOTLIGHT_COUNT);
+  const gridVendors = featured.slice(SPOTLIGHT_COUNT);
+  const hasSpotlight = spotlightVendors.length > 0;
 
   return (
     <section
@@ -58,25 +71,47 @@ export async function FeaturedVendors() {
           </Link>
         </div>
 
-        <div className="mt-8">
-          {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
-          <RotatingVendorCarousel
-            vendors={featured}
-            label="Featured vendors"
-            className="md:hidden"
-          />
+        <div className="mt-8 flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,2fr)] lg:gap-10">
+          {hasSpotlight ?
+            <NewThisWeekSpotlight vendors={spotlightVendors} />
+          : null}
 
-          <div className="hidden flex-col gap-4 md:flex">
-            <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
-              Featured vendors
-            </p>
-            <ul className="grid grid-cols-3 gap-6">
-              {featured.map((vendor) => (
-                <li key={vendor.slug} className="group">
-                  <FeaturedVendorCard vendor={vendor} />
-                </li>
-              ))}
-            </ul>
+          {/* Vertical divider — separates the rotating spotlight from the
+              featured vendors on desktop; collapses to a top border when
+              stacked. */}
+          {hasSpotlight ?
+            <div
+              aria-hidden="true"
+              className="hidden bg-surface-500/25 lg:block"
+            />
+          : null}
+
+          <div
+            className={
+              hasSpotlight ?
+                "min-w-0 border-t border-surface-500/20 pt-8 lg:border-t-0 lg:pt-0"
+              : "min-w-0"
+            }
+          >
+            {/* Mobile: auto-rotating carousel. Desktop/tablet: static grid. */}
+            <RotatingVendorCarousel
+              vendors={gridVendors}
+              label="Featured vendors"
+              className="md:hidden"
+            />
+
+            <div className="hidden flex-col gap-4 md:flex">
+              <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
+                Featured vendors
+              </p>
+              <ul className="grid grid-cols-3 gap-6">
+                {gridVendors.map((vendor) => (
+                  <li key={vendor.slug} className="group">
+                    <VendorCard vendor={vendor} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -94,28 +129,22 @@ export async function FeaturedVendors() {
 }
 
 /**
- * Adapt a workbook-derived {@link Vendor} into the {@link FeaturedVendor} card
- * shape. Real vendors have no curated description, imagery, or categories yet, so
- * we derive a "Known for …" blurb from sample items and reuse the shared
- * marketplace photo. The important part is the `slug`, which now matches the
- * directory/detail route so "View their collection" resolves.
+ * Adapt a workbook-derived {@link Vendor} into the {@link VendorCardVendor}
+ * shape the unified card consumes. Real vendors have no dedicated photography
+ * yet, so we reuse the shared marketplace photo; their sample items, price
+ * range, and item count carry through so the featured card shows the same
+ * "Known for" blurb and price/stock footer as the directory. The important part
+ * is the `slug`, which matches the directory/detail route so "View collection"
+ * resolves.
  */
-function toFeaturedVendor(vendor: Vendor): FeaturedVendor {
+function toCardVendor(vendor: Vendor): VendorCardVendor {
   return {
     name: vendor.name,
     slug: vendor.slug,
-    description: describeVendor(vendor),
     imageSrc: PLACEHOLDER_IMAGE,
     imageAlt: `A selection of products from ${vendor.name} at the Forest City Vault marketplace`,
-    categories: [],
+    sampleItems: vendor.sampleItems,
+    priceRange: vendor.priceRange,
+    itemCount: vendor.itemCount,
   };
-}
-
-/** Short blurb derived from a vendor's sample items. */
-function describeVendor(vendor: Vendor): string {
-  const highlights = vendor.sampleItems.slice(0, 3);
-  if (highlights.length === 0) {
-    return "An independent vendor inside the Vault.";
-  }
-  return `Known for ${highlights.join(", ")}.`;
 }

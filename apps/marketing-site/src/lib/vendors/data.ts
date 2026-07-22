@@ -58,7 +58,9 @@ export const getVendorBySlug = (
     vendors.find((vendor) => vendor.slug === slug),
   );
 
-const FEATURED_COUNT = 3;
+// The homepage splits these into a 3-vendor "New this week" spotlight column
+// and a 3-vendor "Featured vendors" grid, so we pick 6 per rotation.
+const FEATURED_COUNT = 6;
 const FOUR_HOURS_IN_SECONDS = 60 * 60 * 4;
 
 /**

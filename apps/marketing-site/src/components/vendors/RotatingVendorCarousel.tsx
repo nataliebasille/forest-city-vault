@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { FeaturedVendorCard, type FeaturedVendor } from "./FeaturedVendorCard";
+import { VendorCard, type VendorCardVendor } from "./VendorCard";
 
 const ROTATE_INTERVAL_MS = 5000;
 // Minimum horizontal travel (px) before a touch gesture counts as a swipe.
@@ -14,7 +14,7 @@ export function RotatingVendorCarousel({
   fillHeight = false,
   className = "",
 }: {
-  vendors: FeaturedVendor[];
+  vendors: VendorCardVendor[];
   label: string;
   // When true, cards stretch to fill leftover vertical space so the carousel
   // height matches an adjacent column instead of scaling with card width.
@@ -176,7 +176,7 @@ export function RotatingVendorCarousel({
                 inert={!isActive}
                 className={cn("w-full shrink-0", fillHeight && "lg:h-full")}
               >
-                <FeaturedVendorCard vendor={vendor} fillHeight={fillHeight} />
+                <VendorCard vendor={vendor} fillHeight={fillHeight} />
               </div>
             );
           })}
