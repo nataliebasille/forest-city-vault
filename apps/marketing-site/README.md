@@ -33,7 +33,8 @@ pnpm --filter marketing-site lint
 
 The `/become-a-vendor` page submits applications through a Server Action
 (`src/app/become-a-vendor/actions.ts`) that emails the shop via
-[Resend](https://resend.com). Configure these environment variables:
+[Resend](https://resend.com), using the shared `@forest-city-vault/core-email`
+package (`ResendEmailSender`). Configure these environment variables:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
@@ -41,9 +42,11 @@ The `/become-a-vendor` page submits applications through a Server Action
 | `VENDOR_APPLICATION_TO_EMAIL` | Yes | Where applications are delivered. |
 | `VENDOR_APPLICATION_FROM_EMAIL` | No | Sender address; defaults to `onboarding@resend.dev` for testing. Use an address on a domain verified in Resend for production. |
 
-If `RESEND_API_KEY` or `VENDOR_APPLICATION_TO_EMAIL` is missing, the form
-validates input but fails gracefully with a user-friendly message instead of
-crashing.
+`RESEND_API_KEY` and `VENDOR_APPLICATION_TO_EMAIL` are required: if either is
+missing, the email layer fails to build (a `ConfigError`), so the Server Action
+rejects rather than silently accepting applications it can't deliver. A genuine
+send failure (Resend rejecting the request) is still caught and shown to the
+applicant as a friendly retry message.
 
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

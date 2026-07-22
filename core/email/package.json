@@ -1,0 +1,26 @@
+{
+  "name": "@forest-city-vault/core-email",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/public.ts",
+  "types": "./src/public.ts",
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.spec.ts",
+    "lint": "biome lint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@forest-city-vault/core-config": "workspace:*",
+    "effect": "^3.21.2",
+    "resend": "^6.17.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "expect": "^29.0.0",
+    "expect-type": "^1.3.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5"
+  }
+}

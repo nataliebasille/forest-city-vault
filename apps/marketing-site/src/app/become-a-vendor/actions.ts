@@ -1,37 +1,137 @@
 "use server";
 
-import { Resend } from "resend";
+import { Effect, Either, ParseResult, Schema } from "effect";
 import { VENDOR_CATEGORIES } from "@/lib/vendors/categories";
+import { EmailSender, type EmailMessage } from "@forest-city-vault/core-email";
+import { action } from "@/lib/runtime/runtime";
+import { RequestTrace } from "@/lib/runtime/request-trace";
+import type {
+  VendorApplicationFieldErrors,
+  VendorApplicationState,
+} from "./state";
 
-/** Field-level validation errors keyed by form field name. */
-export type VendorApplicationFieldErrors = Partial<
-  Record<"businessName" | "contactName" | "email" | "message", string>
->;
+/**
+ * Handles "Become a vendor" application submissions. Validates on the server,
+ * screens a honeypot field for bots, and emails the application to the shop.
+ *
+ * Runs through the shared {@link action} boundary, so the whole submission
+ * carries a request id and its logs (received, sent, and any failure) are
+ * annotated with that id. Expected outcomes — honeypot, validation, missing
+ * config, provider failure, success — are all resolved to a
+ * {@link VendorApplicationState} value so the boundary never rejects and the form
+ * always receives a next state.
+ *
+ * Bound to React's `useActionState`: `action` returns a
+ * `(prevState, formData) => Promise<VendorApplicationState>` function, which is
+ * exactly the signature `useActionState` expects.
+ */
+export const submitVendorApplication = action(
+  "vendor.application.submit",
+  (_prevState: VendorApplicationState, formData: FormData) =>
+    Effect.gen(function* () {
+      const trace = yield* RequestTrace;
+      yield* Effect.logInfo("vendor.application.received", {
+        requestId: trace.requestId,
+        requestIdSource: trace.requestIdSource,
+      });
 
-export type VendorApplicationState = {
-  status: "idle" | "success" | "error";
-  /** Human-readable message shown to the applicant. */
-  message: string;
-  /** Field-level errors for inline display. */
-  fieldErrors?: VendorApplicationFieldErrors;
-  /** Echoes submitted values so the form can repopulate after an error. */
-  values?: {
-    businessName: string;
-    contactName: string;
-    email: string;
-    phone: string;
-    website: string;
-    categories: string[];
-    message: string;
-  };
-};
+      // Honeypot: real users never fill this hidden field. Pretend success so
+      // bots don't learn they were filtered.
+      if (field(formData, "company_website")) {
+        yield* Effect.logInfo("vendor.application.honeypot_tripped");
+        return {
+          status: "success",
+          message: "Thanks! Your application is on its way.",
+        } satisfies VendorApplicationState;
+      }
 
-export const initialVendorApplicationState: VendorApplicationState = {
-  status: "idle",
-  message: "",
-};
+      const values = readValues(formData);
+      const fieldErrors = validate(values);
+
+      if (Object.keys(fieldErrors).length > 0) {
+        yield* Effect.logInfo("vendor.application.validation_failed", {
+          fields: Object.keys(fieldErrors),
+        });
+        return {
+          status: "error",
+          message: "Please fix the highlighted fields and try again.",
+          fieldErrors,
+          values,
+        } satisfies VendorApplicationState;
+      }
+
+      const sender = yield* EmailSender;
+
+      return yield* sender.send(buildEmail(values)).pipe(
+        Effect.zipRight(
+          Effect.logInfo("vendor.application.sent", {
+            businessName: values.businessName,
+          }).pipe(
+            Effect.as({
+              status: "success",
+              message:
+                "Thanks for applying! We've received your details and will be in touch soon.",
+            } satisfies VendorApplicationState),
+          ),
+        ),
+        Effect.catchTag("EmailSendError", (error) =>
+          Effect.logError("vendor.application.send_failed", {
+            cause: String(error.cause),
+          }).pipe(
+            Effect.as({
+              status: "error",
+              message:
+                "Something went wrong sending your application. Please try again in a moment.",
+              values,
+            } satisfies VendorApplicationState),
+          ),
+        ),
+      );
+    }),
+);
+
+type VendorApplicationValues = NonNullable<VendorApplicationState["values"]>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Declarative validation for the fields shown inline on the form. Each rule
+ * carries the exact copy surfaced to the applicant, and the email field chains
+ * two rules so an empty value reports "required" while a malformed value reports
+ * "invalid" (the chain short-circuits, so only one message is ever produced per
+ * field). Values are already trimmed by {@link readValues}; excess keys (phone,
+ * website, categories) are ignored by the struct.
+ */
+const VendorApplicationInput = Schema.Struct({
+  businessName: Schema.String.pipe(
+    Schema.minLength(1, {
+      message: () => "Please tell us your business or brand name.",
+    }),
+  ),
+  contactName: Schema.String.pipe(
+    Schema.minLength(1, { message: () => "Please tell us your name." }),
+  ),
+  email: Schema.String.pipe(
+    Schema.minLength(1, {
+      message: () => "Please enter an email so we can reach you.",
+    }),
+    Schema.pattern(EMAIL_PATTERN, {
+      message: () => "Please enter a valid email address.",
+    }),
+  ),
+  message: Schema.String.pipe(
+    Schema.minLength(1, {
+      message: () => "Please tell us a little about your work.",
+    }),
+  ),
+});
+
+const FIELD_ERROR_KEYS = [
+  "businessName",
+  "contactName",
+  "email",
+  "message",
+] as const satisfies ReadonlyArray<keyof VendorApplicationFieldErrors>;
 
 function field(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -47,26 +147,8 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/**
- * Handles "Become a vendor" application submissions. Validates on the server,
- * screens a honeypot field for bots, and emails the application to the shop via
- * Resend. Designed for React's `useActionState`, so it takes the previous state
- * as its first argument and returns the next state.
- */
-export async function submitVendorApplication(
-  _prevState: VendorApplicationState,
-  formData: FormData,
-): Promise<VendorApplicationState> {
-  // Honeypot: real users never fill this hidden field. Pretend success so bots
-  // don't learn they were filtered.
-  if (field(formData, "company_website")) {
-    return {
-      status: "success",
-      message: "Thanks! Your application is on its way.",
-    };
-  }
-
-  const values = {
+function readValues(formData: FormData): VendorApplicationValues {
+  return {
     businessName: field(formData, "businessName"),
     contactName: field(formData, "contactName"),
     email: field(formData, "email"),
@@ -78,53 +160,41 @@ export async function submitVendorApplication(
       .filter((c) => VENDOR_CATEGORIES.includes(c as never)),
     message: field(formData, "message"),
   };
+}
+
+function isFieldErrorKey(
+  key: PropertyKey,
+): key is keyof VendorApplicationFieldErrors {
+  return (FIELD_ERROR_KEYS as ReadonlyArray<PropertyKey>).includes(key);
+}
+
+function validate(
+  values: VendorApplicationValues,
+): VendorApplicationFieldErrors {
+  const result = Schema.decodeUnknownEither(VendorApplicationInput, {
+    errors: "all",
+  })(values);
+
+  if (Either.isRight(result)) {
+    return {};
+  }
 
   const fieldErrors: VendorApplicationFieldErrors = {};
-  if (!values.businessName) {
-    fieldErrors.businessName = "Please tell us your business or brand name.";
+  for (const issue of ParseResult.ArrayFormatter.formatErrorSync(result.left)) {
+    const key = issue.path[0];
+    // Keep the first message per field, mirroring the email short-circuit.
+    if (key !== undefined && isFieldErrorKey(key) && !fieldErrors[key]) {
+      fieldErrors[key] = issue.message;
+    }
   }
-  if (!values.contactName) {
-    fieldErrors.contactName = "Please tell us your name.";
-  }
-  if (!values.email) {
-    fieldErrors.email = "Please enter an email so we can reach you.";
-  } else if (!EMAIL_PATTERN.test(values.email)) {
-    fieldErrors.email = "Please enter a valid email address.";
-  }
-  if (!values.message) {
-    fieldErrors.message = "Please tell us a little about your work.";
-  }
+  return fieldErrors;
+}
 
-  if (Object.keys(fieldErrors).length > 0) {
-    return {
-      status: "error",
-      message: "Please fix the highlighted fields and try again.",
-      fieldErrors,
-      values,
-    };
-  }
-
-  const apiKey = process.env.RESEND_API_KEY;
-  const toEmail = process.env.VENDOR_APPLICATION_TO_EMAIL;
-  const fromEmail =
-    process.env.VENDOR_APPLICATION_FROM_EMAIL ?? "onboarding@resend.dev";
-
-  if (!apiKey || !toEmail) {
-    console.error(
-      "[become-a-vendor] Missing email configuration: set RESEND_API_KEY and VENDOR_APPLICATION_TO_EMAIL.",
-    );
-    return {
-      status: "error",
-      message:
-        "We couldn't submit your application right now. Please try again later or email us directly.",
-      values,
-    };
-  }
-
+function buildEmail(values: VendorApplicationValues): EmailMessage {
   const categoriesText =
     values.categories.length > 0 ? values.categories.join(", ") : "—";
 
-  const lines = [
+  const text = [
     `Business / brand name: ${values.businessName}`,
     `Contact name: ${values.contactName}`,
     `Email: ${values.email}`,
@@ -134,7 +204,7 @@ export async function submitVendorApplication(
     "",
     "About their work:",
     values.message,
-  ];
+  ].join("\n");
 
   const html = `
     <h2>New vendor application</h2>
@@ -150,39 +220,10 @@ export async function submitVendorApplication(
     <p style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${escapeHtml(values.message)}</p>
   `;
 
-  try {
-    const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({
-      from: `Forest City Vault <${fromEmail}>`,
-      to: [toEmail],
-      replyTo: values.email,
-      subject: `Vendor application — ${values.businessName}`,
-      text: lines.join("\n"),
-      html,
-    });
-
-    if (error) {
-      console.error("[become-a-vendor] Resend error:", error);
-      return {
-        status: "error",
-        message:
-          "Something went wrong sending your application. Please try again in a moment.",
-        values,
-      };
-    }
-  } catch (error) {
-    console.error("[become-a-vendor] Unexpected error:", error);
-    return {
-      status: "error",
-      message:
-        "Something went wrong sending your application. Please try again in a moment.",
-      values,
-    };
-  }
-
   return {
-    status: "success",
-    message:
-      "Thanks for applying! We've received your details and will be in touch soon.",
+    subject: `Vendor application — ${values.businessName}`,
+    text,
+    html,
+    replyTo: values.email,
   };
 }
