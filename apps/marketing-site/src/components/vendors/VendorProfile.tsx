@@ -13,7 +13,7 @@ function monogram(name: string): string {
 const BAND_BACKGROUND =
   "radial-gradient(circle at 90% 120%, rgba(175,95,29,0.35) 0%, transparent 55%)," +
   "radial-gradient(circle at -10% -20%, rgba(190,153,109,0.25) 0%, transparent 55%)," +
-  "#faf4ec";
+  "var(--color-surface-100)";
 
 /**
  * Vendor detail shell for `/vendors/[slug]`. Opens with a back link to the
@@ -53,7 +53,7 @@ export function VendorProfile({
         />
         <div className="flex flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:gap-5 md:px-8">
           <span
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl font-heading text-3xl text-surface-50 shadow-[0_2px_8px_rgba(175,95,29,0.35)]"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl font-heading text-3xl text-white shadow-[0_2px_8px_rgba(175,95,29,0.35)]"
             style={{
               background: "linear-gradient(135deg, #af5f1d 0%, #c97028 100%)",
             }}
@@ -65,10 +65,10 @@ export function VendorProfile({
             <p className="font-subheading text-xs font-semibold tracking-[0.24em] text-primary-500 uppercase">
               Vendor Collection
             </p>
-            <h1 className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl">
+            <h1 className="font-heading text-3xl leading-tight text-ink sm:text-4xl">
               {vendor.name}
             </h1>
-            <p className="font-body text-sm text-secondary-500/70">
+            <p className="font-body text-sm text-ink/70">
               {vendor.itemCount} {vendor.itemCount === 1 ? "item" : "items"}
               {price ? ` · ${price}` : null}
             </p>

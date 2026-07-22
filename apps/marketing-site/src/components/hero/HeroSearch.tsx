@@ -22,7 +22,7 @@ export function HeroSearch() {
         </label>
         <div className="flex flex-1 items-center gap-3 px-3">
           <SearchIcon
-            className="h-5 w-5 shrink-0 text-secondary-500/70"
+            className="h-5 w-5 shrink-0 text-ink/70"
             aria-hidden="true"
           />
           <input
@@ -31,7 +31,7 @@ export function HeroSearch() {
             name="q"
             placeholder="Search products, categories, or vendors"
             autoComplete="off"
-            className="w-full border-0 bg-transparent px-0 py-2 text-base text-on-surface-50 placeholder:text-secondary-500/60 focus:outline-none"
+            className="w-full border-0 bg-transparent px-0 py-2 text-base text-on-surface-50 placeholder:text-ink/60 focus:outline-none"
           />
         </div>
         <button
@@ -51,7 +51,7 @@ export function HeroSearch() {
               <Link
                 href={categoryHref(category)}
                 aria-label={`Browse ${category} vendors`}
-                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-2 text-sm whitespace-nowrap text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-2 text-sm whitespace-nowrap text-ink transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               >
                 {category}
               </Link>
@@ -66,7 +66,7 @@ export function HeroSearch() {
 
       {/* Desktop: wrapping category chips that link straight to filtered results. */}
       <div className="hidden space-y-3 md:block">
-        <p className="font-subheading text-xs tracking-[0.24em] text-secondary-500/80 uppercase">
+        <p className="font-subheading text-xs tracking-[0.24em] text-ink/80 uppercase">
           Popular right now
         </p>
         <ul className="flex flex-wrap gap-2">
@@ -75,7 +75,7 @@ export function HeroSearch() {
               <Link
                 href={categoryHref(category)}
                 aria-label={`Browse ${category} vendors`}
-                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-1.5 text-sm text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50/70 px-4 py-1.5 text-sm text-ink transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               >
                 {category}
               </Link>

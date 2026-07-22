@@ -48,7 +48,7 @@ export function VendorSearchForm({
       </label>
       <div className="flex flex-1 items-center gap-3 px-2">
         <SearchIcon
-          className="h-5 w-5 shrink-0 text-secondary-500/70"
+          className="h-5 w-5 shrink-0 text-ink/70"
           aria-hidden="true"
         />
         <input
@@ -60,7 +60,7 @@ export function VendorSearchForm({
           placeholder="Search products, categories, or vendors"
           autoComplete="off"
           enterKeyHint="search"
-          className="w-full border-0 bg-transparent py-2 text-base text-on-surface-50 placeholder:text-secondary-500/60 focus:outline-none"
+          className="w-full border-0 bg-transparent py-2 text-base text-on-surface-50 placeholder:text-ink/60 focus:outline-none"
         />
       </div>
 
@@ -69,7 +69,7 @@ export function VendorSearchForm({
           href="/vendors"
           onClick={() => setQuery("")}
           aria-label="Clear search"
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-secondary-500/70 transition-colors hover:bg-surface-500/15 hover:text-secondary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-ink/70 transition-colors hover:bg-surface-500/15 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           <CloseIcon className="h-5 w-5" />
         </Link>

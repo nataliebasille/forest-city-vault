@@ -31,7 +31,7 @@ export function DesktopNav() {
             key={item.label}
             href={item.href}
             {...externalProps}
-            className="nav-link font-subheading text-sm font-medium text-surface-50"
+            className="nav-link font-subheading text-sm font-medium text-on-secondary-500"
           >
             <span className="nav-underline">{item.label}</span>
           </Link>

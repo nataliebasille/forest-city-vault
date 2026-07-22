@@ -11,7 +11,7 @@ const CHIP_BASE =
 const CHIP_ACTIVE =
   "border-primary-500 bg-primary-500 text-on-primary-500 shadow-[0_10px_25px_-18px_rgba(175,95,29,0.9)]";
 const CHIP_INACTIVE =
-  "border-surface-950/15 bg-surface-50 text-secondary-500 hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50";
+  "border-surface-950/15 bg-surface-50 text-ink hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50";
 
 /**
  * Category quick-filters. Each chip is a link to a pre-filtered directory view

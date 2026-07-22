@@ -43,7 +43,7 @@ export function VendorResultsToolbar({
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p
         aria-live="polite"
-        className="font-subheading text-sm text-secondary-500/80"
+        className="font-subheading text-sm text-ink/80"
       >
         {countLabel(count, query)}
       </p>
@@ -70,7 +70,7 @@ export function VendorResultsToolbar({
                   "inline-flex items-center rounded-full px-3 py-1 font-subheading transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500",
                   isActive ?
                     "bg-primary-500 text-on-primary-500"
-                  : "text-secondary-500/80 hover:text-secondary-500",
+                  : "text-ink/80 hover:text-ink",
                 )}
               >
                 {option.label}

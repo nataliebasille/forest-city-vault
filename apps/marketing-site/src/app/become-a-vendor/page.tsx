@@ -42,7 +42,7 @@ export default function BecomeVendorPage() {
               <span className="h-px w-8 bg-primary-500" aria-hidden="true" />
               A curated marketplace in Ohio City
             </p>
-            <h1 className="mt-5 font-heading text-4xl leading-[1.05] text-secondary-500 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 font-heading text-4xl leading-[1.05] text-ink sm:text-5xl lg:text-6xl">
               Sell your work at the{" "}
               <span className="italic text-primary-500">Vault</span>.
             </h1>
@@ -61,7 +61,7 @@ export default function BecomeVendorPage() {
               </a>
               <a
                 href="#how-it-works"
-                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
+                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-ink"
               >
                 <span className="nav-underline">See the split</span>
               </a>
@@ -83,7 +83,7 @@ export default function BecomeVendorPage() {
             </p>
             <h2
               id="how-it-works-heading"
-              className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl lg:text-5xl"
+              className="font-heading text-3xl leading-tight text-ink sm:text-4xl lg:text-5xl"
             >
               A simple consignment split.
             </h2>
@@ -110,18 +110,18 @@ export default function BecomeVendorPage() {
                 }
               >
                 {tier.featured ? (
-                  <span className="absolute top-6 right-6 rounded-full bg-primary-500 px-3 py-1 font-subheading text-[0.62rem] font-bold tracking-[0.14em] text-surface-50 uppercase">
+                  <span className="absolute top-6 right-6 rounded-full bg-primary-500 px-3 py-1 font-subheading text-[0.62rem] font-bold tracking-[0.14em] text-on-primary-500 uppercase">
                     Optional boost
                   </span>
                 ) : null}
                 <p className="font-subheading text-xs font-bold tracking-[0.22em] text-primary-500 uppercase">
                   {tier.label}
                 </p>
-                <p className="mt-4 font-heading text-5xl text-secondary-500">
+                <p className="mt-4 font-heading text-5xl text-ink">
                   <span className="text-primary-500">{tier.vendorShare}</span> /{" "}
                   {tier.storeShare}
                 </p>
-                <p className="mt-1 font-subheading text-sm font-semibold text-secondary-500/75">
+                <p className="mt-1 font-subheading text-sm font-semibold text-ink/75">
                   You keep {tier.vendorShare}% of every sale
                 </p>
                 <p className="mt-4 text-base/7 text-on-surface-50/85">
@@ -134,7 +134,7 @@ export default function BecomeVendorPage() {
                   </p>
                 ) : null}
                 {tier.note ? (
-                  <p className="mt-4 border-t border-surface-500/25 pt-4 text-sm text-secondary-500/70">
+                  <p className="mt-4 border-t border-surface-500/25 pt-4 text-sm text-ink/70">
                     {tier.note}
                   </p>
                 ) : null}
@@ -142,7 +142,7 @@ export default function BecomeVendorPage() {
             ))}
           </div>
 
-          <p className="mt-6 text-base text-secondary-500/70 italic">
+          <p className="mt-6 text-base text-ink/70 italic">
             Consignment means you only pay when you sell, with no monthly rent
             and no risk. Applying doesn&apos;t commit you to anything; we&apos;ll
             sort out the details together.
@@ -159,7 +159,7 @@ export default function BecomeVendorPage() {
                 key={perk.title}
                 className="rounded-2xl border border-surface-500/35 bg-surface-50 p-5"
               >
-                <h3 className="font-subheading text-base font-bold text-secondary-500">
+                <h3 className="font-subheading text-base font-bold text-ink">
                   {perk.title}
                 </h3>
                 <p className="mt-1.5 text-sm/6 text-on-surface-50/75">
@@ -184,7 +184,7 @@ export default function BecomeVendorPage() {
             </p>
             <h2
               id="apply-heading"
-              className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl lg:text-5xl"
+              className="font-heading text-3xl leading-tight text-ink sm:text-4xl lg:text-5xl"
             >
               Tell us about your work.
             </h2>

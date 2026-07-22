@@ -21,7 +21,7 @@ export default function Home() {
               <span className="h-px w-8 bg-primary-500" aria-hidden="true" />A
               curated marketplace in Ohio City
             </p>
-            <h1 className="font-heading text-4xl leading-[1.05] text-secondary-500 sm:text-5xl lg:text-6xl xl:text-7xl">
+            <h1 className="font-heading text-4xl leading-[1.05] text-ink sm:text-5xl lg:text-6xl xl:text-7xl">
               Find your next{" "}
               <span className="italic text-primary-500">favorite</span> thing.
             </h1>
@@ -40,7 +40,7 @@ export default function Home() {
             <div className="hidden flex-wrap items-center gap-x-6 gap-y-3 md:flex">
               <Link
                 href="/vendors"
-                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
+                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-ink"
               >
                 <span className="nav-underline">Browse all vendors</span>
                 <ArrowUpRightIcon className="h-4 w-4 text-primary-500" />
@@ -49,14 +49,14 @@ export default function Home() {
                 href={MAP_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-secondary-500"
+                className="nav-link inline-flex items-center gap-2 font-subheading text-sm font-semibold text-ink"
               >
                 <span className="nav-underline">Plan your visit</span>
                 <ArrowUpRightIcon className="h-4 w-4 text-primary-500" />
               </a>
             </div>
 
-            <div className="hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-surface-950/10 pt-5 text-sm text-secondary-500/80 md:flex">
+            <div className="hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-surface-950/10 pt-5 text-sm text-ink/80 md:flex">
               <a
                 href={MAP_URL}
                 target="_blank"
@@ -84,14 +84,14 @@ export default function Home() {
                 sizes="(min-width: 1024px) 45vw, 100vw"
                 className="object-cover object-center"
               />
-              <div className="absolute top-4 right-4 rounded-full border border-surface-950/10 bg-surface-50/90 px-4 py-1.5 font-subheading text-[0.7rem] font-semibold tracking-[0.18em] text-secondary-500 uppercase shadow-sm backdrop-blur">
+              <div className="absolute top-4 right-4 rounded-full border border-surface-950/10 bg-surface-50/90 px-4 py-1.5 font-subheading text-[0.7rem] font-semibold tracking-[0.18em] text-ink uppercase shadow-sm backdrop-blur">
                 New finds weekly
               </div>
               <div className="absolute bottom-4 left-4 hidden max-w-[15rem] rounded-2xl border border-surface-950/10 bg-surface-50/95 px-4 py-3 shadow-lg backdrop-blur md:block">
                 <p className="font-subheading text-[0.65rem] font-semibold tracking-[0.22em] text-primary-500 uppercase">
                   Inside the vault
                 </p>
-                <p className="font-heading text-lg text-secondary-500">
+                <p className="font-heading text-lg text-ink">
                   Made locally.
                   <br />
                   Found here.
@@ -101,7 +101,7 @@ export default function Home() {
 
             {/* Mobile-only quiet trust row beneath the image. */}
             <ul
-              className="mt-4 flex flex-nowrap items-center gap-x-2 overflow-x-auto text-sm whitespace-nowrap text-secondary-500/80 [-ms-overflow-style:none] [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden"
+              className="mt-4 flex flex-nowrap items-center gap-x-2 overflow-x-auto text-sm whitespace-nowrap text-ink/80 [-ms-overflow-style:none] [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden"
               aria-label="Marketplace highlights"
             >
               <li className="inline-flex shrink-0 items-center gap-1.5">

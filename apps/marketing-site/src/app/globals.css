@@ -9,12 +9,30 @@
   --theme-surface-50: #ffffff;
   --theme-surface-500: #be996d;
   --theme-surface-950: #4c4639;
+
+  /*
+   * Adaptive "ink" for headings, labels, and icons that sit on the page
+   * surface. Light mode keeps the warm brand brown (secondary-500); dark mode
+   * switches to the readable foreground computed for the dark surface so the
+   * editorial text stays legible when the system prefers a dark theme.
+   */
+  --color-ink: light-dark(
+    var(--color-light-secondary-500),
+    var(--color-on-dark-surface-50)
+  );
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --lightningcss-light: initial;
   --lightningcss-dark: ;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lightningcss-light: ;
+    --lightningcss-dark: initial;
+  }
 }
 
 .font-heading {
@@ -64,7 +82,7 @@
       rgba(175, 95, 29, 0.18),
       transparent 40%
     ),
-    #ffffff;
+    var(--color-surface-50);
 }
 
 .vault-glow {
@@ -75,7 +93,7 @@
       transparent 42%
     ),
     radial-gradient(circle at 80% 80%, rgba(175, 95, 29, 0.2), transparent 46%),
-    #ffffff;
+    var(--color-surface-50);
 }
 
 html,

@@ -77,7 +77,7 @@ function Field(props: FieldProps) {
           <span className="text-primary-500">*</span>
         : null}
         {optional ?
-          <span className="text-secondary-500/60">(optional)</span>
+          <span className="text-ink/60">(optional)</span>
         : null}
       </label>
       {props.multiline ?
@@ -136,7 +136,7 @@ export function BecomeVendorForm() {
         <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
           Application received
         </p>
-        <h3 className="mt-3 font-heading text-2xl text-secondary-500">
+        <h3 className="mt-3 font-heading text-2xl text-ink">
           Thanks for applying!
         </h3>
         <p className="mt-3 text-lg/8 text-on-surface-50/80">{state.message}</p>
@@ -229,13 +229,13 @@ export function BecomeVendorForm() {
         />
 
         <div className="flex flex-col gap-2.5 md:col-span-2">
-          <span className="font-subheading text-sm font-semibold text-secondary-500">
+          <span className="font-subheading text-sm font-semibold text-ink">
             Product categories{" "}
-            <span className="font-normal text-secondary-500/60">
+            <span className="font-normal text-ink/60">
               (optional)
             </span>
           </span>
-          <p className="-mt-1 text-sm text-secondary-500/70">
+          <p className="-mt-1 text-sm text-ink/70">
             These are just to help us get a feel for your work — your products
             don&apos;t have to fit any of them. Pick any that apply, or skip
             this and tell us more below.
@@ -249,8 +249,8 @@ export function BecomeVendorForm() {
                   className={cn(
                     "cursor-pointer rounded-full border px-4 py-2 font-subheading text-sm font-semibold transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-500",
                     active ?
-                      "border-primary-500 bg-primary-500 text-surface-50"
-                    : "border-surface-500/55 bg-surface-50 text-secondary-500 hover:border-primary-500/50",
+                      "border-primary-500 bg-primary-500 text-on-primary-500"
+                    : "border-surface-500/55 bg-surface-50 text-on-surface-50 hover:border-primary-500/50",
                   )}
                 >
                   <input
@@ -290,7 +290,7 @@ export function BecomeVendorForm() {
         >
           {pending ? "Submitting…" : "Submit application"}
         </button>
-        <p className="text-sm text-secondary-500/70">
+        <p className="text-sm text-ink/70">
           We&apos;ll reply within a few business days.
         </p>
       </div>

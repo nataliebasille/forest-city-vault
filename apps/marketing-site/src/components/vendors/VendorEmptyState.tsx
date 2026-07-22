@@ -12,7 +12,7 @@ export function VendorEmptyState({ query }: { query: string }) {
 
   return (
     <div className="rounded-2xl border border-surface-500/30 bg-surface-50 p-8 text-center md:p-12">
-      <h2 className="font-heading text-2xl text-secondary-500 sm:text-3xl">
+      <h2 className="font-heading text-2xl text-ink sm:text-3xl">
         {trimmed ?
           <>No vendors match “{trimmed}”</>
         : "No vendors found"}
@@ -31,7 +31,7 @@ export function VendorEmptyState({ query }: { query: string }) {
             <li key={category}>
               <Link
                 href={categoryHref(category)}
-                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50 px-4 py-1.5 font-subheading text-sm text-secondary-500 transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+                className="inline-flex items-center rounded-full border border-surface-950/15 bg-surface-50 px-4 py-1.5 font-subheading text-sm text-ink transition-colors hover:border-primary-500/60 hover:bg-primary-50 hover:text-on-primary-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               >
                 {category}
               </Link>

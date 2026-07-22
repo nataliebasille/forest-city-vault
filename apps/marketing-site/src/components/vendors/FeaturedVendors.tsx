@@ -55,7 +55,7 @@ export async function FeaturedVendors() {
             </p>
             <h2
               id="featured-vendors-heading"
-              className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl lg:text-5xl"
+              className="font-heading text-3xl leading-tight text-ink sm:text-4xl lg:text-5xl"
             >
               Meet a few of the independent vendors inside.
             </h2>

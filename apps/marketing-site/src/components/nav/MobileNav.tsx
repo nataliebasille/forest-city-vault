@@ -130,7 +130,7 @@ export function MobileNav() {
         aria-controls="mobile-nav-drawer"
         aria-label={open ? "Close menu" : "Open menu"}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-surface-50/25 text-surface-50 transition-colors hover:bg-surface-50/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-on-secondary-500/25 text-on-secondary-500 transition-colors hover:bg-on-secondary-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-secondary-500"
       >
         {open ?
           <CloseIcon className="h-6 w-6" />
@@ -164,12 +164,12 @@ export function MobileNav() {
               aria-label="Site menu"
               onKeyDown={handlePanelKeyDown}
               className={cn(
-                "fixed inset-y-0 right-0 z-[101] flex w-72 max-w-[80vw] flex-col bg-secondary-500 text-surface-50 shadow-[-20px_0_45px_-20px_rgba(0,0,0,0.6)]",
+                "fixed inset-y-0 right-0 z-[101] flex w-72 max-w-[80vw] flex-col bg-secondary-500 text-on-secondary-500 shadow-[-20px_0_45px_-20px_rgba(0,0,0,0.6)]",
                 !reducedMotion && "transition-transform duration-300 ease-out",
                 open ? "translate-x-0" : "pointer-events-none translate-x-full",
               )}
             >
-              <div className="flex h-16 items-center justify-between gap-4 border-b border-surface-50/10 px-6">
+              <div className="flex h-16 items-center justify-between gap-4 border-b border-on-secondary-500/10 px-6">
                 <Image
                   src="/branding/primary logo no tag reverse.png"
                   alt="Forest City Vault logo"
@@ -182,7 +182,7 @@ export function MobileNav() {
                   type="button"
                   aria-label="Close menu"
                   onClick={() => close()}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-surface-50/25 text-surface-50 transition-colors hover:bg-surface-50/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-on-secondary-500/25 text-on-secondary-500 transition-colors hover:bg-on-secondary-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-secondary-500"
                 >
                   <CloseIcon className="h-6 w-6" />
                 </button>
@@ -205,12 +205,12 @@ export function MobileNav() {
                         className="mt-4 flex flex-col gap-4"
                       >
                         <hr
-                          className="border-surface-50/15"
+                          className="border-on-secondary-500/15"
                           aria-hidden="true"
                         />
                         <Link
                           {...linkProps}
-                          className="btn btn-solid/primary justify-center font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
+                          className="btn btn-solid/primary justify-center font-subheading text-sm font-semibold tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-secondary-500"
                         >
                           {item.label}
                         </Link>
@@ -222,7 +222,7 @@ export function MobileNav() {
                     <Link
                       key={item.label}
                       {...linkProps}
-                      className="rounded-lg px-4 py-3 font-subheading text-base font-medium text-surface-50 transition-colors hover:bg-surface-50/10 focus-visible:bg-surface-50/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface-50"
+                      className="rounded-lg px-4 py-3 font-subheading text-base font-medium text-on-secondary-500 transition-colors hover:bg-on-secondary-500/10 focus-visible:bg-on-secondary-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-secondary-500"
                     >
                       {item.label}
                     </Link>

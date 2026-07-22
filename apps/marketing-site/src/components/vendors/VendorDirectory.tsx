@@ -30,7 +30,7 @@ export function VendorDirectory({
         <p className="font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
           The Vault Directory
         </p>
-        <h1 className="font-heading text-3xl leading-tight text-secondary-500 sm:text-4xl">
+        <h1 className="font-heading text-3xl leading-tight text-ink sm:text-4xl">
           Browse the Vault
         </h1>
         <p className="font-body text-base/7 text-on-surface-50/80">

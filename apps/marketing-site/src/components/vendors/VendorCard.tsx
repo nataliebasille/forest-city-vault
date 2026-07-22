@@ -81,7 +81,7 @@ export function VendorCard({
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
           {vendor.badge ?
-            <span className="absolute top-3 left-3 rounded-md bg-primary-500 px-2.5 py-1 font-subheading text-[0.65rem] font-semibold tracking-[0.12em] text-surface-50 uppercase shadow-sm">
+            <span className="absolute top-3 left-3 rounded-md bg-primary-500 px-2.5 py-1 font-subheading text-[0.65rem] font-semibold tracking-[0.12em] text-on-primary-500 uppercase shadow-sm">
               {vendor.badge}
             </span>
           : null}
@@ -99,7 +99,7 @@ export function VendorCard({
             }}
           />
           <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] font-heading text-xl text-surface-50 shadow-[0_2px_8px_rgba(175,95,29,0.35)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] font-heading text-xl text-white shadow-[0_2px_8px_rgba(175,95,29,0.35)]"
             style={{
               background: "linear-gradient(135deg, #af5f1d 0%, #c97028 100%)",
             }}
@@ -108,7 +108,7 @@ export function VendorCard({
             {monogram(vendor.name)}
           </span>
           {vendor.badge ?
-            <span className="absolute top-3 right-3 rounded-md bg-primary-500 px-2.5 py-1 font-subheading text-[0.65rem] font-semibold tracking-[0.12em] text-surface-50 uppercase shadow-sm">
+            <span className="absolute top-3 right-3 rounded-md bg-primary-500 px-2.5 py-1 font-subheading text-[0.65rem] font-semibold tracking-[0.12em] text-on-primary-500 uppercase shadow-sm">
               {vendor.badge}
             </span>
           : null}
@@ -116,7 +116,7 @@ export function VendorCard({
       }
 
       <div className="flex flex-1 flex-col px-5 pt-4">
-        <h3 className="font-heading text-2xl leading-tight text-secondary-500">
+        <h3 className="font-heading text-2xl leading-tight text-ink">
           {vendor.name}
         </h3>
 
@@ -130,7 +130,7 @@ export function VendorCard({
                 {matchedItems.map((item) => (
                   <li
                     key={item}
-                    className="rounded-lg border border-surface-500/30 bg-surface-50 px-3 py-1 font-body text-sm text-secondary-500/90"
+                    className="rounded-lg border border-surface-500/30 bg-surface-50 px-3 py-1 font-body text-sm text-ink/90"
                   >
                     {item}
                   </li>
@@ -157,7 +157,7 @@ export function VendorCard({
               {categories.map((category) => (
                 <li
                   key={category}
-                  className="rounded-md border border-surface-500/40 px-2.5 py-1 font-subheading text-xs text-secondary-500/80"
+                  className="rounded-md border border-surface-500/40 px-2.5 py-1 font-subheading text-xs text-ink/80"
                 >
                   {category}
                 </li>
@@ -173,12 +173,12 @@ export function VendorCard({
                 <span className="font-subheading text-lg font-semibold whitespace-nowrap text-primary-500">
                   {price}
                 </span>
-              : <span className="font-subheading text-sm text-secondary-500/70">
+              : <span className="font-subheading text-sm text-ink/70">
                   Ask in store
                 </span>
               }
               {hasItemCount ?
-                <span className="font-body text-xs text-secondary-500/50">
+                <span className="font-body text-xs text-ink/50">
                   {vendor.itemCount} {vendor.itemCount === 1 ? "item" : "items"}{" "}
                   available
                 </span>
@@ -209,4 +209,4 @@ function monogram(name: string): string {
 const BAND_BACKGROUND =
   "radial-gradient(circle at 90% 120%, rgba(175,95,29,0.35) 0%, transparent 55%)," +
   "radial-gradient(circle at -10% -20%, rgba(190,153,109,0.25) 0%, transparent 55%)," +
-  "#faf4ec";
+  "var(--color-surface-100)";
