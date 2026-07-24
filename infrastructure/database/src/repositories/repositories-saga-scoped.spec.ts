@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { Cause, Data, Effect, Exit, Option } from "effect";
-import { withSaga } from "@forest-city-vault/platform-saga";
+import { Cause, Data, Effect, Exit, Layer, Option } from "effect";
+import { provideSagaScoped, withSaga } from "@forest-city-vault/platform-saga";
 import { Sales } from "@forest-city-vault/domain";
 import { Database } from "../index";
 import * as schema from "../schema";
@@ -23,14 +23,13 @@ const salePayload = (merchantId: string, paymentId: string) => ({
 });
 
 /**
- * Runs `effect` inside a saga the repository stack has joined: `withSaga`
- * provides the registry/scope, `RepositoriesSagaScoped` opens the transaction
- * (via `databaseSagaScoped`) and builds a transaction-bound Sales repository for
- * the scope. Code inside `effect` uses `Sales.repository` and gets that
- * per-saga, transaction-bound instance.
+ * Runs `effect` inside a saga: `withSaga` opens the saga, rebuilds the
+ * boundary-declared saga-scoped layer (here {@link RepositoriesSagaScoped},
+ * wired in `runWith`) against the saga's fresh `Saga`, and builds a
+ * transaction-bound Sales repository for it. Code inside `effect` uses
+ * `Sales.repository` and gets that per-saga, transaction-bound instance.
  */
-const inSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  withSaga(effect.pipe(Effect.provide(RepositoriesSagaScoped)));
+const inSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) => withSaga(effect);
 
 describe("RepositoriesSagaScoped", () => {
   test("commits repository writes through the saga transaction on success", async () => {
@@ -129,22 +128,32 @@ describe("RepositoriesSagaScoped", () => {
   });
 });
 
-/** Runs an Effect against a fresh in-memory database. */
-function runWith<A>(effect: Effect.Effect<A, unknown, Database>): Promise<A> {
+/** The saga-scoped services `RepositoriesSagaScoped` provides — satisfied at the
+ * boundary in the helpers below and rebuilt per saga by `withSaga`. */
+type RepoScoped = Layer.Layer.Success<typeof RepositoriesSagaScoped>;
+
+/** Runs an Effect against a fresh in-memory database, with the saga's scoped
+ * repositories declared at the boundary so `withSaga` rebuilds them per saga. */
+function runWith<A>(
+  effect: Effect.Effect<A, unknown, RepoScoped>,
+): Promise<A> {
   return Effect.runPromise(
-    effect.pipe(Effect.provide(DatabaseTest)) as Effect.Effect<A, never, never>,
+    effect.pipe(
+      Effect.provide(provideSagaScoped(RepositoriesSagaScoped)),
+      Effect.provide(DatabaseTest),
+    ) as Effect.Effect<A, never, never>,
   );
 }
 
 /** Runs an Effect and returns its Exit, so failures/defects can be inspected. */
 function runWithExit<A, E>(
-  effect: Effect.Effect<A, E, Database>,
+  effect: Effect.Effect<A, E, RepoScoped>,
 ): Promise<Exit.Exit<A, E>> {
   return Effect.runPromise(
-    effect.pipe(Effect.provide(DatabaseTest), Effect.exit) as Effect.Effect<
-      Exit.Exit<A, E>,
-      never,
-      never
-    >,
+    effect.pipe(
+      Effect.provide(provideSagaScoped(RepositoriesSagaScoped)),
+      Effect.provide(DatabaseTest),
+      Effect.exit,
+    ) as Effect.Effect<Exit.Exit<A, E>, never, never>,
   );
 }

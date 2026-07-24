@@ -1,7 +1,11 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Cause, Data, Effect, Exit, Option } from "effect";
-import { SagaError, withSaga } from "@forest-city-vault/platform-saga";
+import {
+  provideSagaScoped,
+  SagaError,
+  withSaga,
+} from "@forest-city-vault/platform-saga";
 import { Database } from "./index";
 import * as schema from "./schema";
 import { DatabaseTest } from "./testing";
@@ -18,14 +22,12 @@ const vendorRow = (name: string) => ({
 class BoomError extends Data.TaggedError("BoomError")<{ why: string }> {}
 
 /**
- * Runs `effect` inside a saga the database has joined: `withSaga` provides the
- * registry and drives commit/rollback, while `databaseSagaScoped` provides a
- * transaction-bound {@link Database} for the scope and registers it as the
- * participant — the same `sagaScoped` seam any scoped service would use. Code
+ * Runs `effect` inside a saga: `withSaga` opens the saga, rebuilds the
+ * boundary-declared saga-scoped layer (here {@link databaseSagaScoped}, wired in
+ * `runWith`) against the saga's fresh `Saga`, and drives commit/rollback. Code
  * inside `effect` obtains that transaction-bound database via `yield* Database`.
  */
-const inSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  withSaga(effect.pipe(Effect.provide(databaseSagaScoped)));
+const inSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) => withSaga(effect);
 
 describe("databaseSagaScoped", () => {
   test("commits the work when the effect succeeds", async () => {
@@ -144,10 +146,14 @@ describe("databaseSagaScoped", () => {
   });
 });
 
-/** Runs an Effect against a fresh in-memory database. */
+/** Runs an Effect against a fresh in-memory database, with the saga's scoped
+ * services declared at the boundary so `withSaga` rebuilds them per saga. */
 function runWith<A>(effect: Effect.Effect<A, unknown, Database>): Promise<A> {
   return Effect.runPromise(
-    effect.pipe(Effect.provide(DatabaseTest)) as Effect.Effect<A, never, never>,
+    effect.pipe(
+      Effect.provide(provideSagaScoped(databaseSagaScoped)),
+      Effect.provide(DatabaseTest),
+    ) as Effect.Effect<A, never, never>,
   );
 }
 
@@ -156,10 +162,10 @@ function runWithExit<A, E>(
   effect: Effect.Effect<A, E, Database>,
 ): Promise<Exit.Exit<A, E>> {
   return Effect.runPromise(
-    effect.pipe(Effect.provide(DatabaseTest), Effect.exit) as Effect.Effect<
-      Exit.Exit<A, E>,
-      never,
-      never
-    >,
+    effect.pipe(
+      Effect.provide(provideSagaScoped(databaseSagaScoped)),
+      Effect.provide(DatabaseTest),
+      Effect.exit,
+    ) as Effect.Effect<Exit.Exit<A, E>, never, never>,
   );
 }

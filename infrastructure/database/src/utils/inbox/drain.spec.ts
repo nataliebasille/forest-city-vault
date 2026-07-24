@@ -1,6 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Effect, Exit } from "effect";
+import { provideSagaScoped } from "@forest-city-vault/platform-saga";
 import { Database, databaseSagaScoped } from "../../index";
 import * as schema from "../../schema";
 import { DatabaseTest } from "../../testing";
@@ -16,7 +17,6 @@ describe("drain", () => {
       drain({
         inbox: "payments",
         requestId: "req-1",
-        scoped: databaseSagaScoped,
         action: () => Effect.void,
       }),
     );
@@ -34,7 +34,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => Effect.void,
         });
 
@@ -56,7 +55,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => Effect.fail(new Error("action failed")),
         });
 
@@ -81,7 +79,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => Effect.fail(new Error("still failing")),
         });
 
@@ -107,7 +104,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => {
             callCount++;
             return Effect.void;
@@ -138,7 +134,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => Effect.fail(new Error("action failed")),
         });
 
@@ -170,7 +165,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => {
             callCount++;
             return Effect.void;
@@ -195,7 +189,6 @@ describe("drain", () => {
           drain({
             inbox: "payments",
             requestId: "req-1",
-            scoped: databaseSagaScoped,
             action: () =>
               Effect.gen(function* () {
                 const txDb = yield* Database;
@@ -234,7 +227,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () =>
             Effect.gen(function* () {
               const txDb = yield* Database;
@@ -276,7 +268,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: (msg) =>
             msg.idempotencyKey === "k2" ?
               Effect.die(new Error("defect on second item"))
@@ -313,7 +304,6 @@ describe("drain", () => {
         yield* drain({
           inbox: "payments",
           requestId: "req-1",
-          scoped: databaseSagaScoped,
           action: () => {
             callCount++;
             return Effect.void;
@@ -345,9 +335,14 @@ function makeItem(overrides: Partial<InboxInsert> = {}): InboxInsert {
   };
 }
 
-/** Runs an Effect against a fresh in-memory database. */
+/** Runs an Effect against a fresh in-memory database, with the inbox saga's
+ * scoped services (a transaction-bound {@link Database}) declared at the
+ * boundary so `withSaga` rebuilds them per message. */
 function runWith<A>(effect: Effect.Effect<A, unknown, Database>): Promise<A> {
   return Effect.runPromise(
-    effect.pipe(Effect.provide(DatabaseTest)) as Effect.Effect<A, never, never>,
+    effect.pipe(
+      Effect.provide(provideSagaScoped(databaseSagaScoped)),
+      Effect.provide(DatabaseTest),
+    ) as Effect.Effect<A, never, never>,
   );
 }

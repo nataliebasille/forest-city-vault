@@ -1,5 +1,5 @@
-import { Saga, withSaga } from "@forest-city-vault/platform-saga";
-import { Effect, Either, Layer } from "effect";
+import { withSaga } from "@forest-city-vault/platform-saga";
+import { Effect, Either } from "effect";
 import { eq, or } from "drizzle-orm/sql/expressions/conditions";
 import * as inboxes from "../../schema/inboxes";
 import { Database, DatabaseError, tryDb } from "../..";
@@ -21,8 +21,8 @@ const MAX_ATTEMPTS = 5;
  * Every message is a self-contained unit of work:
  *
  * - The `action` and the inbox's `processed` status update run **inside one
- *   saga** ({@link withSaga}), on the transaction provided by `scoped`. They
- *   commit together or roll back together, so a message is only ever marked
+ *   saga** ({@link withSaga}), on the saga's transaction-bound {@link Database}.
+ *   They commit together or roll back together, so a message is only ever marked
  *   processed when all of its side effects (the sale, its events, …) were
  *   durably written. Messages are independent: one failing does not roll back
  *   another that already committed.
@@ -33,26 +33,26 @@ const MAX_ATTEMPTS = 5;
  *   item to `failed` (or `dead_letter` at {@link MAX_ATTEMPTS}). This is what
  *   guarantees an unprocessed message's error is never lost to the rollback.
  *
- * `scoped` is the per-message saga-scoped layer that provides the saga-scoped
- * services the `action` uses (repositories, event store, …) **and** the
- * transaction-bound {@link Database} the processed-update runs on — e.g.
- * `RepositoriesSagaScoped` for the real repositories, or `databaseSagaScoped`
- * for bare transactional queries. It requires the ambient {@link Saga} (opened
- * per message here) and the base {@link Database} to open its transaction on.
+ * The per-message saga's scoped services (the transaction-bound {@link Database}
+ * the `action` and the processed-update run on, plus whatever repositories or
+ * event store the `action` uses) are **not** passed in here. They are declared
+ * once at the boundary via `provideSagaScoped`, and {@link withSaga} rebuilds
+ * them fresh for each message — so every message gets its own transaction.
+ * `drain` only names the base pool {@link Database} it needs to load the batch
+ * and record failures on.
  *
  * Any request-scoped services the `action` needs that are *not* saga-scoped
  * (an HTTP client, config, …) are left in the returned effect's requirements
- * and satisfied by the surrounding request context, not by `scoped`.
+ * and satisfied by the surrounding request context.
  */
-export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
+export function drain<I extends InboxKeys, RAction, A, E>(opt: {
   inbox: I;
   requestId: string;
-  scoped: Layer.Layer<Database | RScoped, LE, Saga | Database>;
   action: (
     message: Inbox[I]["inbox"]["$inferSelect"],
   ) => Effect.Effect<A, E, RAction>;
 }) {
-  const { inbox: inboxKey, requestId, scoped, action } = opt;
+  const { inbox: inboxKey, requestId, action } = opt;
   return Effect.gen(function* () {
     const db = yield* Database;
 
@@ -90,7 +90,8 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
         });
 
         // Run the message as a saga: the action plus the `processed` status
-        // update commit or roll back atomically on the saga's transaction.
+        // update commit or roll back atomically on the saga's transaction. The
+        // saga-scoped services are rebuilt per message by `withSaga`.
         const outcome = yield* withSaga(
           Effect.gen(function* () {
             const value = yield* action(item);
@@ -104,7 +105,7 @@ export function drain<I extends InboxKeys, RScoped, RAction, LE, A, E>(opt: {
             );
 
             return value;
-          }).pipe(Effect.provide(scoped)),
+          }),
         ).pipe(Effect.either);
 
         if (Either.isRight(outcome)) {

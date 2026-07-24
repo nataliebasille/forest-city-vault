@@ -5,6 +5,7 @@ import {
   drain,
   RepositoriesSagaScoped,
 } from "@forest-city-vault/infrastructure-database";
+import { provideSagaScoped } from "@forest-city-vault/platform-saga";
 import { getCloverPayment } from "@/lib/integration/payments";
 import { Effect, Schema } from "effect";
 
@@ -29,7 +30,6 @@ export const POST = pooledRoute(() =>
     const processed = yield* drain({
       inbox: "payments",
       requestId,
-      scoped: RepositoriesSagaScoped,
       action: (message) =>
         Effect.gen(function* () {
           const { merchantId } = yield* decodePaymentPayload(
@@ -71,7 +71,7 @@ export const POST = pooledRoute(() =>
     });
 
     return true;
-  }),
+  }).pipe(Effect.provide(provideSagaScoped(RepositoriesSagaScoped))),
 );
 
 function mapCloverPaymentToSaleItems(

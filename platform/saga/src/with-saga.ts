@@ -1,5 +1,6 @@
-import { Effect, Exit, Scope } from "effect";
+import { Effect, Exit, Layer, Scope } from "effect";
 import { Participant, Saga, SagaError } from "./saga";
+import { SagaScopedLayer } from "./saga-scoped-layer";
 
 /**
  * Runs `effect` as a single saga.
@@ -19,23 +20,43 @@ import { Participant, Saga, SagaError } from "./saga";
  *   registration order (best-effort) and the original typed error/defect is
  *   re-raised unchanged.
  *
- * It owns **only** the saga's scope and its commit queue. Every other
- * saga-scoped service (a database transaction, the `EventTracker`, an event
- * broker, …) is provided uniformly by the caller as a layer on `effect`:
- * participants join via {@link sagaScoped}, flush-through buffers are provided
- * as plain scoped layers. The combinator never names a database, SQL,
+ * Saga-scoped services are **not** handed in by the caller. The application
+ * declares them once at the boundary via {@link provideSagaScoped}; this
+ * combinator reads that ambient {@link SagaScopedLayer} and re-materialises it
+ * against the saga's own fresh {@link Saga}, so every saga (each request, each
+ * drained message, …) gets its own transaction-bound services that commit or
+ * roll back with it. When no such layer is declared the default is empty and
+ * there is simply nothing to rebuild.
+ *
+ * Beyond that rebuild the combinator owns **only** the saga's scope and its
+ * commit queue. Every saga-scoped service (a database transaction, the
+ * `EventTracker`, an event broker, …) joins uniformly through {@link sagaScoped}
+ * within the layer it rebuilds. The combinator never names a database, SQL,
  * `EventTracker` or any concrete service — participants are opaque — keeping the
  * dependency flow domain → application → infrastructure intact.
  */
 export const withSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
+    // The layer of saga-scoped services to rebuild for this saga, declared at
+    // the boundary (empty when none). Rebuilt below so its services bind to
+    // this saga's fresh Saga rather than being shared across sagas.
+    const sagaScopedLayer = yield* SagaScopedLayer;
+
     // The saga's scope, plus the ordered commits registered against it. The
     // service closes over both so participants can register while `effect` runs.
     const scope = yield* Scope.make();
     const commits: Participant["commit"][] = [];
     const saga = Saga.make(scope, commits);
 
-    const exit = yield* Effect.exit(Effect.provideService(effect, Saga, saga));
+    // Provide the fresh Saga both to `effect` and to the saga-scoped layer it
+    // depends on, then build that layer here so its transaction/services bind to
+    // this saga.
+    const sagaLayer = Layer.provideMerge(
+      sagaScopedLayer,
+      Layer.succeed(Saga, saga),
+    );
+
+    const exit = yield* Effect.exit(Effect.provide(effect, sagaLayer));
 
     if (Exit.isSuccess(exit)) {
       // Commit in registration order in the value channel, so a commit failure
