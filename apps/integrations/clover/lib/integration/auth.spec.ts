@@ -30,6 +30,9 @@ const config = CloverConfig.make({
   url: "http://clover.test",
   oauthUrl: "http://oauth.clover.test",
   tokenEncryptionKey: Redacted.make(ENCRYPTION_KEY),
+  merchantId: "test-merchant-id",
+  oauthRedirectUri: "http://clover.test/api/oauth/callback",
+  oauthStateSecret: Redacted.make("test-oauth-state-secret"),
 });
 
 type CapturedRequest = { url: string; params: URLSearchParams };

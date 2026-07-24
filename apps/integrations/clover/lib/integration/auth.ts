@@ -150,9 +150,9 @@ function requestTokens(
 }
 
 /**
- * Builds the Clover OAuth v2 authorize URL to which an unauthorized merchant is
- * redirected. Clover shows the merchant the authorization screen and then
- * redirects back to the app's Site URL with a single-use `code`.
+ * Builds the Clover OAuth v2 authorize URL to which the merchant is redirected.
+ * Clover shows the merchant the authorization screen and then redirects back to
+ * the configured callback URL with a single-use `code`.
  *
  * The authorize endpoint lives on Clover's **merchant-facing web host**
  * (`CLOVER_OAUTH_URL`, e.g. `sandbox.dev.clover.com`), which is a different host
@@ -160,19 +160,22 @@ function requestTokens(
  * `apisandbox.dev.clover.com`). Sending the merchant to the API host instead
  * bounces them back to login in a loop.
  *
- * `merchantId` is optional: Clover includes it on the redirect back regardless,
- * but passing it here lets Clover skip merchant selection when it is known.
+ * Every security-sensitive parameter comes from validated configuration, never
+ * from the caller: `client_id` (`CLOVER_APP_ID`), `merchant_id`
+ * (`CLOVER_MERCHANT_ID`) and `redirect_uri` (`CLOVER_OAUTH_REDIRECT_URI`).
+ * Only the CSRF `state` nonce — generated per request — is passed in.
  */
-export function buildAuthorizeUrl(merchantId?: string) {
+export function buildAuthorizeUrl(state: string) {
   return Effect.gen(function* () {
-    const { appId, oauthUrl } = yield* CloverConfig;
+    const { appId, oauthUrl, merchantId, oauthRedirectUri } =
+      yield* CloverConfig;
 
     const authorizeUrl = new URL("/oauth/v2/authorize", oauthUrl);
     authorizeUrl.searchParams.set("client_id", appId);
     authorizeUrl.searchParams.set("response_type", "code");
-    if (merchantId) {
-      authorizeUrl.searchParams.set("merchant_id", merchantId);
-    }
+    authorizeUrl.searchParams.set("merchant_id", merchantId);
+    authorizeUrl.searchParams.set("redirect_uri", oauthRedirectUri);
+    authorizeUrl.searchParams.set("state", state);
 
     return authorizeUrl.toString();
   });

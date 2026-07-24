@@ -19,6 +19,9 @@ export interface MakeRouteTestOptions {
   url?: string;
   oauthUrl?: string;
   tokenEncryptionKey?: string;
+  merchantId?: string;
+  oauthRedirectUri?: string;
+  oauthStateSecret?: string;
   fixedTime?: Date;
 }
 
@@ -43,6 +46,11 @@ export async function makeRouteTest<T>(
   const oauthUrl = options.oauthUrl ?? "http://oauth.localhost";
   const tokenEncryptionKey =
     options.tokenEncryptionKey ?? "test-token-encryption-key";
+  const merchantId = options.merchantId ?? "test-merchant-id";
+  const oauthRedirectUri =
+    options.oauthRedirectUri ?? "http://localhost/api/oauth/callback";
+  const oauthStateSecret =
+    options.oauthStateSecret ?? "test-oauth-state-secret";
   const fixedTime = options.fixedTime ?? new Date("2024-01-01T00:00:00Z");
 
   const { layer: databaseLayer, db: testDb } = await makeDatabaseTestContext();
@@ -54,6 +62,9 @@ export async function makeRouteTest<T>(
     url,
     oauthUrl,
     tokenEncryptionKey: Redacted.make(tokenEncryptionKey),
+    merchantId,
+    oauthRedirectUri,
+    oauthStateSecret: Redacted.make(oauthStateSecret),
   });
 
   const commonLayer = Layer.mergeAll(

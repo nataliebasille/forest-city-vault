@@ -7,6 +7,7 @@ import { compose } from "effect/Function";
 import { Saga } from "@forest-city-vault/platform-saga";
 import { Headers } from "./request/headers";
 import { Cookies } from "./request/cookies";
+import { setResponseHeader } from "../http/response-headers";
 import {
   httpFailure,
   badRequest,
@@ -532,5 +533,83 @@ describe("app.route - redirect", () => {
     )(mockRequest());
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("https://clover.test/go");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ResponseHeaders sink tests
+// ---------------------------------------------------------------------------
+
+describe("app.route - ResponseHeaders sink", () => {
+  test("setResponseHeader appends a header to a successful response", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        yield* setResponseHeader("Cache-Control", "no-store");
+        return "ok";
+      }),
+    )(mockRequest());
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toBe("ok");
+  });
+
+  test("setResponseHeader appends a header to a redirect response", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        yield* setResponseHeader("Set-Cookie", "state=abc; Path=/cb; HttpOnly");
+        return yield* redirect("https://clover.test/authorize");
+      }),
+    )(mockRequest());
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://clover.test/authorize",
+    );
+    expect(response.headers.get("set-cookie")).toBe(
+      "state=abc; Path=/cb; HttpOnly",
+    );
+  });
+
+  test("headers queued before a failure are still applied to the error response", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        yield* setResponseHeader("Set-Cookie", "state=; Max-Age=0");
+        return yield* badRequest("nope");
+      }),
+    )(mockRequest());
+    expect(response.status).toBe(400);
+    expect(response.headers.get("set-cookie")).toBe("state=; Max-Age=0");
+  });
+
+  test("repeated Set-Cookie appends emit multiple cookies", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        yield* setResponseHeader("Set-Cookie", "a=1; Path=/");
+        yield* setResponseHeader("Set-Cookie", "b=2; Path=/");
+        return "ok";
+      }),
+    )(mockRequest());
+    expect(response.headers.getSetCookie()).toEqual([
+      "a=1; Path=/",
+      "b=2; Path=/",
+    ]);
+  });
+
+  test("the sink is isolated per request", async () => {
+    const route = defineRoute({ layer: Layer.empty });
+    const handler = route(() =>
+      Effect.gen(function* () {
+        yield* setResponseHeader("Set-Cookie", "once=1");
+        return "ok";
+      }),
+    );
+
+    const first = await handler(mockRequest());
+    const second = await handler(mockRequest());
+
+    expect(first.headers.getSetCookie()).toEqual(["once=1"]);
+    expect(second.headers.getSetCookie()).toEqual(["once=1"]);
   });
 });

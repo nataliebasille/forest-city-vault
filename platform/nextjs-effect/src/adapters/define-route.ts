@@ -1,6 +1,11 @@
 import { Effect, Layer } from "effect";
 import { NextRequest } from "next/server";
 import { HttpResult, httpResultToResponse } from "../http/http-result";
+import {
+  applyResponseHeaders,
+  emptyResponseHeaderSink,
+  ResponseHeaders,
+} from "../http/response-headers";
 import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
@@ -50,7 +55,7 @@ export function defineRoute<LOut, LErr>(config: {
   action: (
     req: NextRequest,
   ) => Effect.Effect<A, E, R> &
-    MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
+    MustBeNever<Exclude<R, LOut | RequestStateDeps | ResponseHeaders>>,
 ) => RouteHandler<LOut>;
 export function defineRoute<
   LOut,
@@ -71,7 +76,7 @@ export function defineRoute<
   action: (
     req: NextRequest,
   ) => Effect.Effect<AIn, EIn, RIn> &
-    MustBeNever<Exclude<ROut, LOut | RequestStateDeps>>,
+    MustBeNever<Exclude<ROut, LOut | RequestStateDeps | ResponseHeaders>>,
 ) => RouteHandler<LOut>;
 export function defineRoute(config: {
   layer: Layer.Layer<unknown, unknown, unknown>;
@@ -93,6 +98,12 @@ export function defineRoute(config: {
         httpMethod: req.method,
         routePath: req.nextUrl.pathname,
       };
+
+      // Per-request sink that handlers write to via `setResponseHeader` (e.g. a
+      // Set-Cookie for OAuth state, or Cache-Control: no-store). Kept out of the
+      // HttpResult so handlers don't thread a header map through every
+      // `ok`/`redirect`/`badRequest` call — they just `yield* setResponseHeader`.
+      const responseHeaders = emptyResponseHeaderSink();
 
       return Effect.runPromise(
         action(req).pipe(
@@ -135,6 +146,17 @@ export function defineRoute(config: {
             onSuccess: (value) =>
               httpResultToResponse(successToHttpResult(value)),
           }),
+          // Drain the sink onto the finished Response: whatever the handler
+          // queued (on success OR failure) is appended here, so a rejected
+          // OAuth callback still clears its state cookie.
+          Effect.map((response) =>
+            applyResponseHeaders(response, responseHeaders),
+          ),
+          // Provide the sink. Like the `Effect.provide`s above, a pipe-provide
+          // satisfies everything *upstream* of it, so every `setResponseHeader`
+          // in the handler/middleware resolves this one per-request instance —
+          // it reads last but wraps the whole pipeline.
+          Effect.provideService(ResponseHeaders, responseHeaders),
         ) as unknown as Effect.Effect<Response, never, never>,
       );
     };
