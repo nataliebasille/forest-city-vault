@@ -26,14 +26,14 @@ const AppCommon = Layer.mergeAll(
  * The {@link Database} is provided **saga-scoped**: `databaseSagaScoped` opens a
  * transaction (on a connection from `DatabaseLive`'s pool) and exposes the
  * transaction-bound `Database`, enlisting it as a participant of the ambient
- * saga. Because every route runs inside `withSaga` (see `defineRoute`), this
- * layer is built inside the request's saga — so each request gets its own
+ * saga. The default `route` helper composes `withSaga` as middleware, so this
+ * layer is built inside the request's saga — each request gets its own
  * transaction that the saga commits on success or rolls back on any failure,
  * defect or interruption. Handlers simply `yield* Database` and get that
- * transaction; the saga scoping is automatic and requires no route changes.
+ * transaction; the saga scoping requires no route changes.
  *
- * The residual `Saga` requirement is satisfied by the `withSaga` wrapper inside
- * `defineRoute`.
+ * The residual `Saga` requirement is satisfied by the `withSaga` middleware the
+ * `route` helper composes — not by `defineRoute`, which is saga-agnostic.
  *
  * Kept in its own module so tests can swap it via `mock.module` without ever
  * constructing the production resources.
@@ -46,8 +46,8 @@ export const AppLive = Layer.merge(
 /**
  * Dependency layer for routes that must **not** run inside one enclosing request
  * transaction. The {@link Database} is the base pool database (not a saga
- * participant), so `withSaga` has nothing to commit or roll back at the request
- * level.
+ * participant). Paired with the `pooledRoute` helper, which deliberately does not
+ * compose `withSaga`, there is no request-level saga to commit or roll back.
  *
  * Used by inbox drains: `drain` runs each message as its own saga (its own
  * transaction) and, when a message rolls back, records the failure on a separate
