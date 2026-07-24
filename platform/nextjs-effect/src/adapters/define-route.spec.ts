@@ -1,9 +1,10 @@
 import { describe, test } from "node:test";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 import { NextRequest } from "next/server";
 import { compose } from "effect/Function";
+import { Saga } from "@forest-city-vault/platform-saga";
 import { Headers } from "./request/headers";
 import { Cookies } from "./request/cookies";
 import {
@@ -29,6 +30,16 @@ class CounterService extends Context.Tag("route/Counter")<
 class LabelService extends Context.Tag("route/Label")<
   LabelService,
   { text: string }
+>() {}
+
+class TokenService extends Context.Tag("route/Token")<
+  TokenService,
+  { token: string }
+>() {}
+
+class SecretService extends Context.Tag("route/Secret")<
+  SecretService,
+  { secret: string }
 >() {}
 
 const mockRequest = (url = "http://localhost/test") => new NextRequest(url);
@@ -207,6 +218,76 @@ describe("app.route - runtime", () => {
       hasSessionCookie: true,
       cookieCount: 2,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Saga independence - defineRoute is saga-agnostic
+// ---------------------------------------------------------------------------
+
+describe("app.route - saga independence", () => {
+  test("defineRoute alone does not establish a saga", async () => {
+    // defineRoute must NOT implicitly wrap the handler in a saga: with no
+    // saga-providing middleware, the ambient `Saga` service is absent.
+    const route = defineRoute({ layer: Layer.empty });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        const saga = yield* Effect.serviceOption(Saga);
+        return Option.isSome(saga);
+      }),
+    )(mockRequest());
+    expect(await response.json()).toBe(false);
+  });
+
+  test("a saga-providing middleware makes the Saga service available", async () => {
+    // When the application composes a saga wrapper as middleware, the handler
+    // observes the ambient `Saga` — proving saga behavior is opt-in middleware,
+    // not something defineRoute bakes in.
+    const withScopedSaga = <A, E, R>(next: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        const scope = yield* Effect.scope;
+        const saga = Saga.make(scope, []);
+        return yield* next.pipe(Effect.provideService(Saga, saga));
+      }).pipe(Effect.scoped);
+
+    const route = defineRoute({
+      layer: Layer.empty,
+      middleware: withScopedSaga,
+    });
+    const response = await route(() =>
+      Effect.gen(function* () {
+        const saga = yield* Effect.serviceOption(Saga);
+        return Option.isSome(saga);
+      }),
+    )(mockRequest());
+    expect(await response.json()).toBe(true);
+  });
+
+  test("middleware can satisfy a requirement introduced by the configured layer", async () => {
+    // The layer OUTPUTS TokenService but REQUIRES SecretService — a requirement
+    // it introduces that defineRoute knows nothing about. A middleware supplies
+    // SecretService, and the handler resolves TokenService successfully.
+    const TokenLayer = Layer.effect(
+      TokenService,
+      Effect.gen(function* () {
+        const secret = yield* SecretService;
+        return { token: `token-${secret.secret}` };
+      }),
+    );
+
+    const provideSecret = <A, E, R>(next: Effect.Effect<A, E, R>) =>
+      next.pipe(Effect.provideService(SecretService, { secret: "s3cr3t" }));
+
+    const route = defineRoute({
+      layer: TokenLayer,
+      middleware: provideSecret,
+    });
+
+    const response = await route(() =>
+      TokenService.pipe(Effect.map((t) => t.token)),
+    )(mockRequest());
+
+    expect(await response.json()).toBe("token-s3cr3t");
   });
 });
 
@@ -444,7 +525,8 @@ describe("app.route - redirect", () => {
     const response = await route(() =>
       Effect.gen(function* () {
         const counter = yield* CounterService;
-        if (counter.value === 0) return yield* redirect("https://clover.test/go");
+        if (counter.value === 0)
+          return yield* redirect("https://clover.test/go");
         return counter.value;
       }),
     )(mockRequest());

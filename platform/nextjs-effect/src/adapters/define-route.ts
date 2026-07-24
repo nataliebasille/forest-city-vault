@@ -1,4 +1,3 @@
-import { Saga, withSaga } from "@forest-city-vault/platform-saga";
 import { Effect, Layer } from "effect";
 import { NextRequest } from "next/server";
 import { HttpResult, httpResultToResponse } from "../http/http-result";
@@ -24,31 +23,39 @@ export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
 };
 
 /**
- * Creates a route factory bound to a dependency `layer` (and optional pure
+ * Creates a route factory bound to a dependency `layer` (and optional
  * `middleware`). The returned function wraps a handler into a Next.js route.
  *
- * Every route runs as a single saga: the (optionally middleware-wrapped) handler
- * is wrapped in {@link withSaga}, which opens one scope per request, provides the
- * {@link Saga} service and drives commit/rollback from the request's outcome. A
- * handler may therefore require `Saga` — and provide saga-scoped layers such as a
- * database transaction — without it counting as a missing dependency; it is
- * satisfied here. The saga is the outermost wrapper around the request, so
- * `middleware` runs inside it.
+ * `defineRoute` is deliberately policy-free: for each request it creates the
+ * request Effect, provides the configured `layer`, applies the configured
+ * `middleware`, provides the request-state services, then performs logging and
+ * HTTP result conversion before running the Effect. It knows nothing about
+ * sagas, transactions or pools — those are application concerns. An application
+ * that wants request-wide saga semantics composes `withSaga` (or any other
+ * behavior) into `middleware`; see Clover's `route`/`pooledRoute` helpers.
+ *
+ * `middleware` is an ordinary Effect-to-Effect transformation applied *around*
+ * the layer-provided handler, so it may add or remove requirements. In
+ * particular a middleware may satisfy a requirement that the configured `layer`
+ * introduces (for example a saga-scoped layer that requires a `Saga` service
+ * supplied by a `withSaga` middleware) without `defineRoute` knowing what that
+ * requirement represents — the generic `LReq` on the `layer` is free.
  *
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testRoute} without the production layer ever being constructed.
  */
 export function defineRoute<LOut, LErr>(config: {
-  layer: Layer.Layer<LOut, LErr, Saga>;
+  layer: Layer.Layer<LOut, LErr, never>;
 }): <A, E, R>(
   action: (
     req: NextRequest,
   ) => Effect.Effect<A, E, R> &
-    MustBeNever<Exclude<R, LOut | RequestStateDeps | Saga>>,
+    MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => RouteHandler<LOut>;
 export function defineRoute<
   LOut,
   LErr,
+  LReq,
   AIn,
   EIn,
   RIn,
@@ -56,7 +63,7 @@ export function defineRoute<
   EOut,
   ROut,
 >(config: {
-  layer: Layer.Layer<LOut, LErr, Saga>;
+  layer: Layer.Layer<LOut, LErr, LReq>;
   middleware: (
     self: Effect.Effect<AIn, EIn, RIn>,
   ) => Effect.Effect<AOut, EOut, ROut>;
@@ -64,7 +71,7 @@ export function defineRoute<
   action: (
     req: NextRequest,
   ) => Effect.Effect<AIn, EIn, RIn> &
-    MustBeNever<Exclude<ROut, LOut | RequestStateDeps | Saga>>,
+    MustBeNever<Exclude<ROut, LOut | RequestStateDeps>>,
 ) => RouteHandler<LOut>;
 export function defineRoute(config: {
   layer: Layer.Layer<unknown, unknown, unknown>;
@@ -91,20 +98,22 @@ export function defineRoute(config: {
         action(req).pipe(
           Effect.provide(layer),
           middleware,
-          withSaga,
           Effect.provide(buildRequestStateLayer("route", req)),
           Effect.tapBoth({
             onFailure: (error) => {
               const result = failureToHttpResult(error);
               const durationMs = Date.now() - requestStartedAt;
-              const log = result.status >= 500 ? Effect.logError : Effect.logWarning;
+              const log =
+                result.status >= 500 ? Effect.logError : Effect.logWarning;
 
               return log("route.request.failed", {
                 ...requestContext,
                 status: result.status,
                 durationMs,
                 failureDisposition:
-                  result.status >= 500 ? "unexpected_defect" : "expected_terminal",
+                  result.status >= 500 ?
+                    "unexpected_defect"
+                  : "expected_terminal",
                 error: toSafeErrorDetails(result.cause ?? error),
               });
             },

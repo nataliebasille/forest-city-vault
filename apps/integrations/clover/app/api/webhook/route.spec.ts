@@ -1,8 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Database, dbSchema } from "@forest-city-vault/infrastructure-database";
-import { Effect } from "effect";
+import { dbSchema } from "@forest-city-vault/infrastructure-database";
 
 import { makeRouteTest } from "@/lib/testing/make-route-test";
 import { NextRequest } from "next/server";
@@ -18,34 +17,6 @@ const {
   import.meta.url,
   "./route",
 );
-
-// `@/runtime` is imported *after* makeRouteTest has installed the `live.ts`
-// mock, so `route` is bound to the transactional test AppLive (not production).
-const { route } = await import("@/runtime");
-
-const inbox = dbSchema.inboxes.payments.inbox;
-
-function insertPaymentEvent(providerEventId: string) {
-  return Effect.gen(function* () {
-    const database = yield* Database;
-    yield* database.query((sql) =>
-      sql.insert(inbox).values([
-        {
-          requestId: "req-tx-test",
-          status: "received",
-          idempotencyKey: `tx:${providerEventId}`,
-          provider: "clover",
-          providerEventId,
-          providerObjectId: providerEventId.split(":")[1] ?? providerEventId,
-          eventType: "payment",
-          payloadJson: JSON.stringify({ merchantId: "merchant-tx" }),
-          occurredAt: new Date(1700000000000),
-          receivedAt: FIXED_TIME,
-        },
-      ]),
-    );
-  });
-}
 
 describe("POST /api/webhooks/clover", () => {
   describe("verification", () => {
@@ -202,57 +173,70 @@ describe("POST /api/webhooks/clover", () => {
     });
   });
 
-  // Every webhook request runs inside one saga-scoped database transaction,
-  // provided automatically by `AppLive` (the saga-scoped `Database`) and driven
-  // by the `withSaga` wrapper in `defineRoute`. These tests exercise that
-  // boundary through the real transactional `route` factory: a request that
-  // fails after writing must leave nothing behind, while one that succeeds must
-  // persist its writes — with no opt-in from the handler.
+  // The webhook persists every payment event in a request through the saga-scoped
+  // `route`, so the whole request is one transaction: either all of a payload's
+  // events are committed, or none are. These tests drive the real POST handler to
+  // prove that all-or-nothing boundary.
   describe("transactionality", () => {
-    test("rolls back writes when the request fails after writing", async () => {
-      const failingRoute = route(() =>
-        Effect.gen(function* () {
-          yield* insertPaymentEvent("P:tx_rollback_1");
-          return yield* Effect.fail(new Error("boom after write"));
-        }),
-      );
+    test("rolls back earlier events when a later event in the same request fails", async () => {
+      // The second event's objectId has no ":" segment, so the handler derives an
+      // undefined provider object id and the insert violates a NOT NULL
+      // constraint — failing the request after the first event was written.
+      const body = {
+        appId: APP_ID,
+        merchants: {
+          merchant_rollback: [
+            {
+              objectId: "P:tx_rollback_good",
+              type: "CREATE",
+              ts: 1700000005000,
+            },
+            { objectId: "P", type: "CREATE", ts: 1700000005001 },
+          ],
+        },
+      };
 
-      const response = await failingRoute(
-        new NextRequest("http://localhost/api/webhooks/clover", {
-          method: "POST",
-        }),
+      const response = await POST(
+        makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }),
       );
       assert.equal(response.status, 500);
 
-      const rows = await db.select().from(inbox);
-      const persisted = rows.find(
-        (r) => r.providerEventId === "P:tx_rollback_1",
+      const events = await db.select().from(dbSchema.inboxes.payments.inbox);
+      const persisted = events.find(
+        (e) => e.providerEventId === "P:tx_rollback_good",
       );
       assert.equal(
         persisted,
         undefined,
-        "the write before the failure should be rolled back",
+        "the event written before the failure should be rolled back",
       );
     });
 
-    test("commits writes when the request succeeds", async () => {
-      const succeedingRoute = route(() =>
-        Effect.gen(function* () {
-          yield* insertPaymentEvent("P:tx_commit_1");
-          return true;
-        }),
-      );
+    test("commits every event in the payload when the whole request succeeds", async () => {
+      const body = {
+        appId: APP_ID,
+        merchants: {
+          merchant_commit: [
+            { objectId: "P:tx_commit_1", type: "CREATE", ts: 1700000006000 },
+            { objectId: "P:tx_commit_2", type: "UPDATE", ts: 1700000006001 },
+          ],
+        },
+      };
 
-      const response = await succeedingRoute(
-        new NextRequest("http://localhost/api/webhooks/clover", {
-          method: "POST",
-        }),
+      const response = await POST(
+        makeRequest(body, { "x-clover-auth": WEBHOOK_AUTH_CODE }),
       );
       assert.equal(response.status, 200);
 
-      const rows = await db.select().from(inbox);
-      const persisted = rows.find((r) => r.providerEventId === "P:tx_commit_1");
-      assert.ok(persisted, "the write should be committed");
+      const events = await db.select().from(dbSchema.inboxes.payments.inbox);
+      const persisted = events.filter((e) =>
+        ["P:tx_commit_1", "P:tx_commit_2"].includes(e.providerEventId),
+      );
+      assert.equal(
+        persisted.length,
+        2,
+        "every event in a successful request should be committed together",
+      );
     });
   });
 });
