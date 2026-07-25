@@ -14,6 +14,7 @@ Backend-only Next.js service for Clover webhook handling.
 - `GET /api/health` - Health check endpoint
 - `GET /api/oauth/callback` - Clover OAuth callback / Site URL (redirects to Clover authorize on launch, captures per-merchant tokens on return)
 - `POST /api/webhooks/clover` - Clover webhook receiver
+- `POST /api/process/payments` - Internal-only inbox drain trigger (authenticated bearer secret)
 
 ## Notes
 
@@ -79,6 +80,42 @@ one configured merchant id.
    If the merchant has no token, or the refresh token has expired, processing
    fails terminally and the merchant must (re)authorize.
 
+### Internal payment processor endpoint
+
+`POST /api/process/payments` is an internal scheduler/worker endpoint.
+
+- It is **not** a browser login flow and does not use cookies.
+- It remains **POST-only**.
+- Do not enable public CORS access for this endpoint.
+- Every request must send:
+  - `Authorization: Bearer your-processor-secret`
+
+Generate `CLOVER_PROCESSOR_SECRET` as a long random value (for example
+`openssl rand -hex 32`), store it in each environment's secret manager, and
+inject it into this app as an environment variable. Never commit real values.
+
+#### Secret rotation
+
+1. Generate a new strong secret.
+2. Update the secret in the scheduler/worker configuration.
+3. Update the app environment (`CLOVER_PROCESSOR_SECRET`).
+4. Deploy/restart the scheduler and app so both use the same new value.
+5. Revoke the old value.
+
+#### Scheduler usage
+
+Call this endpoint from trusted infrastructure only (for example a private cron
+worker or internal scheduler), always over HTTPS in production, with the bearer
+header above.
+
+#### Execution guard
+
+The route includes a lightweight in-process overlap guard that rejects a second
+trigger while one run is already active in the same application process. This is
+only accidental-trigger protection. It does **not** coordinate across multiple
+instances. Database-level inbox concurrency/claiming correctness is handled
+separately by the inbox implementation.
+
 ### OAuth state cookie & single-use behavior
 
 - The `state` query parameter is a random nonce; the trusted correlation data
@@ -124,8 +161,8 @@ Tokens are encrypted with AES-256-GCM using a key derived from
 - `CLOVER_URL` - Clover API base URL for token exchange/refresh (e.g. `https://apisandbox.dev.clover.com`)
 - `CLOVER_OAUTH_URL` - Clover merchant-facing web host for the OAuth authorize/login step (e.g. `https://sandbox.dev.clover.com`)
 - `CLOVER_WEBHOOK_AUTH_CODE` - shared secret for verifying webhook `x-clover-auth`
+- `CLOVER_PROCESSOR_SECRET` - shared bearer secret for internal `POST /api/process/payments`
 - `CLOVER_TOKEN_ENCRYPTION_KEY` - secret used to encrypt stored OAuth tokens
 - `CLOVER_MERCHANT_ID` - the single merchant id allowed to authorize this app
 - `CLOVER_OAUTH_REDIRECT_URI` - exact OAuth callback URL (absolute; https in production); must match the Clover dashboard Site URL / redirect URI
 - `CLOVER_OAUTH_STATE_SECRET` - secret used to sign the OAuth CSRF state cookie (must be distinct from every other Clover secret)
-

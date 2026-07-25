@@ -28,6 +28,7 @@ export class CloverConfig extends Effect.Service<CloverConfig>()(
         appId: Config.string("CLOVER_APP_ID"),
         secretCode: Config.string("CLOVER_SECRET_CODE"),
         webhookAuthCode: Config.string("CLOVER_WEBHOOK_AUTH_CODE"),
+        processorSecret: Config.redacted("CLOVER_PROCESSOR_SECRET"),
         url: Config.string("CLOVER_URL"),
         oauthUrl: Config.string("CLOVER_OAUTH_URL"),
         tokenEncryptionKey: Config.redacted("CLOVER_TOKEN_ENCRYPTION_KEY"),
@@ -100,4 +101,3 @@ export class EmailConfig extends Effect.Service<EmailConfig>()("EmailConfig", {
     ),
   }),
 }) {}
-

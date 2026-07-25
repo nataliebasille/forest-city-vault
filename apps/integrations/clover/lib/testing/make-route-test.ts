@@ -1,7 +1,7 @@
 import { mock } from "node:test";
 
 import { drizzle } from "drizzle-orm/pglite";
-import { Layer, Redacted } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "@effect/platform";
 
 import { staticClock } from "@forest-city-vault/core-clock";
@@ -16,6 +16,7 @@ export interface MakeRouteTestOptions {
   appId?: string;
   secretCode?: string;
   webhookAuthCode?: string;
+  processorSecret?: string;
   url?: string;
   oauthUrl?: string;
   tokenEncryptionKey?: string;
@@ -23,6 +24,7 @@ export interface MakeRouteTestOptions {
   oauthRedirectUri?: string;
   oauthStateSecret?: string;
   fixedTime?: Date;
+  onPooledRuntimeAcquire?: () => void;
 }
 
 type Testing<T> = {
@@ -42,6 +44,7 @@ export async function makeRouteTest<T>(
   const appId = options.appId ?? "test-app-id";
   const secretCode = options.secretCode ?? "test-app-secret";
   const webhookAuthCode = options.webhookAuthCode ?? "test-auth-code";
+  const processorSecret = options.processorSecret ?? "test-processor-secret";
   const url = options.url ?? "http://localhost";
   const oauthUrl = options.oauthUrl ?? "http://oauth.localhost";
   const tokenEncryptionKey =
@@ -59,6 +62,7 @@ export async function makeRouteTest<T>(
     appId,
     secretCode,
     webhookAuthCode,
+    processorSecret: Redacted.make(processorSecret),
     url,
     oauthUrl,
     tokenEncryptionKey: Redacted.make(tokenEncryptionKey),
@@ -83,7 +87,17 @@ export async function makeRouteTest<T>(
     databaseSagaScoped.pipe(Layer.provide(databaseLayer)),
   );
 
-  const testLayerPooled = Layer.merge(commonLayer, databaseLayer);
+  const pooledAcquireProbe = Layer.effectDiscard(
+    Effect.sync(() => {
+      options.onPooledRuntimeAcquire?.();
+    }),
+  );
+
+  const testLayerPooled = Layer.mergeAll(
+    commonLayer,
+    databaseLayer,
+    pooledAcquireProbe,
+  );
 
   mock.module(new URL("../runtime/live.ts", import.meta.url).href, {
     namedExports: { AppLive: testLayer, AppLivePooled: testLayerPooled },
@@ -102,4 +116,3 @@ export async function makeRouteTest<T>(
     module: moduleExported,
   };
 }
-

@@ -27,6 +27,7 @@ const config = CloverConfig.make({
   appId: APP_ID,
   secretCode: "test-app-secret",
   webhookAuthCode: "test-auth-code",
+  processorSecret: Redacted.make("test-processor-secret"),
   url: "http://clover.test",
   oauthUrl: "http://oauth.clover.test",
   tokenEncryptionKey: Redacted.make(ENCRYPTION_KEY),

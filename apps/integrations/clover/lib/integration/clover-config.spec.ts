@@ -8,6 +8,7 @@ const VALID_ENV: Record<string, string> = {
   CLOVER_APP_ID: "app-id",
   CLOVER_SECRET_CODE: "app-secret",
   CLOVER_WEBHOOK_AUTH_CODE: "webhook-auth",
+  CLOVER_PROCESSOR_SECRET: "processor-secret",
   CLOVER_URL: "https://apisandbox.dev.clover.com",
   CLOVER_OAUTH_URL: "https://sandbox.dev.clover.com",
   CLOVER_TOKEN_ENCRYPTION_KEY: "encryption-key",
@@ -32,6 +33,10 @@ describe("CloverConfig", () => {
       assert.notEqual(
         Redacted.value(exit.value.oauthStateSecret),
         Redacted.value(exit.value.tokenEncryptionKey),
+      );
+      assert.equal(
+        Redacted.value(exit.value.processorSecret),
+        "processor-secret",
       );
     }
   });

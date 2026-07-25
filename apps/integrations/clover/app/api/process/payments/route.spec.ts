@@ -2,37 +2,50 @@ import { describe, test, mock } from "node:test";
 import assert from "node:assert/strict";
 
 import { dbSchema } from "@forest-city-vault/infrastructure-database";
-import { Effect } from "effect";
+import { ConfigProvider, Effect, Exit } from "effect";
 import { NextRequest } from "next/server";
 
 import { encryptToken } from "@/lib/integration/token-crypto";
 import { makeRouteTest } from "@/lib/testing/make-route-test";
 
 const ENCRYPTION_KEY = "test-token-encryption-key";
+const PROCESSOR_SECRET = "test-processor-secret";
+const PROCESSOR_CONFIG_PROVIDER = ConfigProvider.fromMap(
+  new Map([["CLOVER_PROCESSOR_SECRET", PROCESSOR_SECRET]]),
+);
+
+let pooledRuntimeAcquireCount = 0;
+
+process.env.CLOVER_PROCESSOR_SECRET = PROCESSOR_SECRET;
 
 const {
   db,
-  module: { POST },
-} = await makeRouteTest<{ POST: (req: NextRequest) => Promise<Response> }>(
+  module: { POST, internalProcessorRoute },
+} = await makeRouteTest<typeof import("./route")>(
   import.meta.url,
   "./route",
-  { tokenEncryptionKey: ENCRYPTION_KEY },
+  {
+    tokenEncryptionKey: ENCRYPTION_KEY,
+    processorSecret: PROCESSOR_SECRET,
+    onPooledRuntimeAcquire: () => {
+      pooledRuntimeAcquireCount += 1;
+    },
+  },
 );
 
 describe("POST /api/process/payments", () => {
-  test("processes a payment when the merchant has a valid token", async () => {
+  test("processes a payment when called with the correct bearer token", async () => {
     await seedMerchantToken("merchant-ok", "valid-access-token");
     await insertInboxMessage("merchant-ok", "payment-ok", "P:payment-ok");
     stubCloverPayment("payment-ok");
 
-    const response = await POST(processRequest());
+    const response = await POST(processRequest(authHeader()));
 
     mock.restoreAll();
 
     assert.equal(response.status, 200);
     assert.equal(await response.json(), true);
 
-    // The saga marks the message processed only after the sale is durably saved.
     const inboxRows = await db.select().from(dbSchema.inboxes.payments.inbox);
     const message = inboxRows.find((r) => r.providerObjectId === "payment-ok");
     assert.ok(message, "expected the inbox message to exist");
@@ -42,6 +55,108 @@ describe("POST /api/process/payments", () => {
     assert.equal(sales.length, 1, "expected one sale to be created");
   });
 
+  test("returns 401 when authorization header is missing", async () => {
+    const response = await POST(processRequest());
+    const body = await response.text();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.includes(PROCESSOR_SECRET), false);
+  });
+
+  test("returns 401 when authorization scheme is not bearer", async () => {
+    const response = await POST(
+      processRequest({
+        authorization: "Basic abc123",
+      }),
+    );
+
+    assert.equal(response.status, 401);
+  });
+
+  test("returns 401 when bearer token is empty", async () => {
+    const response = await POST(
+      processRequest({
+        authorization: "Bearer ",
+      }),
+    );
+
+    assert.equal(response.status, 401);
+  });
+
+  test("returns 401 when bearer token is incorrect", async () => {
+    const response = await POST(
+      processRequest({
+        authorization: "Bearer not-the-secret",
+      }),
+    );
+    const body = await response.text();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.includes("not-the-secret"), false);
+    assert.equal(body.includes(PROCESSOR_SECRET), false);
+  });
+
+  test("returns 401 when authorization header is malformed", async () => {
+    const response = await POST(
+      processRequest({
+        authorization: "Bearer alpha, Bearer beta",
+      }),
+    );
+
+    assert.equal(response.status, 401);
+  });
+
+  test("unauthorized requests do not invoke processing side effects", async () => {
+    await seedMerchantToken("merchant-unauthorized", "valid-access-token");
+    await insertInboxMessage(
+      "merchant-unauthorized",
+      "payment-unauthorized",
+      "P:payment-unauthorized",
+    );
+
+    const fetchStub = mock.method(globalThis, "fetch", async () => {
+      throw new Error("fetch should not be called for unauthorized requests");
+    });
+
+    const before = await db.select().from(dbSchema.inboxes.payments.inbox);
+    const beforeMessage = before.find(
+      (row) => row.providerObjectId === "payment-unauthorized",
+    );
+    assert.ok(beforeMessage, "expected seeded inbox message");
+
+    const response = await POST(
+      processRequest({
+        authorization: "Bearer wrong-secret",
+      }),
+    );
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 401);
+    assert.equal(fetchStub.mock.callCount(), 0);
+
+    const after = await db.select().from(dbSchema.inboxes.payments.inbox);
+    const afterMessage = after.find(
+      (row) => row.providerObjectId === "payment-unauthorized",
+    );
+    assert.ok(afterMessage, "expected seeded inbox message");
+    assert.equal(afterMessage.status, beforeMessage.status);
+    assert.equal(afterMessage.attempts, beforeMessage.attempts);
+  });
+
+  test("unauthorized requests do not leak secrets in logs", async () => {
+    const logs = await captureConsole(() =>
+      POST(
+        processRequest({
+          authorization: "Bearer leaked-token-value",
+        }),
+      ),
+    );
+
+    assert.equal(logs.includes("leaked-token-value"), false);
+    assert.equal(logs.includes(PROCESSOR_SECRET), false);
+  });
+
   test("records a terminal failure when the merchant is not connected", async () => {
     await insertInboxMessage(
       "merchant-missing",
@@ -49,7 +164,7 @@ describe("POST /api/process/payments", () => {
       "P:payment-missing",
     );
 
-    const response = await POST(processRequest());
+    const response = await POST(processRequest(authHeader()));
     assert.equal(response.status, 200);
     assert.equal(await response.json(), true);
 
@@ -58,12 +173,9 @@ describe("POST /api/process/payments", () => {
       (r) => r.providerObjectId === "payment-missing",
     );
     assert.ok(message, "expected the inbox message to exist");
-    // No token row for the merchant → MerchantNotConnectedError → failed attempt.
     assert.equal(message.status, "failed");
     assert.ok(message.attempts >= 1, "message should have been attempted");
 
-    // The failure is recorded in the inbox errors table, on a connection outside
-    // the (rolled-back) message saga, so the bookkeeping survives.
     const errorRows = await db.select().from(dbSchema.inboxes.payments.errors);
     const recorded = errorRows.filter((e) => e.inboxId === message.id);
     assert.equal(
@@ -72,12 +184,8 @@ describe("POST /api/process/payments", () => {
       "expected exactly one error row for the failed message",
     );
     assert.equal(recorded[0].attemptNumber, message.attempts);
-    assert.ok(
-      recorded[0].error.length > 0,
-      "the failure detail should be recorded",
-    );
+    assert.ok(recorded[0].error.length > 0);
 
-    // The message failed before building a sale, so none was persisted for it.
     const sales = await db.select().from(dbSchema.sales);
     const salesForMessage = sales.filter(
       (s) => s.cloverPaymentId === "payment-missing",
@@ -92,19 +200,13 @@ describe("POST /api/process/payments", () => {
       "payment-writefail",
       "P:payment-writefail",
     );
-    // A line item with quantity 0 passes the domain but violates the
-    // `sales_line_items` CHECK (quantity > 0). The repository inserts the `sales`
-    // row first, then the line items — so the sale row is written and then the
-    // save fails, forcing the message saga to roll back.
     stubCloverPaymentWithLineItem("payment-writefail", { quantity: 0 });
 
-    // Shared test database: capture counts so we assert this message adds no
-    // sale rows, independent of what earlier tests persisted.
     const salesBefore = (await db.select().from(dbSchema.sales)).length;
     const lineItemsBefore = (await db.select().from(dbSchema.salesLineItems))
       .length;
 
-    const response = await POST(processRequest());
+    const response = await POST(processRequest(authHeader()));
 
     mock.restoreAll();
 
@@ -119,8 +221,6 @@ describe("POST /api/process/payments", () => {
     assert.equal(message.status, "failed");
     assert.ok(message.attempts >= 1, "message should have been attempted");
 
-    // The failure bookkeeping is committed even though the message saga rolled
-    // back.
     const errorRows = await db.select().from(dbSchema.inboxes.payments.errors);
     const recorded = errorRows.filter((e) => e.inboxId === message.id);
     assert.equal(
@@ -129,9 +229,6 @@ describe("POST /api/process/payments", () => {
       "expected exactly one error row for the failed message",
     );
 
-    // The sale row written before the constraint violation must be rolled back
-    // together with the failed message saga: no new sale or line item persists,
-    // and none exists for this payment.
     const salesAfter = await db.select().from(dbSchema.sales);
     assert.equal(
       salesAfter.length,
@@ -151,17 +248,54 @@ describe("POST /api/process/payments", () => {
     );
   });
 
-  test("payment inbox route returns 200 with an empty inbox", async () => {
-    const response = await POST(processRequest());
+  test("returns 200 with an empty inbox when authorized", async () => {
+    const response = await POST(processRequest(authHeader()));
     assert.equal(response.status, 200);
     assert.equal(await response.json(), true);
   });
+
+  test("rejects overlapping invocations while one run is active in this process", async () => {
+    const started = deferred<void>();
+    const release = deferred<void>();
+
+    const overlapPOST = internalProcessorRoute(() =>
+      Effect.gen(function* () {
+        started.resolve();
+        yield* Effect.promise(() => release.promise);
+        return true;
+      }),
+    );
+
+    const firstRequest = Effect.runPromiseExit(
+      overlapPOST(processRequest(authHeader())).pipe(
+        Effect.withConfigProvider(PROCESSOR_CONFIG_PROVIDER),
+      ) as never,
+    );
+    await started.promise;
+
+    const overlap = await Effect.runPromiseExit(
+      overlapPOST(processRequest(authHeader())).pipe(
+        Effect.withConfigProvider(PROCESSOR_CONFIG_PROVIDER),
+      ) as never,
+    );
+
+    release.resolve();
+    const firstResponse = await firstRequest;
+
+    assert.equal(Exit.isSuccess(firstResponse), true);
+    assert.equal(Exit.isFailure(overlap), true);
+  });
 });
 
-function processRequest() {
+function processRequest(headers?: Record<string, string>) {
   return new NextRequest("http://localhost/api/process/payments", {
     method: "POST",
+    headers,
   });
+}
+
+function authHeader(token = PROCESSOR_SECRET) {
+  return { authorization: `Bearer ${token}` };
 }
 
 async function seedMerchantToken(merchantId: string, accessTokenPlain: string) {
@@ -174,7 +308,6 @@ async function seedMerchantToken(merchantId: string, accessTokenPlain: string) {
       merchantId,
       appId: "test-app-id",
       accessToken,
-      // A null expiry means a non-expiring token, so no refresh is attempted.
       accessTokenExpiresAt: null,
       refreshToken: null,
       refreshTokenExpiresAt: null,
@@ -205,7 +338,6 @@ async function insertInboxMessage(
   ]);
 }
 
-/** Stubs global fetch to return a Clover payment for the given payment id. */
 function stubCloverPayment(paymentId: string) {
   mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -224,11 +356,6 @@ function stubCloverPayment(paymentId: string) {
   });
 }
 
-/**
- * Stubs global fetch to return a Clover payment carrying a single line item with
- * the given quantity. A quantity of 0 passes the domain but violates the
- * `sales_line_items` CHECK (quantity > 0) at save time.
- */
 function stubCloverPaymentWithLineItem(
   paymentId: string,
   lineItem: { quantity: number },
@@ -257,4 +384,40 @@ function stubCloverPaymentWithLineItem(
     }
     return new Response("not found", { status: 404 });
   });
+}
+
+async function captureConsole(fn: () => Promise<unknown>) {
+  const lines: string[] = [];
+  const push = (chunk: unknown) => {
+    lines.push(String(chunk));
+    return true;
+  };
+  mock.method(process.stdout, "write", push);
+  mock.method(process.stderr, "write", push);
+  for (const method of ["log", "info", "warn", "error", "debug"] as const) {
+    mock.method(console, method, (...args: unknown[]) =>
+      push(args.map((a) => String(a)).join(" ")),
+    );
+  }
+
+  try {
+    await fn();
+  } finally {
+    mock.restoreAll();
+  }
+
+  return lines.join("\n");
+}
+
+function deferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
 }

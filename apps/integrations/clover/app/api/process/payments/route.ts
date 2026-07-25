@@ -1,4 +1,5 @@
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
+import { isAuthorizedInternalBearerToken } from "@/lib/security/internal-bearer-auth";
 import { pooledRoute } from "@/runtime";
 import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
 import {
@@ -6,8 +7,13 @@ import {
   RepositoriesSagaScoped,
 } from "@forest-city-vault/infrastructure-database";
 import { provideSagaScoped } from "@forest-city-vault/platform-saga";
+import {
+  httpFailure,
+  unauthorized,
+} from "@forest-city-vault/platform-nextjs-effect";
 import { getCloverPayment } from "@/lib/integration/payments";
-import { Effect, Schema } from "effect";
+import { Config, Effect, Redacted, Schema } from "effect";
+import { NextRequest } from "next/server";
 
 const PaymentPayloadSchema = Schema.Struct({
   merchantId: Schema.String,
@@ -17,62 +23,64 @@ const decodePaymentPayload = Schema.decodeUnknown(
   Schema.parseJson(PaymentPayloadSchema),
 );
 
-export const POST = pooledRoute(() =>
+const processPaymentsRoute = internalProcessorRoute(() =>
   Effect.gen(function* () {
-    const { requestId } = yield* RequestTrace;
+      const { requestId } = yield* RequestTrace;
 
-    yield* Effect.logInfo("clover.payments.drain.begin", {
-      requestId,
-      workflowStage: "drain_inbox",
-      inbox: "payments",
-    });
+      yield* Effect.logInfo("clover.payments.drain.begin", {
+        requestId,
+        workflowStage: "drain_inbox",
+        inbox: "payments",
+      });
 
-    const processed = yield* drain({
-      inbox: "payments",
-      requestId,
-      action: (message) =>
-        Effect.gen(function* () {
-          const { merchantId } = yield* decodePaymentPayload(
-            message.payloadJson,
-          );
+      const processed = yield* drain({
+        inbox: "payments",
+        requestId,
+        action: (message) =>
+          Effect.gen(function* () {
+            const { merchantId } = yield* decodePaymentPayload(
+              message.payloadJson,
+            );
 
-          const cloverPayment = yield* getCloverPayment(
-            merchantId,
-            message.providerObjectId,
-          );
-
-          const saleItems = mapCloverPaymentToSaleItems(cloverPayment);
-
-          const newSale = Sales.pristine(crypto.randomUUID());
-          const actionPayload: typeof FromCloverPaymentSchema.Type = {
-            payment: {
+            const cloverPayment = yield* getCloverPayment(
               merchantId,
-              paymentId: message.providerObjectId,
-              timestamp: new Date(cloverPayment.createdTime),
-              idempotencyKey: message.idempotencyKey,
-            },
-            items: saleItems,
-          };
+              message.providerObjectId,
+            );
 
-          const sale = yield* Sales.actions.fromCloverPayment(
-            newSale,
-            actionPayload,
-          );
+            const saleItems = mapCloverPaymentToSaleItems(cloverPayment);
 
-          yield* Sales.repository.save(sale);
-        }),
-    });
+            const newSale = Sales.pristine(crypto.randomUUID());
+            const actionPayload: typeof FromCloverPaymentSchema.Type = {
+              payment: {
+                merchantId,
+                paymentId: message.providerObjectId,
+                timestamp: new Date(cloverPayment.createdTime),
+                idempotencyKey: message.idempotencyKey,
+              },
+              items: saleItems,
+            };
 
-    yield* Effect.logInfo("clover.payments.drain.completed", {
-      requestId,
-      workflowStage: "completed",
-      inbox: "payments",
-      processedCount: processed.length,
-    });
+            const sale = yield* Sales.actions.fromCloverPayment(
+              newSale,
+              actionPayload,
+            );
 
-    return true;
-  }).pipe(Effect.provide(provideSagaScoped(RepositoriesSagaScoped))),
+            yield* Sales.repository.save(sale);
+          }),
+      });
+
+      yield* Effect.logInfo("clover.payments.drain.completed", {
+        requestId,
+        workflowStage: "completed",
+        inbox: "payments",
+        processedCount: processed.length,
+      });
+
+      return true;
+    }).pipe(Effect.provide(provideSagaScoped(RepositoriesSagaScoped))),
 );
+
+export const POST = pooledRoute(processPaymentsRoute as never);
 
 function mapCloverPaymentToSaleItems(
   payment: Effect.Effect.Success<ReturnType<typeof getCloverPayment>>,
@@ -103,4 +111,39 @@ function mapCloverPaymentToSaleItems(
     taxAmount: 0, // Clover item-level taxes would be here
     netAmount: item.price * item.quantity,
   }));
+}
+
+const ACTIVE_GUARDS = new Set<string>();
+const PROCESS_GUARD_KEY = "clover.process.payments";
+
+export function internalProcessorRoute(
+  handler: (request: NextRequest) => Effect.Effect<boolean, any, any>,
+): (request: NextRequest) => Effect.Effect<boolean, any, any> {
+  return (request: NextRequest) =>
+    Effect.gen(function* () {
+      const processorSecret = yield* Config.redacted("CLOVER_PROCESSOR_SECRET");
+
+      const isAuthorized = isAuthorizedInternalBearerToken({
+        authorizationHeader: request.headers.get("authorization"),
+        expectedToken: Redacted.value(processorSecret),
+      });
+
+      if (!isAuthorized) {
+        return yield* unauthorized("Unauthorized");
+      }
+
+      if (ACTIVE_GUARDS.has(PROCESS_GUARD_KEY)) {
+        return yield* httpFailure(
+          409,
+          "Payment processing is already running",
+        );
+      }
+
+      ACTIVE_GUARDS.add(PROCESS_GUARD_KEY);
+      try {
+        return yield* handler(request);
+      } finally {
+        ACTIVE_GUARDS.delete(PROCESS_GUARD_KEY);
+      }
+    });
 }
