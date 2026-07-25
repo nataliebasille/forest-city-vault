@@ -94,10 +94,10 @@ function mapCloverPaymentToSaleItems(
         vendorId: "",
         name: "Payment",
         quantity: 1,
-        grossAmount: payment.total,
+        grossAmount: payment.amount,
         discountAmount: payment.discountAmount ?? 0,
         taxAmount: payment.taxAmount ?? 0,
-        netAmount: payment.total,
+        netAmount: payment.amount,
       },
     ];
   }

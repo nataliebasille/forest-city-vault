@@ -4,7 +4,7 @@ import { getMerchantAccessToken } from "./auth";
 
 export const CloverPaymentSchema = Schema.Struct({
   id: Schema.String,
-  total: Schema.Number,
+  amount: Schema.Number,
   taxAmount: Schema.optional(Schema.Number),
   discountAmount: Schema.optional(Schema.Number),
   createdTime: Schema.Number,

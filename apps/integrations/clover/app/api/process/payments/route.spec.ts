@@ -345,7 +345,7 @@ function stubCloverPayment(paymentId: string) {
       return new Response(
         JSON.stringify({
           id: paymentId,
-          total: 1000,
+          amount: 1000,
           createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
           lineItems: { elements: [] },
         }),
@@ -366,7 +366,7 @@ function stubCloverPaymentWithLineItem(
       return new Response(
         JSON.stringify({
           id: paymentId,
-          total: 1000,
+          amount: 1000,
           createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
           lineItems: {
             elements: [
