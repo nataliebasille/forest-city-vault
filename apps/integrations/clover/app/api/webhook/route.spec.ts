@@ -21,20 +21,27 @@ const {
 describe("POST /api/webhooks/clover", () => {
   describe("verification", () => {
     test("returns 200 for a verification payload", async () => {
-      const response = await POST(makeRequest({ verificationCode: "abc123" }));
+      const response = await POST(
+        makeRequest(
+          { verificationCode: "abc123" },
+          { "x-clover-auth": WEBHOOK_AUTH_CODE },
+        ),
+      );
       assert.equal(response.status, 200);
       assert.equal(await response.json(), true);
     });
   });
 
   describe("invalid body", () => {
-    test("returns 400 for an empty body", async () => {
+    test("returns 401 for an empty body when auth header is missing", async () => {
       const response = await POST(makeRequest({}));
-      assert.equal(response.status, 400);
+      assert.equal(response.status, 401);
     });
 
-    test("returns 400 for a body missing required event fields", async () => {
-      const response = await POST(makeRequest({ appId: APP_ID }));
+    test("returns 400 for a body missing required event fields when auth passes", async () => {
+      const response = await POST(
+        makeRequest({ appId: APP_ID }, { "x-clover-auth": WEBHOOK_AUTH_CODE }),
+      );
       assert.equal(response.status, 400);
     });
   });

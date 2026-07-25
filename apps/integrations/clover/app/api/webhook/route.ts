@@ -42,6 +42,18 @@ const handler = (request: NextRequest) =>
     const { webhookAuthCode } = yield* CloverConfig;
     const { requestId } = yield* RequestTrace;
 
+    const actualAuthCode = request.headers.get(CLOVER_AUTH_HEADER);
+    if (!actualAuthCode || !safeEqual(actualAuthCode, webhookAuthCode)) {
+      yield* Effect.logWarning("clover.webhook.authentication.rejected", {
+        requestId,
+        workflowStage: "authenticate",
+        authHeaderPresent: Boolean(actualAuthCode),
+        failureDisposition: "expected_terminal",
+      });
+
+      return yield* unauthorized("Missing or invalid Clover auth header");
+    }
+
     yield* Effect.logInfo("clover.webhook.received", {
       requestId,
       workflowStage: "decode_payload",
@@ -59,18 +71,6 @@ const handler = (request: NextRequest) =>
       });
 
       return true;
-    }
-
-    const actualAuthCode = request.headers.get(CLOVER_AUTH_HEADER);
-    if (!actualAuthCode || !safeEqual(actualAuthCode, webhookAuthCode)) {
-      yield* Effect.logWarning("clover.webhook.authentication.rejected", {
-        requestId,
-        workflowStage: "authenticate",
-        authHeaderPresent: Boolean(actualAuthCode),
-        failureDisposition: "expected_terminal",
-      });
-
-      return yield* unauthorized("Missing or invalid Clover auth header");
     }
 
     yield* recordWebhookEvents(body);
