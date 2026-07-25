@@ -1,0 +1,50 @@
+name: Clover process payments
+
+# Vercel Hobby cron jobs can only run once per day, which is too infrequent for
+# draining the Clover payments inbox. Instead we drive the internal processor
+# endpoint from GitHub Actions on a short schedule. Requires two repository
+# secrets:
+#   - CLOVER_APP_URL          e.g. https://clover-webhooks.vercel.app
+#   - CLOVER_PROCESSOR_SECRET the bearer secret configured on the deployment
+on:
+  schedule:
+    # Every 5 minutes is the minimum interval GitHub Actions allows. Scheduled
+    # runs are best-effort and may be delayed under load.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+# Avoid overlapping runs; the endpoint also has its own in-process overlap guard.
+concurrency:
+  group: clover-process-payments
+  cancel-in-progress: false
+
+jobs:
+  process-payments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger payment inbox drain
+        env:
+          CLOVER_APP_URL: ${{ secrets.CLOVER_APP_URL }}
+          CLOVER_PROCESSOR_SECRET: ${{ secrets.CLOVER_PROCESSOR_SECRET }}
+        run: |
+          if [ -z "$CLOVER_APP_URL" ] || [ -z "$CLOVER_PROCESSOR_SECRET" ]; then
+            echo "Missing CLOVER_APP_URL or CLOVER_PROCESSOR_SECRET repository secret." >&2
+            exit 1
+          fi
+
+          status=$(curl --silent --show-error --fail-with-body \
+            --output /tmp/response.txt --write-out "%{http_code}" \
+            --max-time 120 \
+            --request POST \
+            --header "Authorization: Bearer ${CLOVER_PROCESSOR_SECRET}" \
+            "${CLOVER_APP_URL%/}/api/process/payments") || true
+
+          echo "HTTP ${status}"
+          cat /tmp/response.txt || true
+
+          # 409 means a run is already active (overlap guard) — treat as success.
+          case "$status" in
+            2??|409) exit 0 ;;
+            *) exit 1 ;;
+          esac

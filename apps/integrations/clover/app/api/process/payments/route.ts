@@ -15,6 +15,10 @@ import { getCloverPayment } from "@/lib/integration/payments";
 import { Config, Effect, Redacted, Schema } from "effect";
 import { NextRequest } from "next/server";
 
+// Vercel Hobby caps serverless function duration at 60s. Keep the inbox drain
+// within that budget; larger backlogs are processed across successive triggers.
+export const maxDuration = 60;
+
 const PaymentPayloadSchema = Schema.Struct({
   merchantId: Schema.String,
 });
