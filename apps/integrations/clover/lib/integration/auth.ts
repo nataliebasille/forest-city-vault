@@ -8,8 +8,9 @@ import { CloverConfig } from "@forest-city-vault/core-config";
 import {
   type CloverMerchantTokenRow,
   CloverTokenRepository,
+  withMerchantTokenRefreshLock,
 } from "@forest-city-vault/infrastructure-database";
-import { Data, Effect, Option, Redacted, Schema } from "effect";
+import { Data, Duration, Effect, Option, Redacted, Schema } from "effect";
 import { decryptToken, encryptToken } from "./token-crypto";
 
 /**
@@ -30,6 +31,28 @@ import { decryptToken, encryptToken } from "./token-crypto";
 
 /** Refresh this many milliseconds before the access token actually expires. */
 const EXPIRY_SKEW_MS = 60_000;
+
+/**
+ * How long a caller will wait for another instance's in-flight refresh of the
+ * same merchant before giving up with a retryable
+ * `MerchantTokenRefreshLockTimeoutError`. Comfortably longer than a Clover
+ * refresh round-trip so contended callers normally wait and reuse the refreshed
+ * token rather than timing out.
+ */
+const REFRESH_LOCK_TIMEOUT_MS = 10_000;
+
+/**
+ * Upper bound on a single Clover OAuth token HTTP request (exchange or refresh).
+ *
+ * A refresh runs while the per-merchant advisory lock (and its database
+ * connection) is held, so a hung Clover request must not pin the lock forever.
+ * This is set **below** {@link REFRESH_LOCK_TIMEOUT_MS} so a stuck refresh aborts
+ * and releases the lock before other callers waiting on that lock give up — they
+ * then acquire it and see a still-expired token to retry, rather than all timing
+ * out. A timeout is a retryable {@link CloverRequestTimeoutError}, never a
+ * reauthorization signal.
+ */
+const CLOVER_REQUEST_TIMEOUT_MS = 8_000;
 
 const CloverTokenResponseSchema = Schema.Struct({
   access_token: Schema.String,
@@ -62,6 +85,18 @@ export class ReauthorizationRequiredError extends Data.TaggedError(
   "ReauthorizationRequiredError",
 )<{
   readonly merchantId: string;
+}> {}
+
+/**
+ * A Clover OAuth token request (exchange or refresh) exceeded
+ * {@link CLOVER_REQUEST_TIMEOUT_MS}. Retryable: the network/Clover was slow, the
+ * merchant is still connected, and (for a refresh) the lock has been released so
+ * a retry can proceed. Never conflated with {@link ReauthorizationRequiredError}.
+ */
+export class CloverRequestTimeoutError extends Data.TaggedError(
+  "CloverRequestTimeoutError",
+)<{
+  readonly endpoint: string;
 }> {}
 
 function toSafeErrorDetails(error: unknown) {
@@ -137,6 +172,10 @@ function requestTokens(
 
     return body;
   }).pipe(
+    Effect.timeoutFail({
+      duration: Duration.millis(CLOVER_REQUEST_TIMEOUT_MS),
+      onTimeout: () => new CloverRequestTimeoutError({ endpoint }),
+    }),
     Effect.tapError((error) =>
       Effect.logWarning("clover.auth.token.request.failed", {
         workflowStage: "failed",
@@ -205,30 +244,61 @@ export function exchangeCodeForTokens(merchantId: string, code: string) {
  * Yields a valid, decrypted access token for the merchant, refreshing it first
  * when it is expired (or about to expire). Fails terminally when the merchant is
  * not connected or must re-authorize.
+ *
+ * A refresh is serialized per merchant through a database advisory lock (see
+ * {@link withMerchantTokenRefreshLock}), so two concurrent callers for the same
+ * merchant never refresh with the same (possibly single-use) refresh token: the
+ * first refreshes, and the second waits, rereads and reuses the rotated token.
+ * A valid token is returned without ever taking the lock.
+ *
+ * `options.lockTimeoutMs` overrides how long a contended caller waits for the
+ * refresh lock; it exists mainly so tests can force a fast lock-timeout.
  */
-export function getMerchantAccessToken(merchantId: string) {
+export function getMerchantAccessToken(
+  merchantId: string,
+  options?: { readonly lockTimeoutMs?: number },
+) {
   return Effect.gen(function* () {
-    const row = yield* Option.match(
-      yield* CloverTokenRepository.getByMerchantId(merchantId),
-      {
-        onNone: () =>
-          Effect.fail(new MerchantNotConnectedError({ merchantId })),
-        onSome: (value: CloverMerchantTokenRow) => Effect.succeed(value),
-      },
-    );
-
+    const row = yield* readMerchantTokenRow(merchantId);
     const nowDate = yield* now;
 
     if (!isExpired(row.accessTokenExpiresAt, nowDate)) {
-      const { tokenEncryptionKey } = yield* CloverConfig;
-      const accessToken = yield* decryptToken(
-        Redacted.value(tokenEncryptionKey),
-        row.accessToken,
-      );
-      return Redacted.make(accessToken);
+      return yield* decryptAccessToken(row.accessToken);
     }
 
-    return yield* refreshMerchantToken(merchantId, row, nowDate);
+    yield* Effect.logInfo("clover.auth.refresh.required", {
+      workflowStage: "refresh_required",
+      merchantId,
+    });
+
+    return yield* withMerchantTokenRefreshLock(
+      merchantId,
+      refreshMerchantTokenUnderLock(merchantId),
+      { lockTimeoutMs: options?.lockTimeoutMs ?? REFRESH_LOCK_TIMEOUT_MS },
+    );
+  });
+}
+
+/** Reads the merchant's token row, failing when the merchant is not connected. */
+function readMerchantTokenRow(merchantId: string) {
+  return Effect.flatMap(
+    CloverTokenRepository.getByMerchantId(merchantId),
+    Option.match({
+      onNone: () => Effect.fail(new MerchantNotConnectedError({ merchantId })),
+      onSome: (value: CloverMerchantTokenRow) => Effect.succeed(value),
+    }),
+  );
+}
+
+/** Decrypts a stored access token into a redacted value. */
+function decryptAccessToken(encryptedAccessToken: string) {
+  return Effect.gen(function* () {
+    const { tokenEncryptionKey } = yield* CloverConfig;
+    const accessToken = yield* decryptToken(
+      Redacted.value(tokenEncryptionKey),
+      encryptedAccessToken,
+    );
+    return Redacted.make(accessToken);
   });
 }
 
@@ -241,20 +311,47 @@ function isExpired(expiresAt: Date | null, nowDate: Date): boolean {
 }
 
 /**
- * Refreshes an expired access token using the stored refresh token, persists the
- * rotated pair, and returns the new access token. Fails terminally when no
- * usable refresh token is available.
+ * The refresh critical section, run **inside** the per-merchant advisory lock
+ * (its {@link Database} is the lock's transaction, so the reread and the write
+ * below happen on the same locked connection).
+ *
+ * It mandatorily *rereads* the row after the lock is held before doing anything
+ * else: a concurrent caller may already have refreshed the token while we waited
+ * for the lock, in which case we simply return the fresh token without calling
+ * Clover — and, crucially, without wrongly deciding reauthorization is required
+ * from a stale view of the row.
  */
-function refreshMerchantToken(
-  merchantId: string,
-  row: CloverMerchantTokenRow,
-  nowDate: Date,
-) {
+function refreshMerchantTokenUnderLock(merchantId: string) {
   return Effect.gen(function* () {
+    const row = yield* readMerchantTokenRow(merchantId);
+    const nowDate = yield* now;
+
+    yield* Effect.logInfo("clover.auth.refresh.token_reread", {
+      workflowStage: "reread_after_lock",
+      merchantId,
+      accessTokenExpired: isExpired(row.accessTokenExpiresAt, nowDate),
+    });
+
+    // Another caller refreshed while we waited for the lock: reuse their token.
+    if (!isExpired(row.accessTokenExpiresAt, nowDate)) {
+      yield* Effect.logInfo("clover.auth.refresh.skipped", {
+        workflowStage: "refresh_skipped",
+        merchantId,
+        refreshSkipped: true,
+      });
+      return yield* decryptAccessToken(row.accessToken);
+    }
+
+    // Genuinely still expired: a usable refresh token is required to continue.
     if (
       row.refreshToken === null ||
       isExpired(row.refreshTokenExpiresAt, nowDate)
     ) {
+      yield* Effect.logWarning("clover.auth.refresh.reauthorization_required", {
+        workflowStage: "reauthorization_required",
+        merchantId,
+        hasRefreshToken: row.refreshToken !== null,
+      });
       return yield* Effect.fail(
         new ReauthorizationRequiredError({ merchantId }),
       );
@@ -272,14 +369,35 @@ function refreshMerchantToken(
       { merchantId },
     );
 
-    yield* persistTokens(merchantId, tokens);
+    yield* persistTokens(merchantId, tokens, row);
+
+    yield* Effect.logInfo("clover.auth.refresh.persisted", {
+      workflowStage: "tokens_persisted",
+      merchantId,
+      rotatedRefreshToken: tokens.refresh_token !== undefined,
+    });
 
     return Redacted.make(tokens.access_token);
   });
 }
 
-/** Encrypts and upserts a merchant's tokens. */
-function persistTokens(merchantId: string, tokens: CloverTokenResponse) {
+/**
+ * Encrypts and upserts a merchant's tokens.
+ *
+ * When `previous` is supplied (a refresh, not a first-time exchange) and Clover's
+ * response omits fields, the prior values are preserved rather than nulled:
+ * - a missing `refresh_token` keeps the existing (still-valid) refresh token —
+ *   Clover does not always rotate it, and discarding it would strand the
+ *   merchant; and
+ * - a missing `refresh_token_expiration` keeps the prior expiration.
+ * The original `createdAt` is preserved (the upsert only touches token columns on
+ * conflict) and `updatedAt` is bumped.
+ */
+function persistTokens(
+  merchantId: string,
+  tokens: CloverTokenResponse,
+  previous?: CloverMerchantTokenRow,
+) {
   return Effect.gen(function* () {
     const { appId, tokenEncryptionKey } = yield* CloverConfig;
     const encryptionKey = Redacted.value(tokenEncryptionKey);
@@ -289,10 +407,18 @@ function persistTokens(merchantId: string, tokens: CloverTokenResponse) {
       encryptionKey,
       tokens.access_token,
     );
+
     const encryptedRefreshToken =
-      tokens.refresh_token === undefined ?
-        null
-      : yield* encryptToken(encryptionKey, tokens.refresh_token);
+      tokens.refresh_token !== undefined ?
+        yield* encryptToken(encryptionKey, tokens.refresh_token)
+        // Preserve the existing refresh token when Clover did not rotate it.
+      : (previous?.refreshToken ?? null);
+
+    const refreshTokenExpiresAt =
+      tokens.refresh_token_expiration !== undefined ?
+        unixSecondsToDate(tokens.refresh_token_expiration)
+        // Preserve the prior expiration when no replacement was supplied.
+      : (previous?.refreshTokenExpiresAt ?? null);
 
     yield* CloverTokenRepository.upsert({
       merchantId,
@@ -300,8 +426,8 @@ function persistTokens(merchantId: string, tokens: CloverTokenResponse) {
       accessToken: encryptedAccessToken,
       accessTokenExpiresAt: unixSecondsToDate(tokens.access_token_expiration),
       refreshToken: encryptedRefreshToken,
-      refreshTokenExpiresAt: unixSecondsToDate(tokens.refresh_token_expiration),
-      createdAt: nowDate,
+      refreshTokenExpiresAt,
+      createdAt: previous?.createdAt ?? nowDate,
       updatedAt: nowDate,
     });
   });

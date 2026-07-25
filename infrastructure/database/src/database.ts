@@ -76,6 +76,29 @@ export type DatabaseService = {
     DatabaseError,
     Scope.Scope
   >;
+
+  /**
+   * Runs `use` inside a self-contained transaction bound to a single freshly
+   * reserved connection, providing a transaction-bound {@link DatabaseService}
+   * whose every `query` is **pinned** to that connection.
+   *
+   * This differs from {@link transaction}/{@link beginTransaction} in one crucial
+   * way: it guarantees that the drizzle queries `use` runs actually execute on
+   * the reserved connection (they are run as effects, so the SQL client routes
+   * them through the pinned connection) rather than on an arbitrary pooled
+   * connection. That makes it safe to take a session/transaction-scoped lock
+   * (e.g. `pg_advisory_xact_lock`) on the connection and then read and write on
+   * the *same* connection under that lock — reads and writes cannot silently
+   * escape to a different pooled connection.
+   *
+   * The transaction commits when `use` succeeds and rolls back on any failure,
+   * defect or interruption; the reserved connection is released when the
+   * enclosing scope closes. Intended for short critical sections (such as the
+   * per-merchant token refresh) — not as a general request transaction.
+   */
+  readonly withPinnedTransaction: <A, E, R>(
+    use: (tx: DatabaseService) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | DatabaseError, R>;
 };
 
 export class Database extends Context.Tag("sappho/Database")<
@@ -152,6 +175,8 @@ const createDatabaseService = Effect.gen(function* () {
       ),
 
     beginTransaction,
+
+    withPinnedTransaction,
   });
 
   const beginTransaction: Effect.Effect<
@@ -210,6 +235,99 @@ const createDatabaseService = Effect.gen(function* () {
       ),
     } satisfies DatabaseTransactionHandle;
   });
+
+  const withPinnedTransaction = <A, E, R>(
+    use: (tx: DatabaseService) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | DatabaseError, R> =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        // Reserve a dedicated connection into this scope; released on scope close.
+        const connection = yield* sql.reserve.pipe(
+          Effect.mapError(
+            (cause) =>
+              new DatabaseError({
+                message: "Failed to reserve a database connection",
+                cause,
+              }),
+          ),
+        );
+
+        yield* connection.executeUnprepared("BEGIN", [], undefined).pipe(
+          Effect.mapError(
+            (cause) =>
+              new DatabaseError({
+                message: "Failed to begin database transaction",
+                cause,
+              }),
+          ),
+        );
+
+        // A transaction-bound service whose `query` runs each drizzle operation
+        // *as an effect* under the reserved connection. Running it as an effect
+        // (rather than awaiting the drizzle promise) is what makes the SQL client
+        // honor `TransactionConnection` and route the statement to this pinned
+        // connection instead of an arbitrary pooled one.
+        const pinnedDatabase: DatabaseService = {
+          schema,
+          query: <T>(
+            operation: (database: SapphoDatabase) => Promise<T>,
+            options?: { readonly errorMessage?: string },
+          ) =>
+            Effect.suspend(
+              () => operation(db) as unknown as Effect.Effect<T, unknown>,
+            ).pipe(
+              Effect.provideService(SqlClientModule.TransactionConnection, [
+                connection,
+                0,
+              ] as const),
+              Effect.mapError((cause) =>
+                cause instanceof DatabaseError ? cause : (
+                  new DatabaseError({
+                    message: options?.errorMessage ?? "Database query failed",
+                    cause,
+                  })
+                ),
+              ),
+            ),
+          transaction: () =>
+            Effect.die(
+              new Error(
+                "nested transaction is not supported inside a pinned transaction",
+              ),
+            ),
+          beginTransaction: Effect.die(
+            new Error(
+              "nested beginTransaction is not supported inside a pinned transaction",
+            ),
+          ),
+          withPinnedTransaction,
+        };
+
+        const commit = connection
+          .executeUnprepared("COMMIT", [], undefined)
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new DatabaseError({
+                  message: "Failed to commit database transaction",
+                  cause,
+                }),
+            ),
+            Effect.asVoid,
+          );
+
+        const rollback = Effect.ignore(
+          connection.executeUnprepared("ROLLBACK", [], undefined),
+        );
+
+        return yield* use(pinnedDatabase).pipe(
+          Effect.tap(() => commit),
+          // Any failure, defect or interruption (including a failed commit) rolls
+          // the transaction back, releasing any locks it held.
+          Effect.onError(() => rollback),
+        );
+      }),
+    );
 
   return buildService((effect) => effect);
 });

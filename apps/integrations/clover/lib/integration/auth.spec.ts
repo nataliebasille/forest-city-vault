@@ -9,7 +9,7 @@ import {
   dbSchema,
 } from "@forest-city-vault/infrastructure-database";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
-import { Effect, Exit, Layer, Redacted } from "effect";
+import { Effect, Exit, Layer, Logger, Redacted } from "effect";
 
 import {
   exchangeCodeForTokens,
@@ -17,7 +17,7 @@ import {
   MerchantNotConnectedError,
   ReauthorizationRequiredError,
 } from "@/lib/integration/auth";
-import { encryptToken } from "@/lib/integration/token-crypto";
+import { decryptToken, encryptToken } from "@/lib/integration/token-crypto";
 
 const ENCRYPTION_KEY = "auth-spec-encryption-key";
 const NOW = new Date("2024-06-01T00:00:00.000Z");
@@ -150,6 +150,266 @@ describe("getMerchantAccessToken", () => {
   });
 });
 
+describe("getMerchantAccessToken refresh edge cases", () => {
+  test("preserves the existing refresh token when Clover omits refresh_token", async () => {
+    const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
+    const priorRefreshExpiry = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const { db, run, captured } = await makeDynamicContext(() => ({
+      // A successful refresh that rotates only the access token — Clover does not
+      // always return a new refresh_token, and must never null the existing one.
+      body: {
+        access_token: "rotated-access-token",
+        access_token_expiration: newExpiration,
+      },
+    }));
+
+    await seedToken(db, {
+      merchantId: "m-keep-refresh",
+      accessTokenPlain: "old-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() - 60 * 1000),
+      refreshTokenPlain: "keep-this-refresh-token",
+      refreshTokenExpiresAt: priorRefreshExpiry,
+    });
+
+    const before = await readRow(db, "m-keep-refresh");
+
+    const exit = await run(getMerchantAccessToken("m-keep-refresh"));
+
+    assert.equal(Exit.isSuccess(exit), true);
+    if (Exit.isSuccess(exit)) {
+      assert.equal(Redacted.value(exit.value), "rotated-access-token");
+    }
+    assert.equal(captured.length, 1);
+
+    const after = await readRow(db, "m-keep-refresh");
+    // The stored refresh ciphertext is preserved byte-for-byte (still decrypts to
+    // the original secret) and its expiration is untouched.
+    assert.equal(after.refreshToken, before.refreshToken);
+    assert.equal(
+      after.refreshTokenExpiresAt?.getTime(),
+      priorRefreshExpiry.getTime(),
+    );
+    const decryptedRefresh = await Effect.runPromise(
+      decryptToken(ENCRYPTION_KEY, after.refreshToken!),
+    );
+    assert.equal(decryptedRefresh, "keep-this-refresh-token");
+    // The access token was still rotated.
+    assert.notEqual(after.accessToken, before.accessToken);
+  });
+
+  test("preserves the prior refresh-token expiration when Clover rotates the token but omits its expiration", async () => {
+    const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
+    const priorRefreshExpiry = new Date(NOW.getTime() + 15 * 24 * 60 * 60 * 1000);
+    const { db, run } = await makeDynamicContext(() => ({
+      body: {
+        access_token: "rotated-access-token",
+        access_token_expiration: newExpiration,
+        refresh_token: "rotated-refresh-token",
+        // no refresh_token_expiration
+      },
+    }));
+
+    await seedToken(db, {
+      merchantId: "m-keep-refresh-exp",
+      accessTokenPlain: "old-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() - 60 * 1000),
+      refreshTokenPlain: "old-refresh-token",
+      refreshTokenExpiresAt: priorRefreshExpiry,
+    });
+
+    const exit = await run(getMerchantAccessToken("m-keep-refresh-exp"));
+
+    assert.equal(Exit.isSuccess(exit), true);
+
+    const after = await readRow(db, "m-keep-refresh-exp");
+    // The refresh token itself was rotated...
+    const decryptedRefresh = await Effect.runPromise(
+      decryptToken(ENCRYPTION_KEY, after.refreshToken!),
+    );
+    assert.equal(decryptedRefresh, "rotated-refresh-token");
+    // ...but its expiration falls back to the prior value.
+    assert.equal(
+      after.refreshTokenExpiresAt?.getTime(),
+      priorRefreshExpiry.getTime(),
+    );
+  });
+
+  test("does not overwrite stored tokens when Clover returns a malformed response", async () => {
+    const { db, run, captured } = await makeDynamicContext(() => ({
+      // 200 OK but missing access_token -> schema decoding fails.
+      body: { unexpected: "shape" },
+    }));
+
+    await seedToken(db, {
+      merchantId: "m-malformed",
+      accessTokenPlain: "old-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() - 60 * 1000),
+      refreshTokenPlain: "old-refresh-token",
+      refreshTokenExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const before = await readRow(db, "m-malformed");
+
+    const exit = await run(getMerchantAccessToken("m-malformed"));
+
+    assert.equal(Exit.isFailure(exit), true);
+    assert.equal(captured.length, 1);
+
+    // The row is completely unchanged: no partial/overwritten token state.
+    const after = await readRow(db, "m-malformed");
+    assert.equal(after.accessToken, before.accessToken);
+    assert.equal(
+      after.accessTokenExpiresAt?.getTime(),
+      before.accessTokenExpiresAt?.getTime(),
+    );
+    assert.equal(after.refreshToken, before.refreshToken);
+    assert.equal(after.updatedAt?.getTime(), before.updatedAt?.getTime());
+  });
+
+  test("rolls back on a Clover failure and lets a later caller retry successfully", async () => {
+    const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
+    const { db, run, captured } = await makeDynamicContext(({ index }) =>
+      index === 0 ?
+        // First attempt fails at Clover (retryable): nothing must be persisted.
+        { status: 500, body: { message: "boom" } }
+        // A later attempt succeeds.
+      : {
+          body: {
+            access_token: "recovered-access-token",
+            access_token_expiration: newExpiration,
+            refresh_token: "recovered-refresh-token",
+            refresh_token_expiration: newExpiration + 3600,
+          },
+        },
+    );
+
+    await seedToken(db, {
+      merchantId: "m-retry",
+      accessTokenPlain: "old-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() - 60 * 1000),
+      refreshTokenPlain: "old-refresh-token",
+      refreshTokenExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const before = await readRow(db, "m-retry");
+
+    const firstExit = await run(getMerchantAccessToken("m-retry"));
+    assert.equal(Exit.isFailure(firstExit), true);
+
+    // The failed refresh left the stored tokens untouched (transaction rolled back).
+    const afterFailure = await readRow(db, "m-retry");
+    assert.equal(afterFailure.accessToken, before.accessToken);
+
+    const secondExit = await run(getMerchantAccessToken("m-retry"));
+    assert.equal(Exit.isSuccess(secondExit), true);
+    if (Exit.isSuccess(secondExit)) {
+      assert.equal(Redacted.value(secondExit.value), "recovered-access-token");
+    }
+    assert.equal(captured.length, 2);
+  });
+
+  test("never writes access tokens, refresh tokens, or the client secret to the logs", async () => {
+    const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
+    const { db, run, captured, logs } = await makeDynamicContext(() => ({
+      body: {
+        access_token: "brand-new-access-token",
+        access_token_expiration: newExpiration,
+        refresh_token: "brand-new-refresh-token",
+        refresh_token_expiration: newExpiration + 3600,
+      },
+    }));
+
+    await seedToken(db, {
+      merchantId: "m-logsafe",
+      accessTokenPlain: "old-secret-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() - 60 * 1000),
+      refreshTokenPlain: "old-secret-refresh-token",
+      refreshTokenExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const before = await readRow(db, "m-logsafe");
+
+    const exit = await run(getMerchantAccessToken("m-logsafe"));
+    assert.equal(Exit.isSuccess(exit), true);
+    assert.equal(captured.length, 1);
+
+    const after = await readRow(db, "m-logsafe");
+    const joined = logs.join("\n");
+    // Plaintext tokens, the client secret, and the encrypted ciphertexts must
+    // never appear anywhere in the structured logs.
+    const forbidden = [
+      "old-secret-access-token",
+      "old-secret-refresh-token",
+      "brand-new-access-token",
+      "brand-new-refresh-token",
+      "test-app-secret",
+      before.accessToken,
+      after.accessToken,
+      after.refreshToken!,
+    ];
+    for (const secret of forbidden) {
+      assert.equal(
+        joined.includes(secret),
+        false,
+        `logs unexpectedly contained a secret: ${secret.slice(0, 12)}…`,
+      );
+    }
+    // Sanity: the redacting log pipeline actually ran and logged the refresh.
+    assert.ok(joined.includes("clover.auth.refresh.required"));
+  });
+
+  test("returns the stored token without refreshing when it is just outside the expiry skew", async () => {
+    const { db, run, captured } = await makeDynamicContext(() => ({
+      body: {},
+    }));
+    // Expires 1s beyond the skew window -> still considered valid.
+    await seedToken(db, {
+      merchantId: "m-outside-skew",
+      accessTokenPlain: "still-valid-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() + 60 * 1000 + 1000),
+      refreshTokenPlain: "some-refresh-token",
+      refreshTokenExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const exit = await run(getMerchantAccessToken("m-outside-skew"));
+
+    assert.equal(Exit.isSuccess(exit), true);
+    if (Exit.isSuccess(exit)) {
+      assert.equal(Redacted.value(exit.value), "still-valid-access-token");
+    }
+    // Inside the skew it would refresh; outside, it must not touch Clover.
+    assert.equal(captured.length, 0);
+  });
+
+  test("refreshes when the token is within the expiry skew even though it has not literally expired", async () => {
+    const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
+    const { db, run, captured } = await makeDynamicContext(() => ({
+      body: {
+        access_token: "skew-refreshed-access-token",
+        access_token_expiration: newExpiration,
+        refresh_token: "skew-refreshed-refresh-token",
+        refresh_token_expiration: newExpiration + 3600,
+      },
+    }));
+    // Expires 30s from now: still in the future, but inside the 60s skew window.
+    await seedToken(db, {
+      merchantId: "m-inside-skew",
+      accessTokenPlain: "about-to-expire-access-token",
+      accessTokenExpiresAt: new Date(NOW.getTime() + 30 * 1000),
+      refreshTokenPlain: "some-refresh-token",
+      refreshTokenExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const exit = await run(getMerchantAccessToken("m-inside-skew"));
+
+    assert.equal(Exit.isSuccess(exit), true);
+    if (Exit.isSuccess(exit)) {
+      assert.equal(Redacted.value(exit.value), "skew-refreshed-access-token");
+    }
+    assert.equal(captured.length, 1);
+  });
+});
+
 describe("exchangeCodeForTokens", () => {
   test("exchanges the code and persists the merchant's encrypted tokens", async () => {
     const expiration = Math.floor(NOW.getTime() / 1000) + 3600;
@@ -251,6 +511,100 @@ async function makeContext(responseBody: unknown = {}) {
     );
 
   return { db, captured, run };
+}
+
+type StubResponse = { readonly status?: number; readonly body: unknown };
+
+/**
+ * A stub HttpClient whose response is computed per call by `handler`, so a test
+ * can vary status/body across attempts (e.g. fail then succeed) and record the
+ * requests it saw. Also captures every log line emitted while an effect runs so
+ * tests can assert secrets never reach the logs.
+ */
+function stubHttpClientDynamic(
+  handler: (call: {
+    readonly index: number;
+    readonly request: CapturedRequest;
+  }) => StubResponse,
+  captured: CapturedRequest[],
+) {
+  const client = HttpClient.make((request) => {
+    const capturedRequest: CapturedRequest = {
+      url: request.url,
+      params: bodyToParams(request.body),
+    };
+    const index = captured.length;
+    captured.push(capturedRequest);
+
+    const { status = 200, body } = handler({
+      index,
+      request: capturedRequest,
+    });
+
+    return Effect.succeed(
+      HttpClientResponse.fromWeb(
+        request,
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+  });
+
+  return Layer.succeed(HttpClient.HttpClient, client);
+}
+
+async function makeDynamicContext(
+  handler: (call: {
+    readonly index: number;
+    readonly request: CapturedRequest;
+  }) => StubResponse,
+) {
+  const { layer: databaseLayer, db } = await makeDatabaseTestContext();
+  const captured: CapturedRequest[] = [];
+  const logs: string[] = [];
+
+  const captureLogger = Logger.replace(
+    Logger.defaultLogger,
+    Logger.make((options) => {
+      try {
+        logs.push(
+          `${JSON.stringify(options.message)} ${JSON.stringify(
+            Array.from(options.annotations),
+          )}`,
+        );
+      } catch {
+        logs.push(String(options.message));
+      }
+    }),
+  );
+
+  const layer = Layer.mergeAll(
+    Layer.succeed(CloverConfig, config),
+    staticClock(NOW),
+    stubHttpClientDynamic(handler, captured),
+    databaseLayer,
+    captureLogger,
+  );
+
+  const run = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.runPromiseExit(
+      effect.pipe(Effect.provide(layer)) as Effect.Effect<A, E, never>,
+    );
+
+  return { db, captured, logs, run };
+}
+
+/** Reads a single merchant token row directly (test convenience). */
+async function readRow(
+  db: Awaited<ReturnType<typeof makeDatabaseTestContext>>["db"],
+  merchantId: string,
+) {
+  const rows = await db.select().from(dbSchema.cloverMerchantTokens);
+  const row = rows.find((r) => r.merchantId === merchantId);
+  assert.ok(row, `expected a token row for ${merchantId}`);
+  return row;
 }
 
 async function seedToken(
