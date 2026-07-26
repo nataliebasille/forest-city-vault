@@ -20,15 +20,24 @@ importers:
 
   apps/admin-portal:
     dependencies:
+      '@nataliebasille/natcore-design-system':
+        specifier: ^2.0.3
+        version: 2.0.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.3.0)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       next:
-        specifier: 16.2.6
-        version: 16.2.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: 16.2.10
+        version: 16.2.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: 19.2.4
         version: 19.2.4
       react-dom:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -42,6 +51,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.2.3(@types/react@19.2.15)
+      prettier:
+        specifier: ^3.8.3
+        version: 3.8.3
       tailwindcss:
         specifier: ^4
         version: 4.3.0

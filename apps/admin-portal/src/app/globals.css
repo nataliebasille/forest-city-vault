@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "@nataliebasille/natcore-design-system/css";
+
+@theme static {
+  --theme-primary: #af5f1d;
+  --theme-secondary: #4c4639;
+  --theme-accent: #be996d;
+
+  --theme-surface-50: #ffffff;
+  --theme-surface-500: #be996d;
+  --theme-surface-950: #4c4639;
+
+  /*
+   * Adaptive "ink" for headings, labels, and icons that sit on the page
+   * surface. Light mode keeps the warm brand brown (secondary-500); dark mode
+   * switches to the readable foreground computed for the dark surface so the
+   * editorial text stays legible when the system prefers a dark theme.
+   */
+  --color-ink: light-dark(
+    var(--color-light-secondary-500),
+    var(--color-on-dark-surface-50)
+  );
+}
+
+:root {
+  color-scheme: light dark;
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lightningcss-light: ;
+    --lightningcss-dark: initial;
+  }
+}
+
+.font-heading {
+  font-family: var(--font-heading), serif;
+}
+
+.font-subheading {
+  font-family: var(--font-subheading), serif;
+}
+
+.font-body {
+  font-family: var(--font-body), serif;
+}
+
+html,
+body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+body {
+  font-family: var(--font-body), Georgia, serif;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}

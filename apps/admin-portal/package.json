@@ -1,5 +1,5 @@
 {
-  "name": "admin-portal",
+  "name": "@forest-city-vault/app-admin-portal",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,15 +11,19 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "next": "16.2.6",
+    "@nataliebasille/natcore-design-system": "^2.0.3",
+    "dotenv": "^17.4.2",
+    "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "prettier": "^3.8.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
