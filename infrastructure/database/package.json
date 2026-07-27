@@ -15,6 +15,8 @@
     "db:generate": "pnpm db:generate:drizzle-schema && drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
+    "bootstrap:store": "tsx scripts/bootstrap-store.ts",
+    "bootstrap:owner": "tsx scripts/bootstrap-owner-membership.ts",
     "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -25,6 +27,8 @@
     "@effect/sql-pg": "^0.52.1",
     "@forest-city-vault/core-config": "workspace:*",
     "@forest-city-vault/core-domain": "workspace:*",
+    "@forest-city-vault/core-clock": "workspace:*",
+    "@forest-city-vault/core-id-generator": "workspace:*",
     "@forest-city-vault/platform-saga": "workspace:*",
     "@forest-city-vault/domain": "workspace:*",
     "drizzle-orm": "^0.44.0",

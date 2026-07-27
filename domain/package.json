@@ -9,9 +9,22 @@
     ".": "./index.ts",
     "./sales/sale.events": "./sales/sale.events.ts"
   },
+  "scripts": {
+    "test": "node --import tsx --test **/*.spec.ts",
+    "lint": "biome lint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
   "dependencies": {
+    "@forest-city-vault/core-clock": "workspace:*",
     "@forest-city-vault/core-domain": "workspace:*",
     "effect": "^3.21.2",
     "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "expect": "^29.7.0",
+    "expect-type": "^1.3.0",
+    "tsx": "^4.22.3"
   }
 }
