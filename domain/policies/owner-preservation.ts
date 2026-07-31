@@ -3,8 +3,8 @@ import type { StoreRole } from "../store-membership/store-membership.entity";
 
 /**
  * An operation would leave a store with no active owner. Raised by the
- * owner-preservation policy when disabling — or demoting from `owner` — the last
- * remaining active owner of a store.
+ * owner-preservation policy when disabling the last remaining active owner of a
+ * store.
  */
 export class FinalActiveOwnerError extends Data.TaggedError(
   "domain/policies/FinalActiveOwnerError",
@@ -41,19 +41,6 @@ export const ensureOwnerPreservedOnDisable = (
   subject: OwnerPreservationSubject,
 ) =>
   isLastActiveOwner(subject) ?
-    Effect.fail(new FinalActiveOwnerError({ storeId: subject.storeId }))
-  : Effect.void;
-
-/**
- * Guards changing `subject`'s role to `nextRole`. Demoting the last active owner
- * to any non-owner role is rejected; keeping the `owner` role (or changing a
- * non-owner) is always allowed.
- */
-export const ensureOwnerPreservedOnRoleChange = (
-  subject: OwnerPreservationSubject,
-  nextRole: StoreRole,
-) =>
-  nextRole !== "owner" && isLastActiveOwner(subject) ?
     Effect.fail(new FinalActiveOwnerError({ storeId: subject.storeId }))
   : Effect.void;
 

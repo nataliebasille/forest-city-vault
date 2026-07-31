@@ -61,7 +61,7 @@ const makeMembership = (
   membershipId: string,
   storeId: string,
   userId: string,
-  role: "owner" | "manager" | "inventory" | "finance" | "readOnly" = "owner",
+  role: "owner" = "owner",
   email = "owner@example.com",
 ) =>
   Effect.gen(function* () {
@@ -122,7 +122,7 @@ describe("StoreMembership repository (pooled)", () => {
     const reloaded = await runPooled(
       Effect.gen(function* () {
         yield* makeStore(storeId);
-        yield* makeMembership(membershipId, storeId, userId, "manager");
+        yield* makeMembership(membershipId, storeId, userId, "owner");
         return yield* StoreMembership.repository.getById(
           StoreMembership.pristine(membershipId).id,
         );
@@ -131,7 +131,7 @@ describe("StoreMembership repository (pooled)", () => {
 
     assert.equal(reloaded.snapshot.storeId, storeId);
     assert.equal(reloaded.snapshot.userId, userId);
-    assert.equal(reloaded.snapshot.role, "manager");
+    assert.equal(reloaded.snapshot.role, "owner");
     assert.equal(reloaded.snapshot.status, "active");
   });
 
@@ -170,7 +170,7 @@ describe("StoreMembership repository (pooled)", () => {
         yield* makeStore(storeId);
         yield* makeMembership(crypto.randomUUID(), storeId, userId, "owner");
         // Second membership for the same (store, user) must be rejected.
-        yield* makeMembership(crypto.randomUUID(), storeId, userId, "manager");
+        yield* makeMembership(crypto.randomUUID(), storeId, userId, "owner");
       }).pipe(
         Effect.provide(RepositoriesLive),
         Effect.provide(staticClock(NOW)),
@@ -199,13 +199,6 @@ describe("StoreMembership repository (pooled)", () => {
           storeId,
           crypto.randomUUID(),
           "owner",
-        );
-        // A manager does not count.
-        yield* makeMembership(
-          crypto.randomUUID(),
-          storeId,
-          crypto.randomUUID(),
-          "manager",
         );
         // A disabled owner does not count.
         const disabledOwner = yield* makeMembership(

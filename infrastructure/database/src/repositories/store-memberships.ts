@@ -10,7 +10,6 @@ import { Effect, Option } from "effect";
 import { and, count, eq } from "drizzle-orm";
 import { Database } from "../database";
 import { storeMemberships } from "../schema/store-memberships";
-import { onAmbientDatabase } from "../utils/on-ambient-database";
 
 type MembershipId = AggregateType_GetId<typeof StoreMembership>;
 type MembershipSnapshot = AggregateType_GetSnapshot<typeof StoreMembership>;
@@ -36,101 +35,104 @@ const toAggregate = (row: MembershipRow) => ({
 });
 
 /**
- * Persistence for the `StoreMembership` aggregate. Follows the same
- * ambient-`Database` pattern as the other repositories, reading/writing the
+ * Persistence for the `StoreMembership` aggregate. Follows the same build-time
+ * `Database` capture as the other repositories, reading/writing the
  * `fcv_store_memberships` snapshot table while the durable event append is
- * handled by the repository's `withEventTracking` wrapper.
+ * handled by the repository's `withEventTracking` wrapper. The captured
+ * `Database` is named honestly in the layer's requirements.
  */
-export const StoreMembershipRepositoryLive = StoreMembership.repository.make({
-  getById: (id: MembershipId) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const rows = yield* db
-          .query((sql) =>
+export const StoreMembershipRepositoryLive = StoreMembership.repository.make(
+  Effect.gen(function* () {
+    const db = yield* Database;
+
+    return {
+      getById: (id: MembershipId) =>
+        Effect.gen(function* () {
+          const rows = yield* db
+            .query((sql) =>
+              sql
+                .select()
+                .from(storeMemberships)
+                .where(eq(storeMemberships.id, id)),
+            )
+            .pipe(
+              Effect.mapError(
+                (error) =>
+                  new RepositoryError({
+                    aggType: "StoreMembership",
+                    aggId: id,
+                    error,
+                  }),
+              ),
+            );
+
+          const row = rows[0];
+          if (!row) {
+            return yield* Effect.fail(
+              new AggregateNotFoundError({
+                aggType: "StoreMembership",
+                aggId: id,
+              }),
+            );
+          }
+
+          return toAggregate(row);
+        }),
+
+      save: (aggregate: MembershipAggregate) =>
+        Effect.gen(function* () {
+          const id = String(aggregate.id);
+          const { snapshot, version } = aggregate;
+
+          yield* db.query((sql) =>
             sql
-              .select()
-              .from(storeMemberships)
-              .where(eq(storeMemberships.id, id)),
-          )
-          .pipe(
-            Effect.mapError(
-              (error) =>
-                new RepositoryError({
-                  aggType: "StoreMembership",
-                  aggId: id,
-                  error,
-                }),
-            ),
+              .insert(storeMemberships)
+              .values([
+                {
+                  id,
+                  storeId: snapshot.storeId,
+                  userId: snapshot.userId,
+                  email: snapshot.email,
+                  role: snapshot.role,
+                  status: snapshot.status,
+                  version,
+                  createdAt: snapshot.createdAt,
+                  updatedAt: snapshot.updatedAt,
+                } satisfies typeof storeMemberships.$inferInsert,
+              ])
+              .onConflictDoUpdate({
+                target: storeMemberships.id,
+                set: {
+                  email: snapshot.email,
+                  role: snapshot.role,
+                  status: snapshot.status,
+                  version,
+                  updatedAt: snapshot.updatedAt,
+                },
+              }),
           );
-
-        const row = rows[0];
-        if (!row) {
-          return yield* Effect.fail(
-            new AggregateNotFoundError({
-              aggType: "StoreMembership",
-              aggId: id,
-            }),
-          );
-        }
-
-        return toAggregate(row);
-      }),
-    ),
-
-  save: (aggregate: MembershipAggregate) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const id = String(aggregate.id);
-        const { snapshot, version } = aggregate;
-
-        yield* db.query((sql) =>
-          sql
-            .insert(storeMemberships)
-            .values([
-              {
-                id,
-                storeId: snapshot.storeId,
-                userId: snapshot.userId,
-                email: snapshot.email,
-                role: snapshot.role,
-                status: snapshot.status,
-                version,
-                createdAt: snapshot.createdAt,
-                updatedAt: snapshot.updatedAt,
-              } satisfies typeof storeMemberships.$inferInsert,
-            ])
-            .onConflictDoUpdate({
-              target: storeMemberships.id,
-              set: {
-                email: snapshot.email,
-                role: snapshot.role,
-                status: snapshot.status,
-                version,
-                updatedAt: snapshot.updatedAt,
-              },
-            }),
-        );
-      }).pipe(
-        Effect.mapError(
-          (error) =>
-            new RepositoryError({
-              aggType: "StoreMembership",
-              aggId: String(aggregate.id),
-              error,
-            }),
+        }).pipe(
+          Effect.mapError(
+            (error) =>
+              new RepositoryError({
+                aggType: "StoreMembership",
+                aggId: String(aggregate.id),
+                error,
+              }),
+          ),
         ),
-      ),
-    ),
-});
+    };
+  }),
+);
 
 /**
  * Read-model queries later authorization work needs. They live beside the
  * repository (like `CloverTokenRepository`'s bespoke queries) and read the
- * ambient {@link Database}, so inside a saga they run on the same transaction as
- * the membership mutation — which is what makes the owner-preservation count
- * consistent under concurrency.
+ * {@link Database} at call time, naming it honestly in their requirements. So
+ * inside a saga they run on the same transaction as the membership mutation —
+ * which is what makes the owner-preservation count consistent under
+ * concurrency — while the composition root discharges the `Database`
+ * requirement.
  */
 export const StoreMembershipQueries = {
   /**
@@ -139,25 +141,23 @@ export const StoreMembershipQueries = {
    * make owner-membership bootstrap idempotent.
    */
   findByStoreAndUser: (storeId: string, userId: string) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const rows = yield* db.query((sql) =>
-          sql
-            .select()
-            .from(storeMemberships)
-            .where(
-              and(
-                eq(storeMemberships.storeId, storeId),
-                eq(storeMemberships.userId, userId),
-              ),
-            )
-            .limit(1),
-        );
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.query((sql) =>
+        sql
+          .select()
+          .from(storeMemberships)
+          .where(
+            and(
+              eq(storeMemberships.storeId, storeId),
+              eq(storeMemberships.userId, userId),
+            ),
+          )
+          .limit(1),
+      );
 
-        return Option.fromNullable(rows[0]).pipe(Option.map(toAggregate));
-      }),
-    ),
+      return Option.fromNullable(rows[0]).pipe(Option.map(toAggregate));
+    }),
 
   /**
    * Counts the store's active `owner` memberships without loading them into
@@ -165,23 +165,21 @@ export const StoreMembershipQueries = {
    * cheaply and transactionally.
    */
   countActiveOwners: (storeId: string) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const rows = yield* db.query((sql) =>
-          sql
-            .select({ value: count() })
-            .from(storeMemberships)
-            .where(
-              and(
-                eq(storeMemberships.storeId, storeId),
-                eq(storeMemberships.status, "active"),
-                eq(storeMemberships.role, "owner"),
-              ),
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.query((sql) =>
+        sql
+          .select({ value: count() })
+          .from(storeMemberships)
+          .where(
+            and(
+              eq(storeMemberships.storeId, storeId),
+              eq(storeMemberships.status, "active"),
+              eq(storeMemberships.role, "owner"),
             ),
-        );
+          ),
+      );
 
-        return Number(rows[0]?.value ?? 0);
-      }),
-    ),
+      return Number(rows[0]?.value ?? 0);
+    }),
 } as const;

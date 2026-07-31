@@ -11,8 +11,10 @@ import { RepositoriesSagaScoped } from "../repositories/index";
 /**
  * The services a bootstrap effect may require: the saga-scoped repositories
  * (rebuilt per saga by `withSaga`) plus the clock and id generator the
- * aggregate actions read. `Database` is intentionally absent — repository and
- * query methods resolve it at call time (see `onAmbientDatabase`).
+ * aggregate actions read. `Database` is intentionally absent here — the
+ * saga-scoped repositories capture it when they are rebuilt per saga and
+ * `provideSagaScoped` discharges that requirement, so bootstrap callers never
+ * name `Database`.
  */
 type BootstrapRequirements =
   | Layer.Layer.Success<typeof RepositoriesSagaScoped>

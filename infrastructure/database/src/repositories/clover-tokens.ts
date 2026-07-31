@@ -2,7 +2,6 @@ import { Data, Effect, Option } from "effect";
 import { eq, sql } from "drizzle-orm";
 import { Database, DatabaseError, type DatabaseService } from "../database";
 import { cloverMerchantTokens } from "../schema/clover-tokens";
-import { onAmbientDatabase } from "../utils/on-ambient-database";
 
 export type CloverMerchantTokenRow = typeof cloverMerchantTokens.$inferSelect;
 export type CloverMerchantTokenInsert =
@@ -40,10 +39,13 @@ export class MerchantTokenRefreshLockTimeoutError extends Data.TaggedError(
 /**
  * Persistence for per-merchant Clover OAuth tokens.
  *
- * Like the other repositories, every method reads the **ambient**
- * {@link Database} at call time (via {@link onAmbientDatabase}), so it runs on
- * the saga's transaction inside a `withSaga` boundary and on the base connection
- * otherwise, without the caller re-providing `Database`.
+ * Like the other repositories, every method reads the {@link Database} at call
+ * time and names it honestly in its requirements, so it runs on the saga's
+ * transaction inside a `withSaga` boundary and on the base connection otherwise,
+ * without the caller re-providing `Database`. Call-time resolution is load
+ * bearing here: {@link withMerchantTokenRefreshLock} swaps the ambient
+ * `Database` mid-flight to a lock-pinned transaction, and these methods must
+ * pick that up so the reread and write run on the locked connection.
  *
  * Token values are opaque strings here — encryption/decryption is the caller's
  * responsibility (the Clover app encrypts before `upsert` and decrypts after
@@ -51,20 +53,18 @@ export class MerchantTokenRefreshLockTimeoutError extends Data.TaggedError(
  */
 export const CloverTokenRepository = {
   getByMerchantId: (merchantId: string) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const rows = yield* db.query((sql) =>
-          sql
-            .select()
-            .from(cloverMerchantTokens)
-            .where(eq(cloverMerchantTokens.merchantId, merchantId))
-            .limit(1),
-        );
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.query((sql) =>
+        sql
+          .select()
+          .from(cloverMerchantTokens)
+          .where(eq(cloverMerchantTokens.merchantId, merchantId))
+          .limit(1),
+      );
 
-        return Option.fromNullable(rows[0]);
-      }),
-    ),
+      return Option.fromNullable(rows[0]);
+    }),
 
   /**
    * Inserts the merchant's tokens, or overwrites them when the merchant
@@ -72,27 +72,25 @@ export const CloverTokenRepository = {
    * so a conflict updates the token columns and bumps `updated_at`.
    */
   upsert: (row: CloverMerchantTokenInsert) =>
-    onAmbientDatabase(
-      Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.query((sql) =>
-          sql
-            .insert(cloverMerchantTokens)
-            .values([row])
-            .onConflictDoUpdate({
-              target: cloverMerchantTokens.merchantId,
-              set: {
-                appId: row.appId,
-                accessToken: row.accessToken,
-                accessTokenExpiresAt: row.accessTokenExpiresAt,
-                refreshToken: row.refreshToken,
-                refreshTokenExpiresAt: row.refreshTokenExpiresAt,
-                updatedAt: row.updatedAt,
-              },
-            }),
-        );
-      }),
-    ),
+    Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db.query((sql) =>
+        sql
+          .insert(cloverMerchantTokens)
+          .values([row])
+          .onConflictDoUpdate({
+            target: cloverMerchantTokens.merchantId,
+            set: {
+              appId: row.appId,
+              accessToken: row.accessToken,
+              accessTokenExpiresAt: row.accessTokenExpiresAt,
+              refreshToken: row.refreshToken,
+              refreshTokenExpiresAt: row.refreshTokenExpiresAt,
+              updatedAt: row.updatedAt,
+            },
+          }),
+      );
+    }),
 } as const;
 
 /**
@@ -141,11 +139,11 @@ export const withMerchantTokenRefreshLock = <A, E, R>(
 ): Effect.Effect<
   A,
   E | DatabaseError | MerchantTokenRefreshLockTimeoutError,
-  R
+  R | Database
 > => {
   const lockTimeoutMs = options?.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
 
-  const run = Effect.gen(function* () {
+  return Effect.gen(function* () {
     const database = yield* Database;
 
     return yield* database.withPinnedTransaction((tx) =>
@@ -160,16 +158,13 @@ export const withMerchantTokenRefreshLock = <A, E, R>(
         yield* acquireRefreshLock(tx, merchantId, lockTimeoutMs).pipe(
           Effect.tapError((error) =>
             error._tag === "MerchantTokenRefreshLockTimeoutError" ?
-              Effect.logWarning(
-                "database.clover_token_refresh_lock.timeout",
-                {
-                  workflowStage: "lock_timeout",
-                  merchantId,
-                  lockTimeoutMs,
-                  failureCategory: "lock_timeout",
-                  failureDisposition: "retryable",
-                },
-              )
+              Effect.logWarning("database.clover_token_refresh_lock.timeout", {
+                workflowStage: "lock_timeout",
+                merchantId,
+                lockTimeoutMs,
+                failureCategory: "lock_timeout",
+                failureDisposition: "retryable",
+              })
             : Effect.logWarning("database.clover_token_refresh_lock.failed", {
                 workflowStage: "lock_failed",
                 merchantId,
@@ -187,19 +182,12 @@ export const withMerchantTokenRefreshLock = <A, E, R>(
         });
 
         // The reread and any write the caller does run on `tx` — the same locked
-        // connection — because the repository reads the ambient `Database`.
+        // connection — because `Effect.provideService` swaps the `Database` the
+        // effect reads to the lock-pinned transaction.
         return yield* Effect.provideService(effect, Database, tx);
       }),
     );
   });
-
-  // The ambient `Database` read above is infrastructure the caller must never
-  // name; it is always in scope at runtime (mirrors `onAmbientDatabase`).
-  return run as Effect.Effect<
-    A,
-    E | DatabaseError | MerchantTokenRefreshLockTimeoutError,
-    R
-  >;
 };
 
 /**

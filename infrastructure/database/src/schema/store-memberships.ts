@@ -9,13 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { stores } from "./stores";
 
-export const storeRole = pgEnum("store_role", [
-  "owner",
-  "manager",
-  "inventory",
-  "finance",
-  "readOnly",
-]);
+export const storeRole = pgEnum("store_role", ["owner"]);
 
 export const storeMembershipStatus = pgEnum("store_membership_status", [
   "active",

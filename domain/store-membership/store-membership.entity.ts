@@ -4,16 +4,16 @@ import { Schema } from "effect";
  * The recognized store roles, in one place. `STORE_ROLES` is the single source
  * of truth: the permission policy is keyed by exactly these values (a
  * `Record<StoreRole, ...>`), so adding a role here forces the policy to map it
- * or fail to type-check. A vendor role is intentionally absent — vendor portal
- * access will be modelled separately when that portal is built.
+ * or fail to type-check.
+ *
+ * Only `owner` exists today — the store owner is the sole admin-portal persona.
+ * Workers ring up sales at the Clover register and vendors use a separate
+ * (future) vendor portal; neither is an admin-portal role. Additional roles
+ * (e.g. a vendor-onboarding worker) will be added here when a persona actually
+ * needs partial portal access, at which point the permission split becomes
+ * meaningful.
  */
-export const STORE_ROLES = [
-  "owner",
-  "manager",
-  "inventory",
-  "finance",
-  "readOnly",
-] as const;
+export const STORE_ROLES = ["owner"] as const;
 
 export const StoreRoleSchema = Schema.Literal(...STORE_ROLES);
 export type StoreRole = typeof StoreRoleSchema.Type;

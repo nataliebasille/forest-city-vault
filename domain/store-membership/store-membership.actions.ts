@@ -22,18 +22,9 @@ export const CreateMembershipSchema = Schema.Struct({
   role: StoreRoleSchema,
 });
 
-export const ChangeMembershipRoleSchema = Schema.Struct({
-  role: StoreRoleSchema,
-});
-
 type MembershipCreatedEvent = {
   type: "MembershipCreated";
   payload: typeof events.MembershipCreated.schema.Type;
-};
-
-type MembershipRoleChangedEvent = {
-  type: "MembershipRoleChanged";
-  payload: typeof events.MembershipRoleChanged.schema.Type;
 };
 
 type MembershipDisabledEvent = {
@@ -72,20 +63,6 @@ export const createMembership = (payload: typeof CreateMembershipSchema.Type) =>
       type: "MembershipCreated",
       payload: { storeId, userId, email, role, createdAt },
     } satisfies MembershipCreatedEvent;
-  });
-
-export const changeMembershipRole = (
-  _snapshot: MembershipSnapshot,
-  payload: typeof ChangeMembershipRoleSchema.Type,
-) =>
-  Effect.gen(function* () {
-    const role = yield* requireRole(payload.role);
-    const updatedAt = yield* now;
-
-    return {
-      type: "MembershipRoleChanged",
-      payload: { role, updatedAt },
-    } satisfies MembershipRoleChangedEvent;
   });
 
 export const disableMembership = (snapshot: MembershipSnapshot) =>

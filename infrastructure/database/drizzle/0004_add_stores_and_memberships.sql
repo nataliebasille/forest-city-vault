@@ -1,5 +1,5 @@
 CREATE TYPE "public"."store_membership_status" AS ENUM('active', 'disabled');--> statement-breakpoint
-CREATE TYPE "public"."store_role" AS ENUM('owner', 'manager', 'inventory', 'finance', 'readOnly');--> statement-breakpoint
+CREATE TYPE "public"."store_role" AS ENUM('owner');--> statement-breakpoint
 CREATE TYPE "public"."store_status" AS ENUM('active', 'inactive');--> statement-breakpoint
 CREATE TABLE "fcv_store_memberships" (
 	"id" uuid PRIMARY KEY NOT NULL,

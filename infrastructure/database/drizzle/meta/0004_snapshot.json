@@ -1,5 +1,5 @@
 {
-  "id": "170874ec-f209-4329-b4a1-039305ebdd8d",
+  "id": "e06a258f-12f7-4e4b-a333-178db09f0938",
   "prevId": "5a00c4a2-9a65-4373-b1fa-d483b4fcc073",
   "version": "7",
   "dialect": "postgresql",
@@ -1014,11 +1014,7 @@
       "name": "store_role",
       "schema": "public",
       "values": [
-        "owner",
-        "manager",
-        "inventory",
-        "finance",
-        "readOnly"
+        "owner"
       ]
     },
     "public.store_status": {

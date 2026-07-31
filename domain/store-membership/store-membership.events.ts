@@ -33,25 +33,6 @@ export const MembershipCreated = {
     }) satisfies typeof StoreMembershipSchema.Type,
 };
 
-const MembershipRoleChangedSchema = Schema.Struct({
-  role: StoreRoleSchema,
-  updatedAt: Schema.Date,
-});
-
-export const MembershipRoleChanged = {
-  schema: MembershipRoleChangedSchema,
-
-  handler: (
-    snapshot: typeof StoreMembershipSchema.Type,
-    payload: typeof MembershipRoleChangedSchema.Type,
-  ) =>
-    ({
-      ...snapshot,
-      role: payload.role,
-      updatedAt: payload.updatedAt,
-    }) satisfies typeof StoreMembershipSchema.Type,
-};
-
 const MembershipDisabledSchema = Schema.Struct({
   updatedAt: Schema.Date,
 });

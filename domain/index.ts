@@ -33,10 +33,7 @@ export {
   type StoreMembershipStatus,
   type StoreRole,
 } from "./store-membership/store-membership.entity";
-export {
-  ChangeMembershipRoleSchema,
-  CreateMembershipSchema,
-} from "./store-membership/store-membership.actions";
+export { CreateMembershipSchema } from "./store-membership/store-membership.actions";
 export {
   MembershipAlreadyActiveError,
   MembershipAlreadyDisabledError,
@@ -59,7 +56,6 @@ export {
 
 export {
   ensureOwnerPreservedOnDisable,
-  ensureOwnerPreservedOnRoleChange,
   FinalActiveOwnerError,
   type OwnerPreservationSubject,
 } from "./policies/owner-preservation";

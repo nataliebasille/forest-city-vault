@@ -112,27 +112,6 @@ describe("StoreMembership", () => {
     expect((error as MembershipInvalidRoleError).role).toBe("superuser");
   });
 
-  it("changes the membership role", () => {
-    const changed = runAction(
-      StoreMembership.actions.changeRole(createMembership(), {
-        role: "manager",
-      }),
-    );
-
-    expect(changed.snapshot.role).toBe("manager");
-    expect(changed.version).toBe(2);
-  });
-
-  it("rejects changing to an unrecognized role", () => {
-    const exit = runActionExit(
-      StoreMembership.actions.changeRole(createMembership(), {
-        role: "superuser" as StoreRole,
-      }),
-    );
-
-    expect(expectFailure(exit)).toBeInstanceOf(MembershipInvalidRoleError);
-  });
-
   it("disables an active membership", () => {
     const disabled = runAction(
       StoreMembership.actions.disable(createMembership(), undefined),

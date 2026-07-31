@@ -5,49 +5,37 @@ import {
 } from "../store-membership/store-membership.entity";
 
 /**
- * The complete vocabulary of store permissions. These name capabilities that
- * later slices will implement; nothing here grants behaviour beyond the checks
- * in this module. `ALL_PERMISSIONS` is the single source of truth and is
- * asserted to be exhaustive over {@link StorePermission} below, so adding a
- * permission to the type without listing it here is a compile error.
+ * The complete vocabulary of store permissions — one coarse capability per
+ * admin-portal resource area. These name capabilities that later slices will
+ * implement; nothing here grants behaviour beyond the checks in this module.
+ * `ALL_PERMISSIONS` is the single source of truth and is asserted to be
+ * exhaustive over {@link StorePermission} below, so adding a permission to the
+ * type without listing it here is a compile error.
+ *
+ * These are intentionally coarse (no `:read`/`:manage` split): `owner` is the
+ * only role today and holds every permission, so finer granularity would be
+ * unused. A permission will be split (e.g. into read vs manage) when a role
+ * that needs the narrower grant is actually introduced.
  */
 export type StorePermission =
-  | "store:read"
-  | "store:update"
-  | "memberships:read"
-  | "memberships:create"
-  | "memberships:update"
-  | "memberships:disable"
-  | "clover:read"
-  | "vendors:read"
-  | "vendors:manage"
-  | "inventory:read"
-  | "inventory:manage"
-  | "sales:read"
-  | "reconciliation:manage"
-  | "statements:read"
-  | "statements:manage"
-  | "payouts:read"
-  | "payouts:manage";
+  | "store"
+  | "memberships"
+  | "vendors"
+  | "inventory"
+  | "sales"
+  | "statements"
+  | "payouts"
+  | "reconciliation";
 
 export const ALL_PERMISSIONS = [
-  "store:read",
-  "store:update",
-  "memberships:read",
-  "memberships:create",
-  "memberships:update",
-  "memberships:disable",
-  "clover:read",
-  "vendors:read",
-  "vendors:manage",
-  "inventory:read",
-  "inventory:manage",
-  "sales:read",
-  "reconciliation:manage",
-  "statements:read",
-  "statements:manage",
-  "payouts:read",
-  "payouts:manage",
+  "store",
+  "memberships",
+  "vendors",
+  "inventory",
+  "sales",
+  "statements",
+  "payouts",
+  "reconciliation",
 ] as const satisfies readonly StorePermission[];
 
 // Exhaustiveness guard: if `StorePermission` gains a member that is missing from
@@ -78,52 +66,13 @@ export class PermissionDeniedError extends Data.TaggedError(
  * The role → permission policy. Keyed by `StoreRole` (a `Record`), so adding a
  * role to {@link STORE_ROLES} without mapping it here is a compile error — the
  * mapping is exhaustive over every role by construction.
+ *
+ * Today `owner` is the only role and receives every permission. When a partial
+ * role is added, give it a narrower set here.
  */
 const ROLE_PERMISSIONS: Record<StoreRole, ReadonlySet<StorePermission>> = {
   // Owner receives every permission.
   owner: new Set(ALL_PERMISSIONS),
-
-  // Manager receives all permissions except membership mutation and payout
-  // management; it may still read memberships and payouts.
-  manager: new Set(
-    ALL_PERMISSIONS.filter(
-      (permission) =>
-        permission !== "memberships:create" &&
-        permission !== "memberships:update" &&
-        permission !== "memberships:disable" &&
-        permission !== "payouts:manage",
-    ),
-  ),
-
-  inventory: new Set([
-    "store:read",
-    "clover:read",
-    "vendors:read",
-    "inventory:read",
-    "inventory:manage",
-    "sales:read",
-  ]),
-
-  finance: new Set([
-    "store:read",
-    "vendors:read",
-    "inventory:read",
-    "sales:read",
-    "statements:read",
-    "statements:manage",
-    "payouts:read",
-    "payouts:manage",
-  ]),
-
-  readOnly: new Set([
-    "store:read",
-    "clover:read",
-    "vendors:read",
-    "inventory:read",
-    "sales:read",
-    "statements:read",
-    "payouts:read",
-  ]),
 };
 
 /** Returns the exact set of permissions granted to `role`. */
@@ -137,6 +86,11 @@ export const hasPermission = (role: StoreRole, permission: StorePermission) =>
  * Authorizes `subject` for `permission`, failing when the membership is disabled
  * (checked first, so a disabled owner is still denied) or when the role does not
  * grant the permission.
+ *
+ * The `PermissionDeniedError` branch is currently unreachable: `owner` is the
+ * only role and holds every permission, so no active membership can lack one. It
+ * is kept deliberately — the moment a partial role is introduced it becomes
+ * live, and the `permission` argument stays meaningful at every call site.
  */
 export const requirePermission = (
   subject: PermissionSubject,

@@ -6,7 +6,6 @@ import {
   hasPermission,
   MembershipDisabledError,
   permissionsForRole,
-  PermissionDeniedError,
   requirePermission,
   STORE_ROLES,
   type StorePermission,
@@ -21,48 +20,6 @@ import {
  */
 const EXPECTED: Record<StoreRole, readonly StorePermission[]> = {
   owner: ALL_PERMISSIONS,
-  manager: [
-    "store:read",
-    "store:update",
-    "memberships:read",
-    "clover:read",
-    "vendors:read",
-    "vendors:manage",
-    "inventory:read",
-    "inventory:manage",
-    "sales:read",
-    "reconciliation:manage",
-    "statements:read",
-    "statements:manage",
-    "payouts:read",
-  ],
-  inventory: [
-    "store:read",
-    "clover:read",
-    "vendors:read",
-    "inventory:read",
-    "inventory:manage",
-    "sales:read",
-  ],
-  finance: [
-    "store:read",
-    "vendors:read",
-    "inventory:read",
-    "sales:read",
-    "statements:read",
-    "statements:manage",
-    "payouts:read",
-    "payouts:manage",
-  ],
-  readOnly: [
-    "store:read",
-    "clover:read",
-    "vendors:read",
-    "inventory:read",
-    "sales:read",
-    "statements:read",
-    "payouts:read",
-  ],
 };
 
 const sorted = (permissions: Iterable<StorePermission>) =>
@@ -79,50 +36,28 @@ describe("permissions", () => {
     expect(sorted(permissionsForRole("owner"))).toEqual(
       sorted(ALL_PERMISSIONS),
     );
-  });
-
-  it("does not grant the manager membership-mutation or payout management", () => {
-    for (const denied of [
-      "memberships:create",
-      "memberships:update",
-      "memberships:disable",
-      "payouts:manage",
-    ] as const) {
-      expect(hasPermission("manager", denied)).toBe(false);
+    for (const permission of ALL_PERMISSIONS) {
+      expect(hasPermission("owner", permission)).toBe(true);
     }
-    // The manager may still read memberships and payouts.
-    expect(hasPermission("manager", "memberships:read")).toBe(true);
-    expect(hasPermission("manager", "payouts:read")).toBe(true);
   });
 
   describe("requirePermission", () => {
     it("succeeds when an active membership's role grants the permission", () => {
       const exit = Effect.runSyncExit(
-        requirePermission({ role: "owner", status: "active" }, "store:update"),
+        requirePermission({ role: "owner", status: "active" }, "store"),
       );
 
       expect(Exit.isSuccess(exit)).toBe(true);
     });
 
-    it("fails with PermissionDeniedError when the role lacks the permission", () => {
-      const exit = Effect.runSyncExit(
-        requirePermission(
-          { role: "readOnly", status: "active" },
-          "store:update",
-        ),
-      );
-
-      expect(Exit.isFailure(exit)).toBe(true);
-      const error =
-        Exit.isFailure(exit) && exit.cause._tag === "Fail" ?
-          exit.cause.error
-        : undefined;
-      expect(error).toBeInstanceOf(PermissionDeniedError);
-    });
+    // The `PermissionDeniedError` branch of `requirePermission` is intentionally
+    // not exercised: `owner` is the only role and holds every permission, so no
+    // active membership can lack one. A denial test will be added alongside the
+    // first partial role that can actually be missing a permission.
 
     it("always denies a disabled membership, even an owner", () => {
       const exit = Effect.runSyncExit(
-        requirePermission({ role: "owner", status: "disabled" }, "store:read"),
+        requirePermission({ role: "owner", status: "disabled" }, "store"),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);

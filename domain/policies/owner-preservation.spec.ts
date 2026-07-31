@@ -3,7 +3,6 @@ import { expect } from "expect";
 import { Effect, Exit } from "effect";
 import {
   ensureOwnerPreservedOnDisable,
-  ensureOwnerPreservedOnRoleChange,
   FinalActiveOwnerError,
   type OwnerPreservationSubject,
 } from "../index";
@@ -29,12 +28,6 @@ const failure = <A, E>(effect: Effect.Effect<A, E>) => {
 
 describe("owner-preservation policy", () => {
   describe("ensureOwnerPreservedOnDisable", () => {
-    it("allows disabling a non-owner membership", () => {
-      expect(
-        isSuccess(ensureOwnerPreservedOnDisable(subject({ role: "manager" }))),
-      ).toBe(true);
-    });
-
     it("allows disabling an owner when another active owner exists", () => {
       expect(
         isSuccess(
@@ -61,41 +54,6 @@ describe("owner-preservation policy", () => {
           ),
         ),
       ).toBe(true);
-    });
-  });
-
-  describe("ensureOwnerPreservedOnRoleChange", () => {
-    it("allows keeping the owner role", () => {
-      expect(
-        isSuccess(
-          ensureOwnerPreservedOnRoleChange(
-            subject({ otherActiveOwners: 0 }),
-            "owner",
-          ),
-        ),
-      ).toBe(true);
-    });
-
-    it("allows demoting an owner when another active owner exists", () => {
-      expect(
-        isSuccess(
-          ensureOwnerPreservedOnRoleChange(
-            subject({ otherActiveOwners: 1 }),
-            "manager",
-          ),
-        ),
-      ).toBe(true);
-    });
-
-    it("rejects demoting the final active owner to a non-owner role", () => {
-      expect(
-        failure(
-          ensureOwnerPreservedOnRoleChange(
-            subject({ otherActiveOwners: 0 }),
-            "manager",
-          ),
-        ),
-      ).toBeInstanceOf(FinalActiveOwnerError);
     });
   });
 });
