@@ -10,7 +10,17 @@ import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
-const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
+/**
+ * A pure wrapper applied around a route handler. Applied *inside* the layer, so
+ * it may require services the layer provides. It typically leaves the success
+ * and error channels intact while enriching the requirement channel — for
+ * example composing `withSaga` to run the handler inside a request saga.
+ */
+type RouteMiddleware = (
+  self: Effect.Effect<unknown, unknown, unknown>,
+) => Effect.Effect<unknown, unknown, unknown>;
+
+const identityTransform: RouteMiddleware = (next) => next;
 
 const RouteOverride = Symbol.for("platform-nextjs-effect/RouteOverride");
 
@@ -23,7 +33,7 @@ const RouteOverride = Symbol.for("platform-nextjs-effect/RouteOverride");
 export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
   readonly [RouteOverride]: (
     req: NextRequest,
-    layer: Layer.Layer<LOut, unknown, never>,
+    layer: Layer.Layer<LOut, unknown, RequestStateDeps>,
   ) => Promise<Response>;
 };
 
@@ -32,66 +42,46 @@ export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
  * `middleware`). The returned function wraps a handler into a Next.js route.
  *
  * `defineRoute` is deliberately policy-free: for each request it creates the
- * request Effect, provides the configured `layer`, applies the configured
- * `middleware`, provides the request-state services, then performs logging and
- * HTTP result conversion before running the Effect. It knows nothing about
- * sagas, transactions or pools — those are application concerns. An application
- * that wants request-wide saga semantics composes `withSaga` (or any other
- * behavior) into `middleware`; see Clover's `route`/`pooledRoute` helpers.
+ * request Effect, applies the configured `middleware` *around* the handler,
+ * provides the configured `layer`, provides the request-state services, then
+ * performs logging and HTTP result conversion before running the Effect. It
+ * knows nothing about sagas, transactions or pools — those are application
+ * concerns. An application that wants request-wide saga semantics composes
+ * `withSaga` into `middleware` and declares its saga-scoped services via
+ * `provideSagaScoped` on the `layer`; see Clover's `route`/`pooledRoute`
+ * helpers.
  *
- * `middleware` is an ordinary Effect-to-Effect transformation applied *around*
- * the layer-provided handler, so it may add or remove requirements. In
- * particular a middleware may satisfy a requirement that the configured `layer`
- * introduces (for example a saga-scoped layer that requires a `Saga` service
- * supplied by a `withSaga` middleware) without `defineRoute` knowing what that
- * requirement represents — the generic `LReq` on the `layer` is free.
+ * `middleware` is applied *inside* the layer (it wraps the handler before the
+ * layer is provided), so — exactly like `definePage` and `defineServerAction` —
+ * a middleware may require services the configured `layer` provides. This is the
+ * page/action analog: where a page returns its rendered value, a route converts
+ * the handler's value (or typed failure) into a `Response`.
+ *
+ * `defineRoute` is saga-agnostic: it opens no saga and provides no `Saga`
+ * service. The `layer` may require request-state services (provided from
+ * `next/headers`), and its residual requirement channel is discharged before the
+ * handler runs.
  *
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testRoute} without the production layer ever being constructed.
  */
 export function defineRoute<LOut, LErr>(config: {
-  layer: Layer.Layer<LOut, LErr, never>;
+  layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
+  middleware?: RouteMiddleware;
 }): <A, E, R>(
   action: (
     req: NextRequest,
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps | ResponseHeaders>>,
-) => RouteHandler<LOut>;
-export function defineRoute<
-  LOut,
-  LErr,
-  LReq,
-  AIn,
-  EIn,
-  RIn,
-  AOut,
-  EOut,
-  ROut,
->(config: {
-  layer: Layer.Layer<LOut, LErr, LReq>;
-  middleware: (
-    self: Effect.Effect<AIn, EIn, RIn>,
-  ) => Effect.Effect<AOut, EOut, ROut>;
-}): (
-  action: (
-    req: NextRequest,
-  ) => Effect.Effect<AIn, EIn, RIn> &
-    MustBeNever<Exclude<ROut, LOut | RequestStateDeps | ResponseHeaders>>,
-) => RouteHandler<LOut>;
-export function defineRoute(config: {
-  layer: Layer.Layer<unknown, unknown, unknown>;
-  middleware?: (
-    self: Effect.Effect<unknown, unknown, unknown>,
-  ) => Effect.Effect<unknown, unknown, unknown>;
-}) {
+) => RouteHandler<LOut> {
   const middleware = config.middleware ?? identityTransform;
 
-  return (
+  return ((
     action: (req: NextRequest) => Effect.Effect<unknown, unknown, unknown>,
   ): RouteHandler<unknown> => {
     const run = (
       req: NextRequest,
-      layer: Layer.Layer<unknown, unknown, never>,
+      layer: Layer.Layer<unknown, unknown, RequestStateDeps>,
     ) => {
       const requestStartedAt = Date.now();
       const requestContext = {
@@ -106,9 +96,8 @@ export function defineRoute(config: {
       const responseHeaders = emptyResponseHeaderSink();
 
       return Effect.runPromise(
-        action(req).pipe(
+        middleware(action(req)).pipe(
           Effect.provide(layer),
-          middleware,
           Effect.provide(buildRequestStateLayer("route", req)),
           Effect.tapBoth({
             onFailure: (error) => {
@@ -164,13 +153,13 @@ export function defineRoute(config: {
     const routeFn = ((req: NextRequest) =>
       run(
         req,
-        config.layer as Layer.Layer<unknown, unknown, never>,
+        config.layer as Layer.Layer<unknown, unknown, RequestStateDeps>,
       )) as RouteHandler<unknown>;
 
     (routeFn as { [RouteOverride]: typeof run })[RouteOverride] = run;
 
     return routeFn;
-  };
+  }) as ReturnType<typeof defineRoute<LOut, LErr>>;
 }
 
 /**
@@ -182,7 +171,7 @@ export function defineRoute(config: {
  */
 export function testRoute<LOut>(
   route: RouteHandler<LOut>,
-  options: { layer: Layer.Layer<LOut, unknown, never> },
+  options: { layer: Layer.Layer<LOut, unknown, RequestStateDeps> },
 ) {
   return (req: NextRequest) => route[RouteOverride](req, options.layer);
 }

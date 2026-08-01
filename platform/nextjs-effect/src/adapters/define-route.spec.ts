@@ -38,11 +38,6 @@ class TokenService extends Context.Tag("route/Token")<
   { token: string }
 >() {}
 
-class SecretService extends Context.Tag("route/Secret")<
-  SecretService,
-  { secret: string }
->() {}
-
 const mockRequest = (url = "http://localhost/test") => new NextRequest(url);
 
 // ---------------------------------------------------------------------------
@@ -243,7 +238,8 @@ describe("app.route - saga independence", () => {
   test("a saga-providing middleware makes the Saga service available", async () => {
     // When the application composes a saga wrapper as middleware, the handler
     // observes the ambient `Saga` — proving saga behavior is opt-in middleware,
-    // not something defineRoute bakes in.
+    // not something defineRoute bakes in. The middleware is applied INSIDE the
+    // layer, so it provides `Saga` directly to the handler it wraps.
     const withScopedSaga = <A, E, R>(next: Effect.Effect<A, E, R>) =>
       Effect.gen(function* () {
         const scope = yield* Effect.scope;
@@ -264,31 +260,29 @@ describe("app.route - saga independence", () => {
     expect(await response.json()).toBe(true);
   });
 
-  test("middleware can satisfy a requirement introduced by the configured layer", async () => {
-    // The layer OUTPUTS TokenService but REQUIRES SecretService — a requirement
-    // it introduces that defineRoute knows nothing about. A middleware supplies
-    // SecretService, and the handler resolves TokenService successfully.
-    const TokenLayer = Layer.effect(
-      TokenService,
-      Effect.gen(function* () {
-        const secret = yield* SecretService;
-        return { token: `token-${secret.secret}` };
-      }),
-    );
+  test("middleware can read a service the configured layer provides", async () => {
+    // With middleware applied INSIDE the layer, a middleware may require a
+    // service the configured layer provides — the route analog of the page and
+    // server-action "middleware wraps the handler with request context" tests.
+    const seen: string[] = [];
+    const TokenLayer = Layer.succeed(TokenService, { token: "abc" });
 
-    const provideSecret = <A, E, R>(next: Effect.Effect<A, E, R>) =>
-      next.pipe(Effect.provideService(SecretService, { secret: "s3cr3t" }));
+    const readToken = <A, E, R>(next: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        const { token } = yield* TokenService;
+        seen.push(token);
+        return yield* next;
+      });
 
     const route = defineRoute({
       layer: TokenLayer,
-      middleware: provideSecret,
+      middleware: readToken,
     });
 
-    const response = await route(() =>
-      TokenService.pipe(Effect.map((t) => t.token)),
-    )(mockRequest());
+    const response = await route(() => Effect.succeed("done"))(mockRequest());
 
-    expect(await response.json()).toBe("token-s3cr3t");
+    expect(await response.json()).toBe("done");
+    expect(seen).toEqual(["abc"]);
   });
 });
 

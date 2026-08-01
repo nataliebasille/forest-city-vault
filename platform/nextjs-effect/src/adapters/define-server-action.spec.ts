@@ -2,7 +2,6 @@ import { describe, test } from "node:test";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
-import { Saga } from "@forest-city-vault/platform-saga";
 import { compose } from "effect/Function";
 import { Headers, HeadersState } from "./request/headers";
 import { CookiesState } from "./request/cookies";
@@ -57,7 +56,7 @@ const requestState = (
 
 const test$ = <Args extends readonly unknown[], A, LOut>(
   action: ServerActionHandler<Args, A, LOut>,
-  layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>,
+  layer: Layer.Layer<LOut, unknown, RequestStateDeps>,
   headers?: Record<string, string>,
 ) => testServerAction(action, { layer, requestState: requestState(headers) });
 

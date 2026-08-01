@@ -13,20 +13,19 @@ export { AppLive } from "./live";
  * — or roll back together on any failure, defect or interruption. Handlers get
  * this atomicity for free; `defineRoute` itself is saga-agnostic.
  *
- * `flow` composes left-to-right, so `withSaga` is the *outermost* transformation
- * and request tracing runs inside it. Applied by {@link defineRoute} around the
- * layer-provided handler, the effective structure per request is:
+ * `flow` composes left-to-right, so `withSaga` is the *outermost* wrapper around
+ * the handler and request tracing runs inside it. {@link defineRoute} applies that
+ * middleware *inside* the layer, so the effective structure per request is:
  *
  * ```ts
  * withSaga(
- *   RequestTraceMiddleware(
- *     handler.pipe(Effect.provide(AppLive)),
- *   ),
- * );
+ *   RequestTraceMiddleware(handler),
+ * ).pipe(Effect.provide(AppLive));
  * ```
  *
- * Because `AppLive` is provided *inside* `withSaga`, the saga-scoped `Database`
- * transaction is opened within the request's saga.
+ * `AppLive` declares its saga-scoped {@link Database} via `provideSagaScoped`, and
+ * `withSaga` — running inside `AppLive`'s context — rebuilds it per request bound
+ * to a fresh request saga, so the transaction is opened within that saga.
  */
 export const route = defineRoute({
   layer: AppLive,

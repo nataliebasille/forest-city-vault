@@ -2,7 +2,6 @@ import { describe, test } from "node:test";
 import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
-import { Saga } from "@forest-city-vault/platform-saga";
 import { compose } from "effect/Function";
 import { Headers, HeadersState } from "./request/headers";
 import { CookiesState } from "./request/cookies";
@@ -53,7 +52,7 @@ const requestState = (
 
 const test$ = <Props, A, LOut>(
   page: PageHandler<Props, A, LOut>,
-  layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>,
+  layer: Layer.Layer<LOut, unknown, RequestStateDeps>,
   headers?: Record<string, string>,
 ) => testPage(page, { layer, requestState: requestState(headers) });
 
@@ -141,15 +140,6 @@ describe("app.page - runtime", () => {
       Layer.succeed(CounterService, { value: 55 }),
     );
     expect(await run(undefined)).toBe(55);
-  });
-
-  test("Saga service is available to the handler", async () => {
-    const page = definePage({ layer: Layer.empty });
-    const run = test$(
-      page("saga", () => Saga.pipe(Effect.map(() => "has-saga"))),
-      Layer.empty,
-    );
-    expect(await run(undefined)).toBe("has-saga");
   });
 
   test("middleware wraps handler", async () => {

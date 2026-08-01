@@ -1,4 +1,3 @@
-import { Saga, withSaga } from "@forest-city-vault/platform-saga";
 import { Effect, Layer } from "effect";
 import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
@@ -30,7 +29,7 @@ export type ServerActionHandler<Args extends readonly unknown[], A, LOut> = ((
   ...args: Args
 ) => Promise<A>) & {
   readonly [ServerActionOverride]: (
-    layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>,
+    layer: Layer.Layer<LOut, unknown, RequestStateDeps>,
     requestState: Layer.Layer<RequestStateDeps, unknown, never>,
     args: Args,
   ) => Promise<A>;
@@ -51,13 +50,17 @@ export type ServerActionHandler<Args extends readonly unknown[], A, LOut> = ((
  *
  * Wiring, from the handler outwards:
  *  1. `middleware` wraps the handler, so it can annotate logs (e.g. with a
- *     request id) around everything the handler does.
+ *     request id) around everything the handler does. Because it is applied
+ *     *inside* the layer, a middleware may require services the `layer`
+ *     provides.
  *  2. `layer` is provided, satisfying the handler's and middleware's services.
- *     The layer may require request-state services (provided below) and may
- *     require {@link Saga} (satisfied next).
- *  3. {@link withSaga} opens one scope per invocation and provides `Saga`, so a
- *     handler may require `Saga` without it counting as a missing dependency.
- *  4. The page request-state layer is provided (backed by `next/headers`).
+ *     The layer may require request-state services (provided below).
+ *  3. The page request-state layer is provided (backed by `next/headers`).
+ *
+ * `defineServerAction` is deliberately saga-agnostic: it opens no saga and
+ * provides no `Saga` service. An action that wants saga semantics (e.g. a
+ * request-scoped transaction) composes `withSaga` into its `middleware` and
+ * declares its saga-scoped services via `provideSagaScoped` on the `layer`.
  *
  * The boundary logs one lifecycle line per invocation — `serverAction.completed`
  * on success, `serverAction.failed` on a typed failure, `serverAction.defect` on
@@ -70,14 +73,14 @@ export type ServerActionHandler<Args extends readonly unknown[], A, LOut> = ((
  * {@link testServerAction} without the production layer ever being constructed.
  */
 export function defineServerAction<LOut, LErr>(config: {
-  layer: Layer.Layer<LOut, LErr, Saga | RequestStateDeps>;
+  layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
   middleware?: ServerActionMiddleware;
 }): <Args extends readonly unknown[], A, E, R>(
   name: string,
   action: (
     ...args: Args
   ) => Effect.Effect<A, E, R> &
-    MustBeNever<Exclude<R, LOut | RequestStateDeps | Saga>>,
+    MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => ServerActionHandler<Args, A, LOut> {
   const middleware = config.middleware ?? identityTransform;
 
@@ -86,7 +89,7 @@ export function defineServerAction<LOut, LErr>(config: {
     action: (...args: unknown[]) => Effect.Effect<unknown, unknown, unknown>,
   ): ServerActionHandler<unknown[], unknown, unknown> => {
     const run = (
-      layer: Layer.Layer<unknown, unknown, Saga | RequestStateDeps>,
+      layer: Layer.Layer<unknown, unknown, RequestStateDeps>,
       requestState: Layer.Layer<RequestStateDeps, unknown, never>,
       args: unknown[],
     ) => {
@@ -96,7 +99,6 @@ export function defineServerAction<LOut, LErr>(config: {
       return Effect.runPromise(
         middleware(action(...args)).pipe(
           Effect.provide(layer),
-          withSaga,
           Effect.provide(requestState),
           Effect.tapBoth({
             onFailure: (error) =>
@@ -126,7 +128,7 @@ export function defineServerAction<LOut, LErr>(config: {
 
     const actionFn = ((...args: unknown[]) =>
       run(
-        config.layer as Layer.Layer<unknown, unknown, Saga | RequestStateDeps>,
+        config.layer as Layer.Layer<unknown, unknown, RequestStateDeps>,
         buildRequestStateLayer("page"),
         args,
       )) as ServerActionHandler<unknown[], unknown, unknown>;
@@ -150,7 +152,7 @@ export function defineServerAction<LOut, LErr>(config: {
 export function testServerAction<Args extends readonly unknown[], A, LOut>(
   action: ServerActionHandler<Args, A, LOut>,
   options: {
-    layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>;
+    layer: Layer.Layer<LOut, unknown, RequestStateDeps>;
     requestState: Layer.Layer<RequestStateDeps, unknown, never>;
   },
 ) {

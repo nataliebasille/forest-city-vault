@@ -142,7 +142,7 @@ describe("route", () => {
 
       const committingRoute = route(() =>
         Effect.gen(function* () {
-          const saga = yield* Saga;
+          const saga = Option.getOrThrow(yield* Effect.serviceOption(Saga));
           yield* saga.register({
             commit: Effect.sync(() => {
               events.push("commit");
@@ -165,7 +165,7 @@ describe("route", () => {
 
       const failingRoute = route(() =>
         Effect.gen(function* () {
-          const saga = yield* Saga;
+          const saga = Option.getOrThrow(yield* Effect.serviceOption(Saga));
           yield* saga.register({
             commit: Effect.sync(() => {
               events.push("commit");
@@ -188,7 +188,7 @@ describe("route", () => {
 
       const defectingRoute = route(() =>
         Effect.gen(function* () {
-          const saga = yield* Saga;
+          const saga = Option.getOrThrow(yield* Effect.serviceOption(Saga));
           yield* saga.register({
             commit: Effect.sync(() => {
               events.push("commit");

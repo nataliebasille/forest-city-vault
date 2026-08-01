@@ -6,41 +6,53 @@ import {
   databaseSagaScoped,
   DatabaseLive,
 } from "@forest-city-vault/infrastructure-database";
+import { provideSagaScoped } from "@forest-city-vault/platform-saga";
 import { Layer } from "effect";
+import { RequestTraceLayer } from "./middleware/request-trace";
 
 /**
  * Services shared by every Clover route, regardless of how the {@link Database}
  * is provided. Kept separate so the transactional and pooled app layers below
  * differ *only* in their database wiring.
+ *
+ * Includes {@link RequestTraceLayer} so every route carries a {@link RequestTrace}
+ * derived from the request headers — provided as a layer (not middleware) so it
+ * satisfies `defineRoute`'s dependency check.
  */
 const AppCommon = Layer.mergeAll(
   CloverConfig.Default,
   SystemClock,
   SystemIdGenerator,
   FetchHttpClient.layer,
+  RequestTraceLayer,
 );
 
 /**
  * Production dependency layer for Clover routes.
  *
- * The {@link Database} is provided **saga-scoped**: `databaseSagaScoped` opens a
- * transaction (on a connection from `DatabaseLive`'s pool) and exposes the
- * transaction-bound `Database`, enlisting it as a participant of the ambient
- * saga. The default `route` helper composes `withSaga` as middleware, so this
- * layer is built inside the request's saga — each request gets its own
- * transaction that the saga commits on success or rolls back on any failure,
- * defect or interruption. Handlers simply `yield* Database` and get that
- * transaction; the saga scoping requires no route changes.
+ * The {@link Database} is provided **saga-scoped** via `provideSagaScoped`: it
+ * declares `databaseSagaScoped` as the boundary's saga-scoped layer, and the
+ * `withSaga` middleware the `route` helper composes rebuilds it per request —
+ * opening a transaction (on a connection from `DatabaseLive`'s pool), binding the
+ * transaction-scoped {@link Database}, and enlisting it as a participant of the
+ * request saga. Each request gets its own transaction that the saga commits on
+ * success or rolls back on any failure, defect or interruption. Handlers simply
+ * `yield* Database` and get that transaction.
  *
- * The residual `Saga` requirement is satisfied by the `withSaga` middleware the
- * `route` helper composes — not by `defineRoute`, which is saga-agnostic.
+ * Because `provideSagaScoped` discharges the `Saga` requirement internally (it is
+ * satisfied by the rebuilding `withSaga`, not by `defineRoute`), this layer has
+ * no residual `Saga` requirement — which is what lets the saga-agnostic
+ * `defineRoute` apply its middleware *inside* the layer. The base
+ * `DatabaseLive` pool is provided alongside so `withSaga` can build the
+ * per-request transaction.
  *
  * Kept in its own module so tests can swap it via `mock.module` without ever
  * constructing the production resources.
  */
-export const AppLive = Layer.merge(
+export const AppLive = Layer.mergeAll(
   AppCommon,
-  databaseSagaScoped.pipe(Layer.provide(DatabaseLive)),
+  DatabaseLive,
+  provideSagaScoped(databaseSagaScoped),
 ).pipe(Layer.orDie);
 
 /**

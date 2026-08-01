@@ -9,6 +9,9 @@ import { CloverConfig } from "@forest-city-vault/core-config";
 import { staticIdGenerator } from "@forest-city-vault/core-id-generator";
 import { databaseSagaScoped } from "@forest-city-vault/infrastructure-database";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
+import { provideSagaScoped } from "@forest-city-vault/platform-saga";
+
+import { RequestTraceLayer } from "../runtime/middleware/request-trace";
 
 export type TestDb = ReturnType<typeof drizzle>;
 
@@ -76,15 +79,19 @@ export async function makeRouteTest<T>(
     FetchHttpClient.layer,
     staticClock(fixedTime),
     staticIdGenerator("00000000-0000-7000-8000-000000000001"),
+    RequestTraceLayer,
   );
 
   // Mirror the production `live.ts` compositions over the same test database:
-  // `AppLive` provides the saga-scoped (transactional) Database, `AppLivePooled`
-  // provides the base pool Database. Both back onto the same PGlite instance, so
-  // the returned `db` handle observes whichever the route under test uses.
-  const testLayer = Layer.merge(
+  // `AppLive` provides the saga-scoped (transactional) Database via
+  // `provideSagaScoped` (rebuilt per request by the `route` helper's `withSaga`),
+  // `AppLivePooled` provides the base pool Database. Both back onto the same
+  // PGlite instance, so the returned `db` handle observes whichever the route
+  // under test uses.
+  const testLayer = Layer.mergeAll(
     commonLayer,
-    databaseSagaScoped.pipe(Layer.provide(databaseLayer)),
+    databaseLayer,
+    provideSagaScoped(databaseSagaScoped),
   );
 
   const pooledAcquireProbe = Layer.effectDiscard(

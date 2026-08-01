@@ -1,4 +1,3 @@
-import { Saga, withSaga } from "@forest-city-vault/platform-saga";
 import { Effect, Layer } from "effect";
 import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
@@ -26,7 +25,7 @@ const PageOverride = Symbol.for("platform-nextjs-effect/PageOverride");
  */
 export type PageHandler<Props, A, LOut> = ((props: Props) => Promise<A>) & {
   readonly [PageOverride]: (
-    layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>,
+    layer: Layer.Layer<LOut, unknown, RequestStateDeps>,
     requestState: Layer.Layer<RequestStateDeps, unknown, never>,
     props: Props,
   ) => Promise<A>;
@@ -48,14 +47,17 @@ export type PageHandler<Props, A, LOut> = ((props: Props) => Promise<A>) & {
  *
  * Wiring, from the handler outwards:
  *  1. `middleware` wraps the handler, so it can annotate logs (e.g. with a
- *     request id) around everything the handler does.
+ *     request id) around everything the handler does. Because it is applied
+ *     *inside* the layer, a middleware may require services the `layer`
+ *     provides.
  *  2. `layer` is provided, satisfying the handler's and middleware's services.
- *     The layer may require request-state services (provided below) and may
- *     require {@link Saga} (satisfied next).
- *  3. {@link withSaga} opens one scope per render and provides `Saga`, so a
- *     handler may require `Saga` — and provide saga-scoped layers such as a
- *     database transaction — without it counting as a missing dependency.
- *  4. The page request-state layer is provided (backed by `next/headers`).
+ *     The layer may require request-state services (provided below).
+ *  3. The page request-state layer is provided (backed by `next/headers`).
+ *
+ * `definePage` is deliberately saga-agnostic: it opens no saga and provides no
+ * `Saga` service. A page that wants saga semantics (e.g. a request-scoped
+ * transaction) composes `withSaga` into its `middleware` and declares its
+ * saga-scoped services via `provideSagaScoped` on the `layer`.
  *
  * The boundary logs one lifecycle line per render — `page.completed` on success,
  * `page.failed` on a typed failure, `page.defect` on an unexpected defect — each
@@ -69,14 +71,14 @@ export type PageHandler<Props, A, LOut> = ((props: Props) => Promise<A>) & {
  * {@link testPage} without the production layer ever being constructed.
  */
 export function definePage<LOut, LErr>(config: {
-  layer: Layer.Layer<LOut, LErr, Saga | RequestStateDeps>;
+  layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
   middleware?: PageMiddleware;
 }): <Props, A, E, R>(
   name: string,
   handler: (
     props: Props,
   ) => Effect.Effect<A, E, R> &
-    MustBeNever<Exclude<R, LOut | RequestStateDeps | Saga>>,
+    MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => PageHandler<Props, A, LOut> {
   const middleware = config.middleware ?? identityTransform;
 
@@ -85,7 +87,7 @@ export function definePage<LOut, LErr>(config: {
     handler: (props: unknown) => Effect.Effect<unknown, unknown, unknown>,
   ): PageHandler<unknown, unknown, unknown> => {
     const run = (
-      layer: Layer.Layer<unknown, unknown, Saga | RequestStateDeps>,
+      layer: Layer.Layer<unknown, unknown, RequestStateDeps>,
       requestState: Layer.Layer<RequestStateDeps, unknown, never>,
       props: unknown,
     ) => {
@@ -95,7 +97,6 @@ export function definePage<LOut, LErr>(config: {
       return Effect.runPromise(
         middleware(handler(props)).pipe(
           Effect.provide(layer),
-          withSaga,
           Effect.provide(requestState),
           Effect.tapBoth({
             onFailure: (error) =>
@@ -125,7 +126,7 @@ export function definePage<LOut, LErr>(config: {
 
     const pageFn = ((props: unknown) =>
       run(
-        config.layer as Layer.Layer<unknown, unknown, Saga | RequestStateDeps>,
+        config.layer as Layer.Layer<unknown, unknown, RequestStateDeps>,
         buildRequestStateLayer("page"),
         props,
       )) as PageHandler<unknown, unknown, unknown>;
@@ -148,7 +149,7 @@ export function definePage<LOut, LErr>(config: {
 export function testPage<Props, A, LOut>(
   page: PageHandler<Props, A, LOut>,
   options: {
-    layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>;
+    layer: Layer.Layer<LOut, unknown, RequestStateDeps>;
     requestState: Layer.Layer<RequestStateDeps, unknown, never>;
   },
 ) {
