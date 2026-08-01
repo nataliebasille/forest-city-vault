@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { Cookies } from "./cookies";
-import { Headers } from "./headers";
+import { CookiesState } from "./cookies";
+import { HeadersState } from "./headers";
 import { Layer } from "effect";
-import { Body } from "./body";
+import { BodyState } from "./body";
 
-const REQUEST_STATE_DEPS = [Body, Cookies, Headers] as const;
+const REQUEST_STATE_DEPS = [BodyState, CookiesState, HeadersState] as const;
 export type RequestStateDeps = InstanceType<
   (typeof REQUEST_STATE_DEPS)[number]
 >;

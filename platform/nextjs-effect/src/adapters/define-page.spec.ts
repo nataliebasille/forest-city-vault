@@ -8,27 +8,23 @@ import { Headers, HeadersState } from "./request/headers";
 import { CookiesState } from "./request/cookies";
 import { BodyState } from "./request/body";
 import { RequestStateDeps } from "./request/layer";
-import {
-  defineServerAction,
-  testServerAction,
-  ServerActionHandler,
-} from "./define-server-action";
+import { definePage, testPage, PageHandler } from "./define-page";
 
 // ---------------------------------------------------------------------------
 // Test services + request-state stand-in
 // ---------------------------------------------------------------------------
 
-class CounterService extends Context.Tag("action/Counter")<
+class CounterService extends Context.Tag("page/Counter")<
   CounterService,
   { value: number }
 >() {}
 
-class LabelService extends Context.Tag("action/Label")<
+class LabelService extends Context.Tag("page/Label")<
   LabelService,
   { text: string }
 >() {}
 
-class TraceService extends Context.Tag("action/Trace")<
+class TraceService extends Context.Tag("page/Trace")<
   TraceService,
   { requestId: string }
 >() {}
@@ -55,56 +51,56 @@ const requestState = (
     Layer.succeed(BodyState, Effect.succeed(undefined)),
   );
 
-const test$ = <Args extends readonly unknown[], A, LOut>(
-  action: ServerActionHandler<Args, A, LOut>,
+const test$ = <Props, A, LOut>(
+  page: PageHandler<Props, A, LOut>,
   layer: Layer.Layer<LOut, unknown, Saga | RequestStateDeps>,
   headers?: Record<string, string>,
-) => testServerAction(action, { layer, requestState: requestState(headers) });
+) => testPage(page, { layer, requestState: requestState(headers) });
 
 // ---------------------------------------------------------------------------
 // Typing tests
 // ---------------------------------------------------------------------------
 
-describe("app.serverAction - types", () => {
+describe("app.page - types", () => {
   test("yield* unprovided Dep in handler is a type error", () => {
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.succeed(CounterService, { value: 1 }),
     });
-    action(
+    page(
       "uses-label",
       // @ts-expect-error - LabelService is not provided by the app
       () => LabelService.pipe(Effect.map((l) => l.text)),
     );
   });
 
-  test("action return type is Promise<A>", () => {
-    const actionFn = defineServerAction({ layer: Layer.empty })(
-      "answer",
-      () => Effect.succeed(123),
+  test("page return type is Promise<A>", () => {
+    const pageFn = definePage({ layer: Layer.empty })("home", () =>
+      Effect.succeed("<main />"),
     );
-    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<Promise<number>>();
+    expectTypeOf<ReturnType<typeof pageFn>>().toEqualTypeOf<Promise<string>>();
   });
 
-  test("action forwards its argument list to the handler", () => {
-    const actionFn = defineServerAction({ layer: Layer.empty })(
-      "concat",
-      (a: string, b: number) => Effect.succeed(`${a}:${b}`),
+  test("page forwards its props object to the handler", () => {
+    const pageFn = definePage({ layer: Layer.empty })(
+      "vendor",
+      (props: { params: Promise<{ slug: string }> }) =>
+        Effect.promise(() => props.params).pipe(Effect.map((p) => p.slug)),
     );
-    expectTypeOf<Parameters<typeof actionFn>>().toEqualTypeOf<
-      [string, number]
+    expectTypeOf<Parameters<typeof pageFn>>().toEqualTypeOf<
+      [{ params: Promise<{ slug: string }> }]
     >();
-    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<Promise<string>>();
+    expectTypeOf<ReturnType<typeof pageFn>>().toEqualTypeOf<Promise<string>>();
   });
 
   test("middleware preserves the resolved value type", () => {
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.empty,
       middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
         next.pipe(Effect.tap(() => Effect.void)),
     });
-    const actionFn = action("m", () => Effect.succeed("handled" as const));
-    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<
-      Promise<"handled">
+    const pageFn = page("m", () => Effect.succeed("rendered" as const));
+    expectTypeOf<ReturnType<typeof pageFn>>().toEqualTypeOf<
+      Promise<"rendered">
     >();
   });
 });
@@ -113,39 +109,52 @@ describe("app.serverAction - types", () => {
 // Runtime tests
 // ---------------------------------------------------------------------------
 
-describe("app.serverAction - runtime", () => {
+describe("app.page - runtime", () => {
   test("resolves with handler value", async () => {
-    const action = defineServerAction({ layer: Layer.empty });
+    const page = definePage({ layer: Layer.empty });
     const run = test$(
-      action("ok", () => Effect.succeed("ok")),
+      page("ok", () => Effect.succeed("ok")),
       Layer.empty,
     );
-    expect(await run()).toBe("ok");
+    expect(await run(undefined)).toBe("ok");
   });
 
-  test("forwards arguments to the handler", async () => {
-    const action = defineServerAction({ layer: Layer.empty });
+  test("forwards props to the handler", async () => {
+    const page = definePage({ layer: Layer.empty });
     const run = test$(
-      action("sum", (a: number, b: number) => Effect.succeed(a + b)),
+      page("slug", (props: { params: Promise<{ slug: string }> }) =>
+        Effect.promise(() => props.params).pipe(Effect.map((p) => p.slug)),
+      ),
       Layer.empty,
     );
-    expect(await run(2, 3)).toBe(5);
+    expect(await run({ params: Promise.resolve({ slug: "acme" }) })).toBe(
+      "acme",
+    );
   });
 
   test("service provided via layer is accessible in handler", async () => {
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.succeed(CounterService, { value: 55 }),
     });
     const run = test$(
-      action("counter", () => CounterService.pipe(Effect.map((c) => c.value))),
+      page("counter", () => CounterService.pipe(Effect.map((c) => c.value))),
       Layer.succeed(CounterService, { value: 55 }),
     );
-    expect(await run()).toBe(55);
+    expect(await run(undefined)).toBe(55);
+  });
+
+  test("Saga service is available to the handler", async () => {
+    const page = definePage({ layer: Layer.empty });
+    const run = test$(
+      page("saga", () => Saga.pipe(Effect.map(() => "has-saga"))),
+      Layer.empty,
+    );
+    expect(await run(undefined)).toBe("has-saga");
   });
 
   test("middleware wraps handler", async () => {
     const order: string[] = [];
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.empty,
       middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
         Effect.gen(function* () {
@@ -156,9 +165,9 @@ describe("app.serverAction - runtime", () => {
         }),
     });
     await test$(
-      action("mw", () => Effect.sync(() => order.push("handler"))),
+      page("mw", () => Effect.sync(() => order.push("handler"))),
       Layer.empty,
-    )();
+    )(undefined);
     expect(order).toEqual(["before", "handler", "after"]);
   });
 
@@ -174,21 +183,21 @@ describe("app.serverAction - runtime", () => {
           return r;
         });
 
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.empty,
       middleware: compose(m("A"), m("B")),
     });
     await test$(
-      action("mw", () => Effect.sync(() => order.push("handler"))),
+      page("mw", () => Effect.sync(() => order.push("handler"))),
       Layer.empty,
-    )();
+    )(undefined);
     expect(order).toEqual(["B:in", "A:in", "handler", "A:out", "B:out"]);
   });
 
   test("Headers request state is accessible in the handler", async () => {
-    const action = defineServerAction({ layer: Layer.empty });
+    const page = definePage({ layer: Layer.empty });
     const run = test$(
-      action("read-header", () =>
+      page("read-header", () =>
         Effect.gen(function* () {
           const headers = yield* Headers;
           return headers.get("x-request-id");
@@ -197,16 +206,77 @@ describe("app.serverAction - runtime", () => {
       Layer.empty,
       { "x-request-id": "req-123" },
     );
-    expect(await run()).toBe("req-123");
+    expect(await run(undefined)).toBe("req-123");
+  });
+
+  test("does not read request state unless the handler accesses it", async () => {
+    // Providing the page request-state layer must not touch `next/headers`:
+    // only a handler that actually reads it should. This is what keeps a page
+    // that ignores request state eligible for static rendering instead of being
+    // forced dynamic by an unconditional `headers()`/`cookies()` call.
+    let headerReads = 0;
+    const spyRequestState = Layer.mergeAll(
+      Layer.succeed(
+        HeadersState,
+        Effect.sync(() => {
+          headerReads++;
+          return new globalThis.Headers({ "x-request-id": "req-1" }) as never;
+        }),
+      ),
+      Layer.succeed(
+        CookiesState,
+        Effect.succeed({
+          get: () => undefined,
+          getAll: () => [],
+          has: () => false,
+          toString: () => "",
+        } as never),
+      ),
+      Layer.succeed(BodyState, Effect.succeed(undefined)),
+    );
+
+    const page = definePage({ layer: Layer.empty });
+
+    const noRead = testPage(page("no-read", () => Effect.succeed("static")), {
+      layer: Layer.empty,
+      requestState: spyRequestState,
+    });
+    expect(await noRead(undefined)).toBe("static");
+    expect(headerReads).toBe(0);
+
+    const reads = testPage(
+      page("reads", () =>
+        Effect.gen(function* () {
+          const h = yield* Headers;
+          return h.get("x-request-id");
+        }),
+      ),
+      { layer: Layer.empty, requestState: spyRequestState },
+    );
+    expect(await reads(undefined)).toBe("req-1");
+    expect(headerReads).toBe(1);
   });
 
   test("a failing handler rejects the returned promise", async () => {
-    const action = defineServerAction({ layer: Layer.empty });
+    const page = definePage({ layer: Layer.empty });
     const run = test$(
-      action("boom", () => Effect.fail(new Error("kaboom"))),
+      page("boom", () => Effect.fail(new Error("kaboom"))),
       Layer.empty,
     );
-    await expect(run()).rejects.toThrow("kaboom");
+    await expect(run(undefined)).rejects.toThrow("kaboom");
+  });
+
+  test("a defect in the handler rejects the returned promise", async () => {
+    const page = definePage({ layer: Layer.empty });
+    const run = test$(
+      page("defect", () =>
+        Effect.sync(() => {
+          throw new Error("render exploded");
+        }),
+      ),
+      Layer.empty,
+    );
+    await expect(run(undefined)).rejects.toThrow("render exploded");
   });
 
   test("a layer service derived from request headers is visible to the handler", async () => {
@@ -221,15 +291,13 @@ describe("app.serverAction - runtime", () => {
       }),
     );
 
-    const action = defineServerAction({ layer: TraceLayer });
+    const page = definePage({ layer: TraceLayer });
     const run = test$(
-      action("trace", () =>
-        TraceService.pipe(Effect.map((t) => t.requestId)),
-      ),
+      page("trace", () => TraceService.pipe(Effect.map((t) => t.requestId))),
       TraceLayer,
       { "x-request-id": "req-abc" },
     );
-    expect(await run()).toBe("req-abc");
+    expect(await run(undefined)).toBe("req-abc");
   });
 
   test("middleware wraps the handler with request context", async () => {
@@ -242,7 +310,7 @@ describe("app.serverAction - runtime", () => {
       }),
     );
 
-    const action = defineServerAction({
+    const page = definePage({
       layer: TraceLayer,
       middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
         Effect.gen(function* () {
@@ -253,30 +321,30 @@ describe("app.serverAction - runtime", () => {
     });
 
     const run = test$(
-      action("trace", () => Effect.succeed("done")),
+      page("trace", () => Effect.succeed("done")),
       TraceLayer,
       { "x-request-id": "req-xyz" },
     );
-    expect(await run()).toBe("done");
+    expect(await run(undefined)).toBe("done");
     expect(seen).toEqual(["req-xyz"]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// testServerAction - dependency override
+// testPage - dependency override
 // ---------------------------------------------------------------------------
 
-describe("app.serverAction - testServerAction overrides", () => {
+describe("app.page - testPage overrides", () => {
   test("overrides the layer value in the handler", async () => {
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.succeed(CounterService, { value: 1 }),
     });
-    const submit = action("counter", () =>
+    const render = page("counter", () =>
       CounterService.pipe(Effect.map((c) => c.value)),
     );
 
-    const run = test$(submit, Layer.succeed(CounterService, { value: 999 }));
-    expect(await run()).toBe(999);
+    const run = test$(render, Layer.succeed(CounterService, { value: 999 }));
+    expect(await run(undefined)).toBe(999);
   });
 
   test("does not build the production layer", async () => {
@@ -289,19 +357,19 @@ describe("app.serverAction - testServerAction overrides", () => {
       }),
     );
 
-    const action = defineServerAction({ layer: RealCounter });
-    const submit = action("counter", () =>
+    const page = definePage({ layer: RealCounter });
+    const render = page("counter", () =>
       CounterService.pipe(Effect.map((c) => c.value)),
     );
 
-    const run = test$(submit, Layer.succeed(CounterService, { value: 42 }));
-    expect(await run()).toBe(42);
+    const run = test$(render, Layer.succeed(CounterService, { value: 42 }));
+    expect(await run(undefined)).toBe(42);
     expect(realBuilt).toBe(false);
   });
 
   test("preserves middleware behavior under override", async () => {
     const order: string[] = [];
-    const action = defineServerAction({
+    const page = definePage({
       layer: Layer.succeed(CounterService, { value: 1 }),
       middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
         Effect.gen(function* () {
@@ -311,12 +379,12 @@ describe("app.serverAction - testServerAction overrides", () => {
           return r;
         }),
     });
-    const submit = action("counter", () =>
+    const render = page("counter", () =>
       CounterService.pipe(Effect.map((c) => c.value)),
     );
 
-    const run = test$(submit, Layer.succeed(CounterService, { value: 5 }));
-    expect(await run()).toBe(5);
+    const run = test$(render, Layer.succeed(CounterService, { value: 5 }));
+    expect(await run(undefined)).toBe(5);
     expect(order).toEqual(["before", "after"]);
   });
 });

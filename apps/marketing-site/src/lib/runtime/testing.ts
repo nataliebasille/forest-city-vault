@@ -1,9 +1,9 @@
 import {
-  Body,
-  Cookies,
-  Headers,
+  BodyState,
+  CookiesState,
+  HeadersState,
 } from "@forest-city-vault/platform-nextjs-effect";
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { RequestTrace, type RequestTraceEntity } from "./request-trace";
 
 /**
@@ -29,13 +29,19 @@ export function staticRequestTrace(
  */
 export function testRequestState(headers: Record<string, string> = {}) {
   return Layer.mergeAll(
-    Layer.succeed(Headers, new globalThis.Headers(headers) as never),
-    Layer.succeed(Cookies, {
-      get: () => undefined,
-      getAll: () => [],
-      has: () => false,
-      toString: () => "",
-    } as never),
-    Layer.succeed(Body, undefined),
+    Layer.succeed(
+      HeadersState,
+      Effect.succeed(new globalThis.Headers(headers) as never),
+    ),
+    Layer.succeed(
+      CookiesState,
+      Effect.succeed({
+        get: () => undefined,
+        getAll: () => [],
+        has: () => false,
+        toString: () => "",
+      } as never),
+    ),
+    Layer.succeed(BodyState, Effect.succeed(undefined)),
   );
 }

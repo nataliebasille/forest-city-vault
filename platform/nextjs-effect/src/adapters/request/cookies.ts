@@ -8,8 +8,8 @@ type CookieStore = Pick<
   "get" | "getAll" | "has" | "toString"
 >;
 
-export class Cookies extends createRequestStateTag("Cookies")<
-  Cookies,
+export class CookiesState extends createRequestStateTag("Cookies")<
+  CookiesState,
   CookieStore
 >({
   fromRequest(req) {
@@ -20,6 +20,14 @@ export class Cookies extends createRequestStateTag("Cookies")<
     return Effect.promise(() => nextCookies());
   },
 }) {}
+
+/**
+ * Reads the ambient request cookies. On a page this calls `next/headers`'
+ * `cookies()` **lazily** — only when a handler yields this — and memoizes the
+ * result per request, so pages that never read cookies are not forced into
+ * dynamic rendering. `yield* Cookies` resolves to the cookie store directly.
+ */
+export const Cookies = Effect.flatMap(CookiesState, (resolve) => resolve);
 
 export function* cookies() {
   return yield* Cookies;
