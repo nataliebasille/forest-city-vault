@@ -56,8 +56,8 @@ export const RequestTraceLayer = Layer.effect(
  * request trace. Applied as the innermost transform in {@link action}, purely for
  * log correlation — it leaves the success and error channels untouched.
  */
-export const RequestTraceMiddleware = (
-  self: Effect.Effect<unknown, unknown, unknown>,
+export const RequestTraceMiddleware = <A, E, R>(
+  self: Effect.Effect<A, E, R>,
 ) =>
   Effect.gen(function* () {
     const trace = yield* RequestTrace;

@@ -76,6 +76,23 @@ describe("app.serverAction - types", () => {
     );
   });
 
+  test("middleware requiring an unprovided service is a type error", () => {
+    // A middleware is layer-aware: its requirement channel is bounded by the
+    // configured layer, so requiring a service the layer does not provide
+    // (LabelService) is rejected at the `defineServerAction` call.
+    const layer = Layer.succeed(CounterService, { value: 1 });
+    const readsUnprovided = <A, E, R>(next: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        yield* LabelService;
+        return yield* next;
+      });
+    defineServerAction({
+      layer,
+      // @ts-expect-error - LabelService is not provided by the configured layer
+      middleware: readsUnprovided,
+    });
+  });
+
   test("action return type is Promise<A>", () => {
     const actionFn = defineServerAction({ layer: Layer.empty })(
       "answer",
@@ -300,15 +317,17 @@ describe("app.serverAction - testServerAction overrides", () => {
 
   test("preserves middleware behavior under override", async () => {
     const order: string[] = [];
+    const trackingMiddleware = <A, E, R>(next: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        order.push("before");
+        const r = yield* next;
+        order.push("after");
+        return r;
+      });
+    const layer = Layer.succeed(CounterService, { value: 1 });
     const action = defineServerAction({
-      layer: Layer.succeed(CounterService, { value: 1 }),
-      middleware: <A, E, R>(next: Effect.Effect<A, E, R>) =>
-        Effect.gen(function* () {
-          order.push("before");
-          const r = yield* next;
-          order.push("after");
-          return r;
-        }),
+      layer,
+      middleware: trackingMiddleware,
     });
     const submit = action("counter", () =>
       CounterService.pipe(Effect.map((c) => c.value)),

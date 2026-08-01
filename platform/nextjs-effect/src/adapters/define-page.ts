@@ -4,16 +4,29 @@ import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 /**
- * A pure wrapper applied around a page handler. It typically leaves the success
- * and error channels intact (the node the handler renders is the node the page
- * returns) while enriching the requirement channel — for example reading a
- * request-trace service to annotate every log the handler emits.
+ * A layer-aware wrapper applied around a page handler. Because it runs *inside*
+ * the configured layer, its requirement channel is bounded by that layer's
+ * `LOut` plus the per-request services (`RequestStateDeps`): it may read any
+ * service the layer supplies without `definePage` naming it, and requiring a
+ * service the layer does *not* provide is a type error. It typically leaves the
+ * success and error channels intact (the node the handler renders is the node
+ * the page returns) while enriching the requirement channel — for example
+ * reading a request-trace service to annotate every log the handler emits.
  */
-type PageMiddleware = (
+type PageMiddleware<LOut> = (
+  self: Effect.Effect<unknown, unknown, LOut | RequestStateDeps>,
+) => Effect.Effect<unknown, unknown, LOut | RequestStateDeps>;
+
+/**
+ * The internal, layer-erased view of a {@link PageMiddleware}: the public
+ * `config.middleware` is checked against the layer-aware type, but inside the
+ * factory we erase `LOut` so the pipeline can apply it to the untyped handler.
+ */
+type UntypedMiddleware = (
   self: Effect.Effect<unknown, unknown, unknown>,
 ) => Effect.Effect<unknown, unknown, unknown>;
 
-const identityTransform: PageMiddleware = (next) => next;
+const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
 
 const PageOverride = Symbol.for("platform-nextjs-effect/PageOverride");
 
@@ -72,7 +85,7 @@ export type PageHandler<Props, A, LOut> = ((props: Props) => Promise<A>) & {
  */
 export function definePage<LOut, LErr>(config: {
   layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
-  middleware?: PageMiddleware;
+  middleware?: PageMiddleware<NoInfer<LOut>>;
 }): <Props, A, E, R>(
   name: string,
   handler: (
@@ -80,7 +93,7 @@ export function definePage<LOut, LErr>(config: {
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => PageHandler<Props, A, LOut> {
-  const middleware = config.middleware ?? identityTransform;
+  const middleware = (config.middleware ?? identityTransform) as UntypedMiddleware;
 
   return ((
     name: string,

@@ -11,16 +11,33 @@ import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 /**
- * A pure wrapper applied around a route handler. Applied *inside* the layer, so
- * it may require services the layer provides. It typically leaves the success
- * and error channels intact while enriching the requirement channel — for
- * example composing `withSaga` to run the handler inside a request saga.
+ * A layer-aware wrapper applied around a route handler. Because it runs *inside*
+ * the configured layer, its requirement channel is bounded by that layer's
+ * `LOut` plus the per-request services (`RequestStateDeps`, `ResponseHeaders`):
+ * it may read (or provide) any service the layer supplies without `defineRoute`
+ * naming it, and requiring a service the layer does *not* provide is a type
+ * error. It typically leaves the success and error channels intact while
+ * enriching the requirement channel — for example reading a request-trace
+ * service, or composing `withSaga` to run the handler inside a request saga.
  */
-type RouteMiddleware = (
+type RouteMiddleware<LOut> = (
+  self: Effect.Effect<
+    unknown,
+    unknown,
+    LOut | RequestStateDeps | ResponseHeaders
+  >,
+) => Effect.Effect<unknown, unknown, LOut | RequestStateDeps | ResponseHeaders>;
+
+/**
+ * The internal, layer-erased view of a {@link RouteMiddleware}: the public
+ * `config.middleware` is checked against the layer-aware type, but inside the
+ * factory we erase `LOut` so the pipeline can apply it to the untyped handler.
+ */
+type UntypedMiddleware = (
   self: Effect.Effect<unknown, unknown, unknown>,
 ) => Effect.Effect<unknown, unknown, unknown>;
 
-const identityTransform: RouteMiddleware = (next) => next;
+const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
 
 const RouteOverride = Symbol.for("platform-nextjs-effect/RouteOverride");
 
@@ -67,14 +84,14 @@ export type RouteHandler<LOut> = ((req: NextRequest) => Promise<Response>) & {
  */
 export function defineRoute<LOut, LErr>(config: {
   layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
-  middleware?: RouteMiddleware;
+  middleware?: RouteMiddleware<NoInfer<LOut>>;
 }): <A, E, R>(
   action: (
     req: NextRequest,
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps | ResponseHeaders>>,
 ) => RouteHandler<LOut> {
-  const middleware = config.middleware ?? identityTransform;
+  const middleware = (config.middleware ?? identityTransform) as UntypedMiddleware;
 
   return ((
     action: (req: NextRequest) => Effect.Effect<unknown, unknown, unknown>,

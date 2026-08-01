@@ -4,16 +4,30 @@ import { toSafeErrorDetails } from "./error-details.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 /**
- * A pure wrapper applied around a server action. It typically leaves the success
- * and error channels intact (the value the action resolves with is the value the
- * server action returns) while enriching the requirement channel — for example
- * reading a request-trace service to annotate every log the handler emits.
+ * A layer-aware wrapper applied around a server action. Because it runs *inside*
+ * the configured layer, its requirement channel is bounded by that layer's
+ * `LOut` plus the per-request services (`RequestStateDeps`): it may read any
+ * service the layer supplies without `defineServerAction` naming it, and
+ * requiring a service the layer does *not* provide is a type error. It typically
+ * leaves the success and error channels intact (the value the action resolves
+ * with is the value the server action returns) while enriching the requirement
+ * channel — for example reading a request-trace service to annotate every log
+ * the handler emits.
  */
-type ServerActionMiddleware = (
+type ServerActionMiddleware<LOut> = (
+  self: Effect.Effect<unknown, unknown, LOut | RequestStateDeps>,
+) => Effect.Effect<unknown, unknown, LOut | RequestStateDeps>;
+
+/**
+ * The internal, layer-erased view of a {@link ServerActionMiddleware}: the public
+ * `config.middleware` is checked against the layer-aware type, but inside the
+ * factory we erase `LOut` so the pipeline can apply it to the untyped handler.
+ */
+type UntypedMiddleware = (
   self: Effect.Effect<unknown, unknown, unknown>,
 ) => Effect.Effect<unknown, unknown, unknown>;
 
-const identityTransform: ServerActionMiddleware = (next) => next;
+const identityTransform = <A, E, R>(next: Effect.Effect<A, E, R>) => next;
 
 const ServerActionOverride = Symbol.for(
   "platform-nextjs-effect/ServerActionOverride",
@@ -74,7 +88,7 @@ export type ServerActionHandler<Args extends readonly unknown[], A, LOut> = ((
  */
 export function defineServerAction<LOut, LErr>(config: {
   layer: Layer.Layer<LOut, LErr, RequestStateDeps>;
-  middleware?: ServerActionMiddleware;
+  middleware?: ServerActionMiddleware<NoInfer<LOut>>;
 }): <Args extends readonly unknown[], A, E, R>(
   name: string,
   action: (
@@ -82,7 +96,7 @@ export function defineServerAction<LOut, LErr>(config: {
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => ServerActionHandler<Args, A, LOut> {
-  const middleware = config.middleware ?? identityTransform;
+  const middleware = (config.middleware ?? identityTransform) as UntypedMiddleware;
 
   return ((
     name: string,
