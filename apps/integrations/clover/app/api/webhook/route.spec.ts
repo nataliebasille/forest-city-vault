@@ -30,6 +30,16 @@ describe("POST /api/webhooks/clover", () => {
       assert.equal(response.status, 200);
       assert.equal(await response.json(), true);
     });
+
+    test("returns 200 for a verification payload without an auth header", async () => {
+      // Clover sends the verification handshake before the callback URL is
+      // validated, so it has no x-clover-auth header. It must still succeed.
+      const response = await POST(
+        makeRequest({ verificationCode: "abc123" }),
+      );
+      assert.equal(response.status, 200);
+      assert.equal(await response.json(), true);
+    });
   });
 
   describe("invalid body", () => {

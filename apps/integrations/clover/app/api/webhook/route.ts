@@ -42,6 +42,23 @@ const handler = (request: NextRequest) =>
     const { webhookAuthCode } = yield* CloverConfig;
     const { requestId } = yield* RequestTrace;
 
+    const parsed = yield* parseBody(CloverWebhookPayload);
+
+    // Clover's verification handshake is POSTed *before* the callback URL is
+    // validated, so — per Clover's docs — it carries no `x-clover-auth` header
+    // (that header only appears on messages sent after validation). Handle it,
+    // and log the code so it can be copied into the dashboard, before enforcing
+    // auth. Every real event notification below still requires the header.
+    if (Either.isRight(parsed) && "verificationCode" in parsed.right) {
+      yield* Effect.logInfo("clover.webhook.verification.received", {
+        requestId,
+        workflowStage: "verification",
+        verificationCode: parsed.right.verificationCode,
+      });
+
+      return true;
+    }
+
     const actualAuthCode = request.headers.get(CLOVER_AUTH_HEADER);
     if (!actualAuthCode || !safeEqual(actualAuthCode, webhookAuthCode)) {
       yield* Effect.logWarning("clover.webhook.authentication.rejected", {
@@ -59,17 +76,14 @@ const handler = (request: NextRequest) =>
       workflowStage: "decode_payload",
     });
 
-    const body = yield* Either.match(yield* parseBody(CloverWebhookPayload), {
+    const body = yield* Either.match(parsed, {
       onLeft: (error) => badRequest("Invalid request body", error),
       onRight: (value) => Effect.succeed(value),
     });
 
+    // Verification payloads are handled above (before the auth check), so this
+    // narrows `body` to an event payload; the guard is defensive.
     if ("verificationCode" in body) {
-      yield* Effect.logInfo("clover.webhook.verification.received", {
-        requestId,
-        workflowStage: "verification",
-      });
-
       return true;
     }
 
