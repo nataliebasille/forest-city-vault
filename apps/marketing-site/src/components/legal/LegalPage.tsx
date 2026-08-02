@@ -6,21 +6,25 @@ type LegalPageProps = {
   title: string;
   /** Short one-line summary shown under the title. */
   intro: string;
-  /** Formatted "Last updated" date. */
-  lastUpdated: string;
+  /** Small uppercase label above the title. Defaults to "Legal". */
+  eyebrow?: string;
+  /** Formatted "Last updated" date. Omit for pages without a revision date. */
+  lastUpdated?: string;
   /** The document body: use `<h2>`, `<h3>`, `<p>`, `<ul>/<li>`, `<a>`. */
   children: ReactNode;
 };
 
 /**
- * Shared shell for legal documents (Privacy Policy, EULA). Renders the site
- * header, a titled hero, and a readable prose column. Styling for the body is
- * applied via child selectors on {@link PROSE_CLASS} so pages can author plain
- * semantic HTML without repeating Tailwind on every element.
+ * Shared shell for legal/informational documents (Privacy Policy, EULA,
+ * Support). Renders the site header, a titled hero, and a readable prose
+ * column. Styling for the body is applied via child selectors on
+ * {@link PROSE_CLASS} so pages can author plain semantic HTML without repeating
+ * Tailwind on every element.
  */
 export function LegalPage({
   title,
   intro,
+  eyebrow = "Legal",
   lastUpdated,
   children,
 }: LegalPageProps) {
@@ -32,15 +36,17 @@ export function LegalPage({
         <div className="mx-auto w-full max-w-3xl px-6 py-14 md:px-10 md:py-20">
           <p className="flex items-center gap-3 font-subheading text-xs font-semibold tracking-[0.28em] text-primary-500 uppercase">
             <span className="h-px w-8 bg-primary-500" aria-hidden="true" />
-            Legal
+            {eyebrow}
           </p>
           <h1 className="mt-5 font-heading text-4xl leading-[1.05] text-ink sm:text-5xl">
             {title}
           </h1>
           <p className="mt-4 text-lg/8 text-on-surface-50/80">{intro}</p>
-          <p className="mt-4 font-subheading text-sm font-semibold text-ink/60">
-            Last updated: {lastUpdated}
-          </p>
+          {lastUpdated ?
+            <p className="mt-4 font-subheading text-sm font-semibold text-ink/60">
+              Last updated: {lastUpdated}
+            </p>
+          : null}
         </div>
       </section>
 
