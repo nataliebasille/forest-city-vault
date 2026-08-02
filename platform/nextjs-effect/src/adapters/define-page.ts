@@ -1,6 +1,10 @@
 import { Effect, Layer } from "effect";
 import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
+import {
+  isNextControlFlowCause,
+  raisePipelineExit,
+} from "./next-signals.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 /**
@@ -74,11 +78,16 @@ export type PageHandler<Props, A, LOut> = ((props: Props) => Promise<A>) & {
  *
  * The boundary logs one lifecycle line per render — `page.completed` on success,
  * `page.failed` on a typed failure, `page.defect` on an unexpected defect — each
- * tagged with the page `name`. A typed failure or defect is re-raised, so
- * `Effect.runPromise` rejects and the failure surfaces to Next.js (its error
- * boundary / `error.tsx`); a handler that redirects or renders `notFound()`
- * should call those `next/navigation` helpers, which throw the control-flow
- * signals Next expects.
+ * tagged with the page `name`. A typed failure or defect is re-raised so the
+ * returned promise rejects and the failure surfaces to Next.js (its error
+ * boundary / `error.tsx`).
+ *
+ * A handler (or its layer) that redirects or renders `notFound()` calls the
+ * `next/navigation` helpers, which throw Next's control-flow signals. Those
+ * signals travel the failure channel as defects, but are *not* application
+ * defects: the boundary re-raises them as their original error — so Next
+ * performs the navigation with the error's `digest` intact — and does not log
+ * them as `page.defect`.
  *
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testPage} without the production layer ever being constructed.
@@ -93,7 +102,8 @@ export function definePage<LOut, LErr>(config: {
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => PageHandler<Props, A, LOut> {
-  const middleware = (config.middleware ?? identityTransform) as UntypedMiddleware;
+  const middleware = (config.middleware ??
+    identityTransform) as UntypedMiddleware;
 
   return ((
     name: string,
@@ -107,7 +117,7 @@ export function definePage<LOut, LErr>(config: {
       const startedAt = Date.now();
       const pageContext = { page: name };
 
-      return Effect.runPromise(
+      return Effect.runPromiseExit(
         middleware(handler(props)).pipe(
           Effect.provide(layer),
           Effect.provide(requestState),
@@ -125,16 +135,21 @@ export function definePage<LOut, LErr>(config: {
                 durationMs: Date.now() - startedAt,
               }),
           }),
+          // A `redirect()`/`notFound()` throw arrives here as a defect, but it is
+          // Next control flow, not a page defect: skip the error log and let
+          // `raisePipelineExit` re-raise it so Next performs the navigation.
           Effect.tapDefect((cause) =>
-            Effect.logError("page.defect", {
-              ...pageContext,
-              durationMs: Date.now() - startedAt,
-              failureDisposition: "unexpected_defect",
-              error: toSafeErrorDetails(cause),
-            }),
+            isNextControlFlowCause(cause) ?
+              Effect.void
+            : Effect.logError("page.defect", {
+                ...pageContext,
+                durationMs: Date.now() - startedAt,
+                failureDisposition: "unexpected_defect",
+                error: toSafeErrorDetails(cause),
+              }),
           ),
         ) as unknown as Effect.Effect<unknown, unknown, never>,
-      );
+      ).then(raisePipelineExit);
     };
 
     const pageFn = ((props: unknown) =>

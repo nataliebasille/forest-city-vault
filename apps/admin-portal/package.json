@@ -11,8 +11,15 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@forest-city-vault/core-config": "workspace:*",
+    "@forest-city-vault/domain": "workspace:*",
+    "@forest-city-vault/infrastructure-database": "workspace:*",
+    "@forest-city-vault/platform-nextjs-effect": "workspace:*",
     "@nataliebasille/natcore-design-system": "^2.0.3",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.111.0",
     "dotenv": "^17.4.2",
+    "effect": "^3.21.2",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",

@@ -3,6 +3,7 @@ import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
 import { compose } from "effect/Function";
+import { redirect as nextRedirect } from "next/navigation";
 import { Headers, HeadersState } from "./request/headers";
 import { CookiesState } from "./request/cookies";
 import { BodyState } from "./request/body";
@@ -244,10 +245,13 @@ describe("app.page - runtime", () => {
 
     const page = definePage({ layer: Layer.empty });
 
-    const noRead = testPage(page("no-read", () => Effect.succeed("static")), {
-      layer: Layer.empty,
-      requestState: spyRequestState,
-    });
+    const noRead = testPage(
+      page("no-read", () => Effect.succeed("static")),
+      {
+        layer: Layer.empty,
+        requestState: spyRequestState,
+      },
+    );
     expect(await noRead(undefined)).toBe("static");
     expect(headerReads).toBe(0);
 
@@ -284,6 +288,40 @@ describe("app.page - runtime", () => {
       Layer.empty,
     );
     await expect(run(undefined)).rejects.toThrow("render exploded");
+  });
+
+  test("re-raises redirect() from the handler as Next's control-flow error", async () => {
+    // `redirect()` throws Next's control-flow signal. The boundary must re-raise
+    // the *original* error — carrying the `NEXT_REDIRECT` digest Next reads to
+    // perform the navigation — rather than wrapping it (which would 500).
+    const page = definePage({ layer: Layer.empty });
+    const run = test$(
+      page("gated", () => Effect.sync(() => nextRedirect("/login"))),
+      Layer.empty,
+    );
+    await expect(run(undefined)).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    });
+  });
+
+  test("re-raises a redirect thrown while building the layer", async () => {
+    // Mirrors the auth gate: the redirect is thrown constructing a service the
+    // handler depends on, so the handler never runs. It must still surface as
+    // Next's control-flow error.
+    const GatedUser = Context.GenericTag<{ id: string }>("page/GatedUser");
+    const GateLayer = Layer.effect(
+      GatedUser,
+      Effect.sync(() => nextRedirect("/login")),
+    );
+
+    const page = definePage({ layer: GateLayer });
+    const run = test$(
+      page("gated-layer", () => GatedUser.pipe(Effect.map((u) => u.id))),
+      GateLayer,
+    );
+    await expect(run(undefined)).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    });
   });
 
   test("a layer service derived from request headers is visible to the handler", async () => {

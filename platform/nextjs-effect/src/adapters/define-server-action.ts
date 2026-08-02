@@ -1,6 +1,10 @@
 import { Effect, Layer } from "effect";
 import { MustBeNever } from "../types.internal";
 import { toSafeErrorDetails } from "./error-details.internal";
+import {
+  isNextControlFlowCause,
+  raisePipelineExit,
+} from "./next-signals.internal";
 import { buildRequestStateLayer, RequestStateDeps } from "./request/layer";
 
 /**
@@ -79,9 +83,16 @@ export type ServerActionHandler<Args extends readonly unknown[], A, LOut> = ((
  * The boundary logs one lifecycle line per invocation — `serverAction.completed`
  * on success, `serverAction.failed` on a typed failure, `serverAction.defect` on
  * an unexpected defect — each tagged with the action `name`. A typed failure or
- * defect is re-raised, so `Effect.runPromise` rejects and the failure surfaces to
+ * defect is re-raised so the returned promise rejects and the failure surfaces to
  * Next.js; a handler that must return a graceful value should catch its own
  * expected errors and resolve with a value.
+ *
+ * An action (or its layer) that redirects or renders `notFound()` calls the
+ * `next/navigation` helpers, which throw Next's control-flow signals. Those
+ * signals travel the failure channel as defects, but are *not* application
+ * defects: the boundary re-raises them as their original error — so Next
+ * performs the navigation with the error's `digest` intact — and does not log
+ * them as `serverAction.defect`.
  *
  * The `layer` is kept as a distinct, replaceable input so tests can swap it via
  * {@link testServerAction} without the production layer ever being constructed.
@@ -96,7 +107,8 @@ export function defineServerAction<LOut, LErr>(config: {
   ) => Effect.Effect<A, E, R> &
     MustBeNever<Exclude<R, LOut | RequestStateDeps>>,
 ) => ServerActionHandler<Args, A, LOut> {
-  const middleware = (config.middleware ?? identityTransform) as UntypedMiddleware;
+  const middleware = (config.middleware ??
+    identityTransform) as UntypedMiddleware;
 
   return ((
     name: string,
@@ -110,7 +122,7 @@ export function defineServerAction<LOut, LErr>(config: {
       const startedAt = Date.now();
       const actionContext = { serverAction: name };
 
-      return Effect.runPromise(
+      return Effect.runPromiseExit(
         middleware(action(...args)).pipe(
           Effect.provide(layer),
           Effect.provide(requestState),
@@ -128,16 +140,21 @@ export function defineServerAction<LOut, LErr>(config: {
                 durationMs: Date.now() - startedAt,
               }),
           }),
+          // A `redirect()`/`notFound()` throw arrives here as a defect, but it is
+          // Next control flow, not an action defect: skip the error log and let
+          // `raisePipelineExit` re-raise it so Next performs the navigation.
           Effect.tapDefect((cause) =>
-            Effect.logError("serverAction.defect", {
-              ...actionContext,
-              durationMs: Date.now() - startedAt,
-              failureDisposition: "unexpected_defect",
-              error: toSafeErrorDetails(cause),
-            }),
+            isNextControlFlowCause(cause) ?
+              Effect.void
+            : Effect.logError("serverAction.defect", {
+                ...actionContext,
+                durationMs: Date.now() - startedAt,
+                failureDisposition: "unexpected_defect",
+                error: toSafeErrorDetails(cause),
+              }),
           ),
         ) as unknown as Effect.Effect<unknown, unknown, never>,
-      );
+      ).then(raisePipelineExit);
     };
 
     const actionFn = ((...args: unknown[]) =>

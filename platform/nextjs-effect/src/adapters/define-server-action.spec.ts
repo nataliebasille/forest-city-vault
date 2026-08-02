@@ -3,6 +3,7 @@ import { expect } from "expect";
 import { expectTypeOf } from "expect-type";
 import { Context, Effect, Layer } from "effect";
 import { compose } from "effect/Function";
+import { redirect as nextRedirect } from "next/navigation";
 import { Headers, HeadersState } from "./request/headers";
 import { CookiesState } from "./request/cookies";
 import { BodyState } from "./request/body";
@@ -94,11 +95,12 @@ describe("app.serverAction - types", () => {
   });
 
   test("action return type is Promise<A>", () => {
-    const actionFn = defineServerAction({ layer: Layer.empty })(
-      "answer",
-      () => Effect.succeed(123),
+    const actionFn = defineServerAction({ layer: Layer.empty })("answer", () =>
+      Effect.succeed(123),
     );
-    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<Promise<number>>();
+    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<
+      Promise<number>
+    >();
   });
 
   test("action forwards its argument list to the handler", () => {
@@ -109,7 +111,9 @@ describe("app.serverAction - types", () => {
     expectTypeOf<Parameters<typeof actionFn>>().toEqualTypeOf<
       [string, number]
     >();
-    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<Promise<string>>();
+    expectTypeOf<ReturnType<typeof actionFn>>().toEqualTypeOf<
+      Promise<string>
+    >();
   });
 
   test("middleware preserves the resolved value type", () => {
@@ -225,6 +229,20 @@ describe("app.serverAction - runtime", () => {
     await expect(run()).rejects.toThrow("kaboom");
   });
 
+  test("re-raises redirect() as Next's control-flow error", async () => {
+    // `redirect()` throws Next's control-flow signal. The boundary must re-raise
+    // the *original* error — carrying the `NEXT_REDIRECT` digest Next reads to
+    // perform the navigation — rather than wrapping it.
+    const action = defineServerAction({ layer: Layer.empty });
+    const run = test$(
+      action("go", () => Effect.sync(() => nextRedirect("/login"))),
+      Layer.empty,
+    );
+    await expect(run()).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    });
+  });
+
   test("a layer service derived from request headers is visible to the handler", async () => {
     // Mirrors the production request-trace pattern: a service built from the
     // request headers is exposed through the app layer, so the handler can carry
@@ -239,9 +257,7 @@ describe("app.serverAction - runtime", () => {
 
     const action = defineServerAction({ layer: TraceLayer });
     const run = test$(
-      action("trace", () =>
-        TraceService.pipe(Effect.map((t) => t.requestId)),
-      ),
+      action("trace", () => TraceService.pipe(Effect.map((t) => t.requestId))),
       TraceLayer,
       { "x-request-id": "req-abc" },
     );

@@ -3,3 +3,4 @@ export * from "./utils/public";
 export * from "./repositories/index";
 export * from "./event-store";
 export * from "./database-saga-scoped";
+export * from "./bootstrap/bootstrap-store";
