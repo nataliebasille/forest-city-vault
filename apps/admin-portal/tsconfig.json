@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/runtime": ["./src/lib/runtime/public.ts"],
       "@/*": ["./src/*"]
     }
   },

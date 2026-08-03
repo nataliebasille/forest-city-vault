@@ -24,7 +24,7 @@
     "@forest-city-vault/platform-nextjs-effect": "workspace:*",
     "dotenv": "^17.4.2",
     "effect": "^3.21.2",
-    "next": "16.2.6",
+    "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

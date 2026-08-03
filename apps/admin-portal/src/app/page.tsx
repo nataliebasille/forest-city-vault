@@ -1,4 +1,5 @@
-import { CurrentUser, privatePage } from "@/lib/auth";
+import { CurrentUser } from "@/lib/auth";
+import { privatePage } from "@/runtime";
 import { Effect } from "effect";
 import Image from "next/image";
 
