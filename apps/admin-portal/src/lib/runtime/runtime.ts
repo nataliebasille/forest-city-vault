@@ -1,15 +1,35 @@
 import {
   definePage,
+  defineRoute,
+  defineServerAction,
   HttpResult,
 } from "@forest-city-vault/platform-nextjs-effect";
 import { Effect, Layer } from "effect";
 import { redirect as nextRedirect } from "next/navigation";
-import { AppLive } from "./app-layer";
-import { CurrentUser } from "./current-user";
-import { requireActiveOwner } from "./require-active-owner";
+import { CurrentUser } from "../auth/current-user";
+import { requireActiveOwner } from "../auth/require-active-owner";
+import { AppLive } from "./live";
 
-/** Where the auth gate sends anonymous or unauthorized visitors. */
-const LOGIN_PATH = "/login";
+export { AppLive } from "./live";
+
+/**
+ * The app's route factory. Every Route Handler in the portal is built with it so
+ * they share one dependency surface — the {@link AppLive} base layer (database,
+ * Supabase auth, Supabase config) — and the Effect route pipeline (logging,
+ * request-state, `HttpResult` handling). Handlers may `yield*` any service the
+ * layer provides without naming it; the request `Cookies`/`Headers` the layer
+ * needs are supplied per request from `next/headers`. This is the admin-portal
+ * analog of Clover's `route` helper.
+ */
+export const route = defineRoute({ layer: AppLive });
+
+/**
+ * The app's server-action factory — the {@link route} analog for Server Actions.
+ * Bound to the same {@link AppLive} layer so actions (e.g. the magic-link send)
+ * read the same services and get the same boundary logging, while their request
+ * state (`Headers`, `Cookies`) comes from the ambient Next.js request.
+ */
+export const serverAction = defineServerAction({ layer: AppLive });
 
 /**
  * A page anyone can reach. It runs on the Effect page pipeline (logging,
@@ -28,6 +48,9 @@ export const publicPage = definePage({ layer: Layer.empty });
  * page handler ever runs. Handlers may `yield* CurrentUser` to read the visitor.
  */
 export const privatePage = definePage({ layer: PrivateLive() });
+
+/** Where the auth gate sends anonymous or unauthorized visitors. */
+const LOGIN_PATH = "/login";
 
 function PrivateLive() {
   const currentUser = Layer.effect(
