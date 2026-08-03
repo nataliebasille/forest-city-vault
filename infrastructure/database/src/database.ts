@@ -2,8 +2,8 @@ import { make as makeDrizzle } from "@effect/sql-drizzle/Pg";
 import { PgClient } from "@effect/sql-pg";
 import * as SqlClientModule from "@effect/sql/SqlClient";
 import { SqlError } from "@effect/sql/SqlError";
-import { SupabaseConfig } from "@forest-city-vault/core-config";
 import {
+  Config,
   ConfigError,
   Context,
   Data,
@@ -344,7 +344,11 @@ export const DatabaseLayer: Layer.Layer<
 
 const PgLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    const { databaseUrl } = yield* SupabaseConfig;
+    // The database connection depends only on `DATABASE_URL` — it deliberately
+    // does not pull the full `SupabaseConfig`, so opening a pooled connection
+    // never requires the Supabase Auth keys (`SUPABASE_URL` / `_ANON_KEY` /
+    // `_SECRET_KEY`). Those are only needed by code that actually calls Supabase.
+    const databaseUrl = yield* Config.string("DATABASE_URL");
 
     return PgClient.layer({
       url: Redacted.make(databaseUrl),
@@ -356,10 +360,7 @@ export const DatabaseLive: Layer.Layer<
   Database,
   SqlError | ConfigError.ConfigError,
   never
-> = DatabaseLayer.pipe(
-  Layer.provide(PgLive),
-  Layer.provide(SupabaseConfig.Default),
-);
+> = DatabaseLayer.pipe(Layer.provide(PgLive));
 
 export { SupabaseConfig } from "@forest-city-vault/core-config";
 export * as dbSchema from "./schema";

@@ -1,0 +1,23 @@
+{
+  "name": "@forest-city-vault/core-auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/public.ts",
+  "types": "./src/public.ts",
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.spec.ts",
+    "lint": "biome lint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
+    "effect": "^3.21.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.22.3",
+    "typescript": "^5"
+  }
+}

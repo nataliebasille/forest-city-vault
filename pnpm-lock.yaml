@@ -213,6 +213,25 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  core/auth:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.111.0
+        version: 2.111.0
+      effect:
+        specifier: ^3.21.2
+        version: 3.21.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.41
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   core/clock:
     dependencies:
       effect:
@@ -359,6 +378,9 @@ importers:
       '@effect/sql-pg':
         specifier: ^0.52.1
         version: 0.52.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@3.21.2))(effect@3.21.2))(@effect/platform@0.96.1(effect@3.21.2))(@effect/sql@0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@3.21.2))(effect@3.21.2))(@effect/platform@0.96.1(effect@3.21.2))(effect@3.21.2))(effect@3.21.2)
+      '@forest-city-vault/core-auth':
+        specifier: workspace:*
+        version: link:../../core/auth
       '@forest-city-vault/core-clock':
         specifier: workspace:*
         version: link:../../core/clock
