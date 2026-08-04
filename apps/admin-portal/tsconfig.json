@@ -20,6 +20,7 @@
     ],
     "paths": {
       "@/runtime": ["./src/lib/runtime/public.ts"],
+      "@ui/*": ["./src/lib/ui/*"],
       "@/*": ["./src/*"]
     }
   },
