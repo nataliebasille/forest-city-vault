@@ -20,7 +20,15 @@ export default privatePage("admin-home", () =>
             width={994}
             height={768}
             priority
-            className="h-auto w-40 md:w-48"
+            className="logo-on-light h-auto w-40 md:w-48"
+          />
+          <Image
+            src="/branding/primary logo no tag reverse.png"
+            alt="Forest City Vault logo"
+            width={994}
+            height={768}
+            priority
+            className="logo-on-dark h-auto w-40 md:w-48"
           />
 
           <div className="flex flex-col items-center gap-4">
