@@ -92,6 +92,35 @@ export function exchangeCodeForSession(code: string) {
 }
 
 /**
+ * Clears the caller's session, deleting the auth cookies via
+ * {@link writableClient}'s `setAll`. Runs only in a Server Action or Route
+ * Handler, where `cookies().set`/`delete` is allowed. A failure to reach the
+ * Supabase auth server is surfaced as a {@link SupabaseSessionError}; the caller
+ * (the sign-out action) still redirects to `/login` regardless, since the local
+ * cookies are the thing that actually gates the portal.
+ */
+export const signOut = Effect.gen(function* () {
+  const client = yield* writableClient;
+
+  const { error } = yield* Effect.tryPromise({
+    try: () => client.auth.signOut(),
+    catch: (cause) =>
+      new SupabaseSessionError({
+        message: "Could not reach the Supabase auth server.",
+        cause,
+      }),
+  });
+
+  if (error) {
+    return yield* new SupabaseSessionError({
+      message: error.message,
+      status: error.status,
+      cause: error,
+    });
+  }
+});
+
+/**
  * A per-request Supabase client whose cookie store is the *writable* Next.js
  * request cookies (`next/headers`). Unlike the read-only client behind the page
  * auth gate, this one runs only in Server Actions and Route Handlers, where

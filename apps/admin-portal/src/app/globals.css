@@ -26,12 +26,38 @@
   color-scheme: light dark;
   --lightningcss-light: initial;
   --lightningcss-dark: ;
+
+  /*
+   * Portal shell content-area background. The sidebar keeps the brand brown
+   * (secondary-500) in both schemes; in dark mode natcore's `surface-50` flips
+   * to that same brown, which collapsed the sidebar and content into one flat
+   * tone. Giving the content its own token — white in light, a darkened brand
+   * brown in dark — keeps the sidebar reading as a distinct, elevated panel.
+   */
+  --shell-content-bg: var(--color-surface-50);
+
+  /*
+   * Shared header height, kept in one place so the sidebar's brand header and
+   * each page's top header line up their bottom borders. It's responsive: a
+   * shorter bar on mobile (where only the mobile top bar and the drawer's brand
+   * header are visible) and the taller desktop height at md+ (where the sidebar
+   * header sits beside the page header). Because every header reads this token,
+   * whichever pair is on screen always matches.
+   */
+  --shell-header-h: 3.5rem;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --shell-header-h: 4.8125rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --lightningcss-light: ;
     --lightningcss-dark: initial;
+    --shell-content-bg: color-mix(in oklab, var(--color-secondary-500) 60%, #000);
   }
 }
 
