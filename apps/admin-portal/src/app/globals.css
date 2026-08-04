@@ -35,6 +35,30 @@
   }
 }
 
+/*
+ * Scheme-aware logo swap. Tailwind's `dark:` variant is not wired up in this
+ * design system, so visibility is toggled with the same `prefers-color-scheme`
+ * mechanism the palette uses: the light-background mark shows by default and the
+ * reverse mark takes over when the OS prefers dark.
+ */
+.logo-on-light {
+  display: block;
+}
+
+.logo-on-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo-on-light {
+    display: none;
+  }
+
+  .logo-on-dark {
+    display: block;
+  }
+}
+
 .font-heading {
   font-family: var(--font-heading), serif;
 }
