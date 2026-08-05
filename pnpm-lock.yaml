@@ -20,6 +20,9 @@ importers:
 
   apps/admin-portal:
     dependencies:
+      '@forest-city-vault/core-clock':
+        specifier: workspace:*
+        version: link:../../core/clock
       '@forest-city-vault/core-config':
         specifier: workspace:*
         version: link:../../core/config
@@ -44,6 +47,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(@electric-sql/pglite@0.4.6)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       effect:
         specifier: ^3.21.2
         version: 3.21.2
@@ -60,6 +66,9 @@ importers:
         specifier: ^3.6.0
         version: 3.6.0
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.4.6
+        version: 0.4.6
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.0
@@ -78,6 +87,9 @@ importers:
       tailwindcss:
         specifier: ^4
         version: 4.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
       typescript:
         specifier: ^5
         version: 5.9.3
@@ -339,6 +351,25 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  core/queryable:
+    dependencies:
+      effect:
+        specifier: ^3.21.2
+        version: 3.21.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.41
+      expect-type:
+        specifier: ^1.3.0
+        version: 1.3.0
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   domain:
     dependencies:
       '@forest-city-vault/core-clock':
@@ -393,6 +424,9 @@ importers:
       '@forest-city-vault/core-id-generator':
         specifier: workspace:*
         version: link:../../core/id-generator
+      '@forest-city-vault/core-queryable':
+        specifier: workspace:*
+        version: link:../../core/queryable
       '@forest-city-vault/domain':
         specifier: workspace:*
         version: link:../../domain

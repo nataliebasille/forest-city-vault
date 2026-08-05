@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
@@ -17,6 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "bootstrap:store": "tsx scripts/bootstrap-store.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner-membership.ts",
+    "seed:sales": "tsx scripts/seed-sales.ts",
     "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -30,6 +32,7 @@
     "@forest-city-vault/core-domain": "workspace:*",
     "@forest-city-vault/core-clock": "workspace:*",
     "@forest-city-vault/core-id-generator": "workspace:*",
+    "@forest-city-vault/core-queryable": "workspace:*",
     "@forest-city-vault/platform-saga": "workspace:*",
     "@forest-city-vault/domain": "workspace:*",
     "drizzle-orm": "^0.44.0",
