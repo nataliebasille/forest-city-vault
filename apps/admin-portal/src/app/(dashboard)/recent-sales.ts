@@ -15,11 +15,24 @@ import { Effect, Schema } from "effect";
 export const RECENT_SALES_LIMIT = 10;
 
 /**
+ * A single line item within a {@link RecentSale}. `amountCents` is the item's
+ * gross amount in whole cents; `vendorName` is the linked vendor's name, or
+ * `null` when the item has no vendor. Formatting (cents → USD, the vendor
+ * fallback) is the view layer's job, not this read model's.
+ */
+export type RecentSaleItem = {
+  readonly name: string;
+  readonly vendorName: string | null;
+  readonly amountCents: number;
+};
+
+/**
  * One row of the dashboard's "Recent sales" preview. Money is in whole cents and
  * `occurredAt` is a real {@link Date}; formatting (cents → USD, the local time
- * string, the item summary, the vendor label) is the view layer's job, not this
- * read model's. `leadItemName`/`itemCount`/`vendorNames` are the raw facts the
- * view derives its "… + N more" and "Multiple vendors" columns from.
+ * string, the item summary) is the view layer's job, not this read model's.
+ * `items` is every line item on the sale, ordered lead-first (highest gross
+ * amount), from which the view derives both its "… + N more" summary and the
+ * per-item hover breakdown.
  *
  * `timeZone` is the store's IANA zone, carried on every row so the view can
  * render each sale's time in the store's local zone without a second read.
@@ -29,9 +42,7 @@ export type RecentSale = {
   readonly occurredAt: Date;
   readonly totalCents: number;
   readonly timeZone: string;
-  readonly leadItemName: string | null;
-  readonly itemCount: number;
-  readonly vendorNames: readonly string[];
+  readonly items: readonly RecentSaleItem[];
 };
 
 /**
@@ -39,13 +50,12 @@ export type RecentSale = {
  * database round-trip: the newest {@link RECENT_SALES_LIMIT} sales ordered by
  * `occurredAt` (ties broken by id for a stable order).
  *
- * Each sale's derived columns are folded in by left-joining its line items (and
- * their vendors) and grouping by the sale: `itemCount` counts the line items,
- * `leadItemName` is the highest-value one (the sale's "headline" item, picked as
- * the first element of the line-item names ordered by gross amount), and
- * `vendorNames` collects the distinct, non-null vendor names. The store's time
- * zone is folded in as a scalar subquery so the view can localize each
- * `occurredAt` without another query.
+ * Each sale's line items are folded in by left-joining them (and their vendors)
+ * and aggregating into a single `items` JSON array per sale, ordered lead-first
+ * by gross amount (ties broken by name). A sale with no line items yields an
+ * empty array. Building the array in one `json_agg` keeps each item's name,
+ * vendor, and amount aligned. The store's time zone is folded in as a scalar
+ * subquery so the view can localize each `occurredAt` without another query.
  */
 export const recentSales = Effect.gen(function* () {
   const queryable = yield* SapphoQueryable;
@@ -60,19 +70,10 @@ export const recentSales = Effect.gen(function* () {
           sql<string>`(select ${stores}."time_zone" from ${stores} where ${stores}."id" = ${BOOTSTRAP_STORE_ID})`.as(
             "time_zone",
           ),
-        itemCount: sql<string>`count(distinct ${salesLineItems}."id")`.as(
-          "item_count",
-        ),
-        leadItemName: sql<
-          string | null
-        >`(array_agg(${salesLineItems}."name" order by ${salesLineItems}."gross_amount_cents" desc, ${salesLineItems}."name" asc))[1]`.as(
-          "lead_item_name",
-        ),
-        vendorNames: sql<
-          string[]
-        >`coalesce(array_agg(distinct ${vendors}."name" order by ${vendors}."name") filter (where ${vendors}."name" is not null), array[]::text[])`.as(
-          "vendor_names",
-        ),
+        items:
+          sql<unknown>`coalesce(json_agg(json_build_object('name', ${salesLineItems}."name", 'vendorName', ${vendors}."name", 'amountCents', ${salesLineItems}."gross_amount_cents") order by ${salesLineItems}."gross_amount_cents" desc, ${salesLineItems}."name" asc) filter (where ${salesLineItems}."id" is not null), '[]'::json)`.as(
+            "items",
+          ),
       })
       .from(sales)
       .leftJoin(salesLineItems, eq(salesLineItems.saleId, sales.id))
@@ -94,14 +95,31 @@ const NumericValue = Schema.transform(
   { strict: false, decode: (value) => Number(value), encode: (value) => value },
 );
 
+const RecentSaleItemRow = Schema.Struct({
+  name: Schema.String,
+  vendorName: Schema.NullOr(Schema.String),
+  amountCents: NumericValue,
+});
+
+// Drivers hand a `json` column back either already parsed (an array of objects,
+// as node-postgres and pglite both do here) or, in some setups, as a raw JSON
+// string; normalize a string before decoding the item list.
+const ItemsValue = Schema.transform(
+  Schema.Unknown,
+  Schema.Array(RecentSaleItemRow),
+  {
+    strict: false,
+    decode: (value) => (typeof value === "string" ? JSON.parse(value) : value),
+    encode: (value) => value,
+  },
+);
+
 const RecentSaleRow = Schema.Struct({
   id: Schema.String,
   occurredAt: Schema.ValidDateFromSelf,
   totalCents: NumericValue,
   timeZone: Schema.String,
-  leadItemName: Schema.NullOr(Schema.String),
-  itemCount: NumericValue,
-  vendorNames: Schema.Array(Schema.String),
+  items: ItemsValue,
 });
 
 const decodeRows = Schema.decodeUnknown(Schema.Array(RecentSaleRow));

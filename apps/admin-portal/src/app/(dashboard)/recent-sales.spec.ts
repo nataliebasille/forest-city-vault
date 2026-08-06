@@ -87,27 +87,50 @@ describe("recentSales", () => {
           occurredAt: "2024-06-01T18:00:00.000Z",
           totalCents: 9700,
           timeZone: STORE_TZ,
-          leadItemName: "Vintage brass lamp",
-          itemCount: 3,
-          vendorNames: ["Aspen Woodworks", "Birch & Co."],
+          items: [
+            {
+              name: "Vintage brass lamp",
+              vendorName: "Birch & Co.",
+              amountCents: 6000,
+            },
+            {
+              name: "Ceramic mug",
+              vendorName: "Aspen Woodworks",
+              amountCents: 2500,
+            },
+            {
+              name: "Enamel pin",
+              vendorName: "Aspen Woodworks",
+              amountCents: 1200,
+            },
+          ],
         },
         {
           id: middle,
           occurredAt: "2024-06-01T15:00:00.000Z",
           totalCents: 2500,
           timeZone: STORE_TZ,
-          leadItemName: "Wool throw blanket",
-          itemCount: 1,
-          vendorNames: ["Aspen Woodworks"],
+          items: [
+            {
+              name: "Wool throw blanket",
+              vendorName: "Aspen Woodworks",
+              amountCents: 2500,
+            },
+          ],
         },
         {
           id: oldest,
           occurredAt: "2024-06-01T12:00:00.000Z",
           totalCents: 4200,
           timeZone: STORE_TZ,
-          leadItemName: "Hand-thrown vase",
-          itemCount: 2,
-          vendorNames: [],
+          items: [
+            {
+              name: "Hand-thrown vase",
+              vendorName: null,
+              amountCents: 3000,
+            },
+            { name: "Soy candle", vendorName: null, amountCents: 1200 },
+          ],
         },
       ],
     );
@@ -130,9 +153,7 @@ describe("recentSales", () => {
       occurredAt: new Date("2024-06-01T12:00:00.000Z"),
       totalCents: 800,
       timeZone: STORE_TZ,
-      leadItemName: null,
-      itemCount: 0,
-      vendorNames: [],
+      items: [],
     });
   });
 
