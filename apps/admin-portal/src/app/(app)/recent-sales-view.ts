@@ -1,4 +1,4 @@
-import type { RecentSaleRow } from "@ui/recent-sales-table";
+import type { RecentSaleRow } from "./recent-sales-table";
 import type { RecentSale } from "./recent-sales";
 
 /**

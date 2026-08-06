@@ -3,8 +3,8 @@ import { dashboardMetrics } from "./dashboard-metrics";
 import { toDashboardMetricTiles } from "./dashboard-metrics-view";
 import { recentSales } from "./recent-sales";
 import { toRecentSaleRows } from "./recent-sales-view";
+import { RecentSalesTable } from "./recent-sales-table";
 import { MetricGrid } from "@ui/metric-grid";
-import { RecentSalesTable } from "@ui/recent-sales-table";
 import { Effect } from "effect";
 
 // The auth gate reads request cookies and the database per request, so this page
