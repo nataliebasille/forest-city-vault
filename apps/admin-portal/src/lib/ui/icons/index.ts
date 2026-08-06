@@ -4,7 +4,11 @@
  * `className` for sizing.
  */
 
+export { ChevronUpDownIcon } from "./chevron-up-down-icon";
 export { CloseIcon } from "./close-icon";
 export type { IconProps } from "./icon-props";
 export { MenuIcon } from "./menu-icon";
+export { MonitorIcon } from "./monitor-icon";
+export { MoonIcon } from "./moon-icon";
 export { SignOutIcon } from "./sign-out-icon";
+export { SunIcon } from "./sun-icon";

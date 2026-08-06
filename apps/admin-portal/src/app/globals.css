@@ -53,19 +53,38 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --lightningcss-light: ;
-    --lightningcss-dark: initial;
-    --shell-content-bg: color-mix(in oklab, var(--color-secondary-500) 60%, #000);
-  }
+/*
+ * Theme is driven by the `data-theme` attribute that next-themes stamps on
+ * `<html>` (Light/Dark/System). next-themes always writes the *resolved* theme —
+ * a "System" choice becomes `light` or `dark` — so keying off the attribute
+ * covers an explicit choice and the system-resolved value with one source of
+ * truth.
+ *
+ * Both directions are set explicitly, at `:root[data-theme=...]` specificity
+ * (0,2,0), because natcore ships its own `@media (prefers-color-scheme: dark)`
+ * that flips these same `--lightningcss-*` polyfill vars from the OS. A plain
+ * `[data-theme="light"]` (0,1,0) could not out-rank that media query, so an
+ * explicit Light choice on a dark OS would still render dark. The higher
+ * specificity here lets the user's choice win over the OS in every combination,
+ * while a "System" choice simply resolves to whichever the OS prefers.
+ */
+:root[data-theme="light"] {
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+  --shell-content-bg: var(--color-surface-50);
+}
+
+:root[data-theme="dark"] {
+  --lightningcss-light: ;
+  --lightningcss-dark: initial;
+  --shell-content-bg: color-mix(in oklab, var(--color-secondary-500) 60%, #000);
 }
 
 /*
  * Scheme-aware logo swap. Tailwind's `dark:` variant is not wired up in this
- * design system, so visibility is toggled with the same `prefers-color-scheme`
- * mechanism the palette uses: the light-background mark shows by default and the
- * reverse mark takes over when the OS prefers dark.
+ * design system, so visibility is toggled with the same `data-theme` attribute
+ * the palette uses: the light-background mark shows by default and the reverse
+ * mark takes over when the resolved theme is dark.
  */
 .logo-on-light {
   display: block;
@@ -75,14 +94,12 @@
   display: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo-on-light {
-    display: none;
-  }
+:root[data-theme="dark"] .logo-on-light {
+  display: none;
+}
 
-  .logo-on-dark {
-    display: block;
-  }
+:root[data-theme="dark"] .logo-on-dark {
+  display: block;
 }
 
 .font-heading {
