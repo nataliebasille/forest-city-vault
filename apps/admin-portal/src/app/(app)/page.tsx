@@ -1,7 +1,10 @@
 import { privatePage } from "@/runtime";
 import { dashboardMetrics } from "./dashboard-metrics";
 import { toDashboardMetricTiles } from "./dashboard-metrics-view";
+import { recentSales } from "./recent-sales";
+import { toRecentSaleRows } from "./recent-sales-view";
 import { MetricGrid } from "@ui/metric-grid";
+import { RecentSalesTable } from "@ui/recent-sales-table";
 import { Effect } from "effect";
 
 // The auth gate reads request cookies and the database per request, so this page
@@ -13,6 +16,9 @@ export default privatePage("admin-dashboard", () =>
     const metrics = yield* dashboardMetrics;
     const tiles = toDashboardMetricTiles(metrics);
 
+    const sales = yield* recentSales;
+    const saleRows = toRecentSaleRows(sales);
+
     return (
       <div className="flex flex-1 flex-col">
         <header className="hidden h-[var(--shell-header-h)] items-center justify-between gap-4 border-b border-ink/10 px-6 md:flex md:px-8">
@@ -21,6 +27,7 @@ export default privatePage("admin-dashboard", () =>
 
         <main className="flex flex-1 flex-col gap-6 px-6 py-6 md:px-8">
           <MetricGrid metrics={tiles} />
+          <RecentSalesTable rows={saleRows} />
         </main>
       </div>
     );
