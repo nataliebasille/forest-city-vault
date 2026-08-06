@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Alegreya, Manrope, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "./theme-provider";
 
 const headingFont = Playfair_Display({
   variable: "--font-heading",
@@ -38,10 +39,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${headingFont.variable} ${subheadingFont.variable} ${bodyFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col palette-surface bg-surface-50 text-on-surface-50">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
