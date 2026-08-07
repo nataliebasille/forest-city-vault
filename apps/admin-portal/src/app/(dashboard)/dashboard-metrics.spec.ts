@@ -4,7 +4,6 @@ import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
   sales,
-  storeMemberships,
   stores,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
@@ -44,7 +43,7 @@ async function seedStore(db: Db) {
 }
 
 describe("dashboardMetrics", () => {
-  test("aggregates sales, vendors, and active members in the store's time zone", async () => {
+  test("aggregates sales and vendors in the store's time zone", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
@@ -64,14 +63,6 @@ describe("dashboardMetrics", () => {
       .insert(vendors)
       .values([makeVendor("Vendor A"), makeVendor("Vendor B")]);
 
-    await db
-      .insert(storeMemberships)
-      .values([
-        makeMembership("01920000-0000-7000-8000-0000000000a1", "active"),
-        makeMembership("01920000-0000-7000-8000-0000000000a2", "active"),
-        makeMembership("01920000-0000-7000-8000-0000000000a3", "disabled"),
-      ]);
-
     const metrics = await runMetrics(layer);
 
     assert.deepEqual(metrics, {
@@ -80,7 +71,6 @@ describe("dashboardMetrics", () => {
       salesWeek: 3,
       revenueWeekCents: 4700,
       vendorCount: 2,
-      activeMemberCount: 2,
     });
   });
 
@@ -96,7 +86,6 @@ describe("dashboardMetrics", () => {
       salesWeek: 0,
       revenueWeekCents: 0,
       vendorCount: 0,
-      activeMemberCount: 0,
     });
   });
 });
@@ -116,16 +105,4 @@ function makeSale(occurredAt: string, totalCents: bigint) {
 
 function makeVendor(name: string) {
   return { name, createdAt: SEED_TS, updatedAt: SEED_TS };
-}
-
-function makeMembership(userId: string, status: "active" | "disabled") {
-  return {
-    storeId: BOOTSTRAP_STORE_ID,
-    userId,
-    email: `${userId}@example.com`,
-    role: "owner" as const,
-    status,
-    createdAt: SEED_TS,
-    updatedAt: SEED_TS,
-  };
 }

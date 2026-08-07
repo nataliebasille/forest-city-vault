@@ -5,7 +5,6 @@ import {
 } from "@forest-city-vault/infrastructure-database";
 import {
   sales,
-  storeMemberships,
   stores,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
@@ -23,7 +22,6 @@ export type DashboardMetrics = {
   readonly salesWeek: number;
   readonly revenueWeekCents: number;
   readonly vendorCount: number;
-  readonly activeMemberCount: number;
 };
 
 /**
@@ -34,7 +32,7 @@ export type DashboardMetrics = {
  * read from the {@link Clock} (not SQL `now()`) so the query is deterministic
  * and testable. A `bounds` CTE computes the store's zone and the local day/week
  * starts once; the outer aggregate then filters sales against those bounds and
- * folds in the vendor and active-member counts as scalar subqueries. `from
+ * folds in the vendor count as a scalar subquery. `from
  * bounds left join sales on true` guarantees exactly one result row even when
  * the store has no sales yet.
  */
@@ -82,10 +80,6 @@ export const dashboardMetrics = Effect.gen(function* () {
         vendorCount: sql<string>`(select count(*) from ${vendors})`.as(
           "vendor_count",
         ),
-        activeMemberCount:
-          sql<string>`(select count(*) from ${storeMemberships} where ${storeMemberships.storeId} = ${BOOTSTRAP_STORE_ID} and ${storeMemberships.status} = 'active')`.as(
-            "active_member_count",
-          ),
       })
       .from(bounds)
       .leftJoin(sales, sql`true`);
@@ -109,7 +103,6 @@ const MetricRow = Schema.Struct({
   salesWeek: MetricValue,
   revenueWeekCents: MetricValue,
   vendorCount: MetricValue,
-  activeMemberCount: MetricValue,
 });
 
 const decodeMetrics = Schema.decodeUnknown(MetricRow);

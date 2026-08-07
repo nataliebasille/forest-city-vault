@@ -44,7 +44,6 @@ describe("dashboardMetrics with domain-seeded sales", () => {
       salesWeek: 5,
       revenueWeekCents: 15923,
       vendorCount: 0,
-      activeMemberCount: 0,
     });
   });
 });
