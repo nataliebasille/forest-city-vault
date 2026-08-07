@@ -2,7 +2,7 @@ import type { Metric } from "@ui/metric-grid";
 import type { DashboardMetrics } from "./dashboard-metrics";
 
 /**
- * Maps the numeric {@link DashboardMetrics} read model onto the six preformatted
+ * Maps the numeric {@link DashboardMetrics} read model onto the five preformatted
  * {@link Metric} tiles the dashboard's grid renders, in display order. This is
  * the one place cents become dollars and raw counts become localized strings —
  * the grid itself stays presentation-only and the read model stays unit-clean.
@@ -33,11 +33,6 @@ export function toDashboardMetricTiles(metrics: DashboardMetrics): Metric[] {
       key: "vendors",
       label: "Vendors",
       value: formatCount(metrics.vendorCount),
-    },
-    {
-      key: "active-members",
-      label: "Active members",
-      value: formatCount(metrics.activeMemberCount),
     },
   ];
 }

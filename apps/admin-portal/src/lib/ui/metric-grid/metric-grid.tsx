@@ -14,7 +14,8 @@ export type Metric = {
 /**
  * The dashboard's compact metric strip: a responsive, data-agnostic grid of
  * headline numbers. It renders exactly the metrics it is handed, in order, and
- * owns none of the data — callers pass preformatted {@link Metric}s.
+ * owns none of the data — callers pass preformatted {@link Metric}s. The desktop
+ * column count matches the number of tiles so the strip is always exactly full.
  */
 export function MetricGrid({
   metrics,
@@ -22,7 +23,9 @@ export function MetricGrid({
   readonly metrics: readonly Metric[];
 }) {
   return (
-    <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-secondary-500/15 bg-secondary-500/15 sm:grid-cols-3 lg:grid-cols-6">
+    <section
+      className={`grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-secondary-500/15 bg-secondary-500/15 sm:grid-cols-3 ${lgColumnsClass(metrics.length)}`}
+    >
       {metrics.map((metric) => (
         <div
           key={metric.key}
@@ -43,4 +46,24 @@ export function MetricGrid({
       ))}
     </section>
   );
+}
+
+// Tailwind's JIT only emits classes it can see as complete strings, so the
+// large-screen column counts are spelled out literally and picked by tile count.
+// Beyond six, the grid keeps six columns and wraps onto a second row.
+function lgColumnsClass(count: number): string {
+  switch (count) {
+    case 1:
+      return "lg:grid-cols-1";
+    case 2:
+      return "lg:grid-cols-2";
+    case 3:
+      return "lg:grid-cols-3";
+    case 4:
+      return "lg:grid-cols-4";
+    case 5:
+      return "lg:grid-cols-5";
+    default:
+      return "lg:grid-cols-6";
+  }
 }
