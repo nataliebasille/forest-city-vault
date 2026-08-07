@@ -15,6 +15,7 @@
     "db:generate:drizzle-schema": "tsx scripts/generate-drizzle-flat-schema.ts",
     "db:generate": "pnpm db:generate:drizzle-schema && drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
+    "db:migrate:prod": "tsx src/migrate.ts .env.production",
     "db:studio": "drizzle-kit studio",
     "bootstrap:store": "tsx scripts/bootstrap-store.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner-membership.ts",

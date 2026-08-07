@@ -10,6 +10,7 @@
     "db:reset": "supabase db reset",
     "db:status": "supabase status",
     "db:migrate": "pnpm --filter @forest-city-vault/infrastructure-database run db:migrate",
+    "db:migrate:prod": "pnpm --filter @forest-city-vault/infrastructure-database run db:migrate:prod",
     "db:generate": "pnpm --filter @forest-city-vault/infrastructure-database run db:generate",
     "db:studio": "pnpm --filter @forest-city-vault/infrastructure-database run db:studio"
   },
