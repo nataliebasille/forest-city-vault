@@ -59,3 +59,23 @@ export {
   FinalActiveOwnerError,
   type OwnerPreservationSubject,
 } from "./policies/owner-preservation";
+
+export { Vendor } from "./vendor/vendor.aggregate-root";
+export {
+  VendorSchema,
+  VendorStatusSchema,
+  type VendorSnapshot,
+  type VendorStatus,
+} from "./vendor/vendor.entity";
+export {
+  CreateVendorSchema,
+  LinkCloverCategorySchema,
+  RenameVendorSchema,
+} from "./vendor/vendor.actions";
+export {
+  VendorAlreadyActiveError,
+  VendorAlreadyInactiveError,
+  VendorCloverCategoryBlankError,
+  VendorCommissionShareOutOfRangeError,
+  VendorNameBlankError,
+} from "./vendor/vendor.errors";

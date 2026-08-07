@@ -36,6 +36,13 @@
       "when": 1785426631117,
       "tag": "0004_add_stores_and_memberships",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786104477287,
+      "tag": "0005_add_vendor_aggregate",
+      "breakpoints": true
     }
   ]
 }
