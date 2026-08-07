@@ -1,3 +1,4 @@
+import { AggregateEvent } from "@forest-city-vault/core-domain";
 import { Schema } from "effect";
 import { BasisPointsSchema } from "../value-objects/basis-points";
 import { VendorSchema } from "./vendor.entity";
@@ -29,6 +30,11 @@ export const VendorCreated = {
     }) satisfies typeof VendorSchema.Type,
 };
 
+export type VendorCreatedEvent = AggregateEvent<
+  "VendorCreated",
+  typeof VendorCreatedSchema.Type
+>;
+
 const VendorRenamedSchema = Schema.Struct({
   name: Schema.String,
   updatedAt: Schema.Date,
@@ -47,6 +53,11 @@ export const VendorRenamed = {
       updatedAt: payload.updatedAt,
     }) satisfies typeof VendorSchema.Type,
 };
+
+export type VendorRenamedEvent = AggregateEvent<
+  "VendorRenamed",
+  typeof VendorRenamedSchema.Type
+>;
 
 const VendorCloverCategoryLinkedSchema = Schema.Struct({
   cloverCategoryId: Schema.String,
@@ -67,6 +78,11 @@ export const VendorCloverCategoryLinked = {
     }) satisfies typeof VendorSchema.Type,
 };
 
+export type VendorCloverCategoryLinkedEvent = AggregateEvent<
+  "VendorCloverCategoryLinked",
+  typeof VendorCloverCategoryLinkedSchema.Type
+>;
+
 const VendorActivatedSchema = Schema.Struct({
   updatedAt: Schema.Date,
 });
@@ -85,6 +101,11 @@ export const VendorActivated = {
     }) satisfies typeof VendorSchema.Type,
 };
 
+export type VendorActivatedEvent = AggregateEvent<
+  "VendorActivated",
+  typeof VendorActivatedSchema.Type
+>;
+
 const VendorDeactivatedSchema = Schema.Struct({
   updatedAt: Schema.Date,
 });
@@ -102,3 +123,8 @@ export const VendorDeactivated = {
       updatedAt: payload.updatedAt,
     }) satisfies typeof VendorSchema.Type,
 };
+
+export type VendorDeactivatedEvent = AggregateEvent<
+  "VendorDeactivated",
+  typeof VendorDeactivatedSchema.Type
+>;

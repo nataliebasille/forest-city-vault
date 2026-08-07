@@ -1,6 +1,12 @@
 import { Effect, Schema } from "effect";
 import { Clock } from "@forest-city-vault/core-clock";
-import * as events from "./vendor.events";
+import type {
+  VendorActivatedEvent,
+  VendorCloverCategoryLinkedEvent,
+  VendorCreatedEvent,
+  VendorDeactivatedEvent,
+  VendorRenamedEvent,
+} from "./vendor.events";
 import { BasisPointsSchema } from "../value-objects/basis-points";
 import { VendorSchema } from "./vendor.entity";
 import {
@@ -27,31 +33,6 @@ export const RenameVendorSchema = Schema.Struct({
 export const LinkCloverCategorySchema = Schema.Struct({
   cloverCategoryId: Schema.String,
 });
-
-type VendorCreatedEvent = {
-  type: "VendorCreated";
-  payload: typeof events.VendorCreated.schema.Type;
-};
-
-type VendorRenamedEvent = {
-  type: "VendorRenamed";
-  payload: typeof events.VendorRenamed.schema.Type;
-};
-
-type VendorCloverCategoryLinkedEvent = {
-  type: "VendorCloverCategoryLinked";
-  payload: typeof events.VendorCloverCategoryLinked.schema.Type;
-};
-
-type VendorActivatedEvent = {
-  type: "VendorActivated";
-  payload: typeof events.VendorActivated.schema.Type;
-};
-
-type VendorDeactivatedEvent = {
-  type: "VendorDeactivated";
-  payload: typeof events.VendorDeactivated.schema.Type;
-};
 
 type VendorSnapshot = typeof VendorSchema.Type;
 
