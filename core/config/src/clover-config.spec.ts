@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { CloverConfig } from "@forest-city-vault/core-config";
+import { CloverConfig } from "./index";
 import { ConfigProvider, Effect, Exit, Redacted } from "effect";
 
 const VALID_ENV: Record<string, string> = {

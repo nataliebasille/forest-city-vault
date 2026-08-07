@@ -1,6 +1,6 @@
 import { Effect, Redacted, Schema } from "effect";
-import { makeRequest } from "./make-request";
-import { getMerchantAccessToken } from "./auth";
+import { makeRequest } from "../make-request";
+import { getMerchantAccessToken } from "../auth";
 
 export const CloverPaymentSchema = Schema.Struct({
   id: Schema.String,

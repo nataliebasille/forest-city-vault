@@ -20,6 +20,7 @@
     "@forest-city-vault/core-domain": "workspace:*",
     "@forest-city-vault/core-id-generator": "workspace:*",
     "@forest-city-vault/infrastructure-database": "workspace:*",
+    "@forest-city-vault/infrastructure-clover": "workspace:*",
     "@forest-city-vault/domain": "workspace:*",
     "@forest-city-vault/platform-nextjs-effect": "workspace:*",
     "dotenv": "^17.4.2",

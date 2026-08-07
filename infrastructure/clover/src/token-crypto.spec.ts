@@ -7,7 +7,7 @@ import {
   decryptToken,
   encryptToken,
   TokenCryptoError,
-} from "@/lib/integration/token-crypto";
+} from "./token-crypto";
 
 const KEY = "unit-test-encryption-key";
 

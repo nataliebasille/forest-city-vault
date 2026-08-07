@@ -9,7 +9,7 @@ import { makeRouteTest } from "@/lib/testing/make-route-test";
 import {
   generateOAuthState,
   OAUTH_STATE_COOKIE_NAME,
-} from "@/lib/integration/oauth-state";
+} from "@forest-city-vault/infrastructure-clover";
 
 const MERCHANT_ID = "test-merchant-id";
 const APP_ID = "test-app-id";

@@ -5,7 +5,7 @@ import { dbSchema } from "@forest-city-vault/infrastructure-database";
 import { ConfigProvider, Effect, Exit } from "effect";
 import { NextRequest } from "next/server";
 
-import { encryptToken } from "@/lib/integration/token-crypto";
+import { encryptToken } from "@forest-city-vault/infrastructure-clover";
 import { makeRouteTest } from "@/lib/testing/make-route-test";
 
 const ENCRYPTION_KEY = "test-token-encryption-key";

@@ -11,7 +11,7 @@ import {
   httpFailure,
   unauthorized,
 } from "@forest-city-vault/platform-nextjs-effect";
-import { getCloverPayment } from "@/lib/integration/payments";
+import { getCloverPayment } from "@forest-city-vault/infrastructure-clover";
 import { Config, Effect, Redacted, Schema } from "effect";
 import { NextRequest } from "next/server";
 

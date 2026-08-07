@@ -16,8 +16,8 @@ import {
   getMerchantAccessToken,
   MerchantNotConnectedError,
   ReauthorizationRequiredError,
-} from "@/lib/integration/auth";
-import { decryptToken, encryptToken } from "@/lib/integration/token-crypto";
+} from "./auth";
+import { decryptToken, encryptToken } from "./token-crypto";
 
 const ENCRYPTION_KEY = "auth-spec-encryption-key";
 const NOW = new Date("2024-06-01T00:00:00.000Z");

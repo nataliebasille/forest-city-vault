@@ -3,15 +3,13 @@ import { route } from "@/runtime";
 import {
   buildAuthorizeUrl,
   exchangeCodeForTokens,
-} from "@/lib/integration/auth";
-import {
   generateOAuthState,
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_COOKIE_PATH,
   OAUTH_STATE_TTL_MS,
   openOAuthState,
   safeEqual,
-} from "@/lib/integration/oauth-state";
+} from "@forest-city-vault/infrastructure-clover";
 import { now } from "@forest-city-vault/core-clock";
 import { CloverConfig } from "@forest-city-vault/core-config";
 import {
