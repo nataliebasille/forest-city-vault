@@ -40,8 +40,8 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1786064423205,
-      "tag": "0005_big_ogun",
+      "when": 1786104477287,
+      "tag": "0005_add_vendor_aggregate",
       "breakpoints": true
     }
   ]
