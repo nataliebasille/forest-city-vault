@@ -5,11 +5,13 @@ import { databaseSagaScoped } from "../database-saga-scoped";
 import { SalesRepositoryLive } from "./sales";
 import { StoreAccountRepositoryLive } from "./stores";
 import { StoreMembershipRepositoryLive } from "./store-memberships";
+import { VendorRepositoryLive } from "./vendors";
 
 export * from "./sales";
 export * from "./clover-tokens";
 export * from "./stores";
 export * from "./store-memberships";
+export * from "./vendors";
 
 /**
  * The aggregate repository layers, merged so every aggregate's port is provided
@@ -20,6 +22,7 @@ const AggregateRepositoriesLive = Layer.mergeAll(
   SalesRepositoryLive,
   StoreAccountRepositoryLive,
   StoreMembershipRepositoryLive,
+  VendorRepositoryLive,
 );
 
 /**
