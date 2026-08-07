@@ -62,8 +62,10 @@ export {
 
 export { Vendor } from "./vendor/vendor.aggregate-root";
 export {
+  VendorItemSchema,
   VendorSchema,
   VendorStatusSchema,
+  type VendorItem,
   type VendorSnapshot,
   type VendorStatus,
 } from "./vendor/vendor.entity";
@@ -71,11 +73,15 @@ export {
   CreateVendorSchema,
   LinkCloverCategorySchema,
   RenameVendorSchema,
+  SyncCloverItemsSchema,
 } from "./vendor/vendor.actions";
 export {
   VendorAlreadyActiveError,
   VendorAlreadyInactiveError,
   VendorCloverCategoryBlankError,
   VendorCommissionShareOutOfRangeError,
+  VendorItemCloverIdBlankError,
+  VendorItemDuplicateError,
+  VendorItemPriceInvalidError,
   VendorNameBlankError,
 } from "./vendor/vendor.errors";

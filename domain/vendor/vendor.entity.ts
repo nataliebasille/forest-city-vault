@@ -1,8 +1,23 @@
 import { Schema } from "effect";
 import { BasisPointsSchema } from "../value-objects/basis-points";
+import { CentsSchema } from "../value-objects/cents";
 
 export const VendorStatusSchema = Schema.Literal("active", "inactive");
 export type VendorStatus = typeof VendorStatusSchema.Type;
+
+/**
+ * An item a vendor sells, sourced from Clover. Each item is a Clover inventory
+ * item within the vendor's Clover category, so `cloverItemId` is its identity
+ * within the vendor's item collection. `price` is stored in cents (see
+ * {@link CentsSchema}).
+ */
+export const VendorItemSchema = Schema.Struct({
+  cloverItemId: Schema.String,
+  name: Schema.String,
+  price: CentsSchema,
+});
+
+export type VendorItem = typeof VendorItemSchema.Type;
 
 export const VendorSchema = Schema.Struct({
   name: Schema.String,
@@ -21,6 +36,12 @@ export const VendorSchema = Schema.Struct({
    * linkage is known.
    */
   cloverCategoryId: Schema.NullOr(Schema.String),
+
+  /**
+   * The items this vendor sells, mirrored from Clover. Keyed by
+   * {@link VendorItemSchema.cloverItemId}; empty until items are synced.
+   */
+  items: Schema.Array(VendorItemSchema),
 
   createdAt: Schema.Date,
   updatedAt: Schema.Date,

@@ -18,5 +18,6 @@ export const storeMemberships = dbSchema.storeMemberships;
 export const storeRole = dbSchema.storeRole;
 export const storeStatus = dbSchema.storeStatus;
 export const stores = dbSchema.stores;
+export const vendorItems = dbSchema.vendorItems;
 export const vendorStatus = dbSchema.vendorStatus;
 export const vendors = dbSchema.vendors;

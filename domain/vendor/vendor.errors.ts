@@ -21,6 +21,31 @@ export class VendorCloverCategoryBlankError extends Data.TaggedError(
   "domain/Vendor/VendorCloverCategoryBlankError",
 )<{}> {}
 
+/**
+ * A synced vendor item carried a blank (empty or whitespace-only) Clover item
+ * id. Ids are trimmed before this check, so a whitespace-only id is rejected the
+ * same as "".
+ */
+export class VendorItemCloverIdBlankError extends Data.TaggedError(
+  "domain/Vendor/VendorItemCloverIdBlankError",
+)<{}> {}
+
+/**
+ * A vendor item sync contained the same Clover item id more than once, so the
+ * incoming set cannot be reconciled unambiguously.
+ */
+export class VendorItemDuplicateError extends Data.TaggedError(
+  "domain/Vendor/VendorItemDuplicateError",
+)<{ readonly cloverItemId: string }> {}
+
+/**
+ * A synced vendor item carried an invalid price (not a non-negative integer
+ * number of cents).
+ */
+export class VendorItemPriceInvalidError extends Data.TaggedError(
+  "domain/Vendor/VendorItemPriceInvalidError",
+)<{ readonly cloverItemId: string }> {}
+
 /** Tried to activate a vendor that is already active. */
 export class VendorAlreadyActiveError extends Data.TaggedError(
   "domain/Vendor/VendorAlreadyActiveError",
