@@ -1,7 +1,7 @@
 import { AggregateEvent } from "@forest-city-vault/core-domain";
 import { Schema } from "effect";
 import { BasisPointsSchema } from "../value-objects/basis-points";
-import { VendorSchema } from "./vendor.entity";
+import { VendorItemSchema, VendorSchema } from "./vendor.entity";
 
 /**
  * As with the store and membership aggregates, every vendor event carries the
@@ -25,6 +25,7 @@ export const VendorCreated = {
       status: "active",
       commissionShare: payload.commissionShare,
       cloverCategoryId: payload.cloverCategoryId,
+      items: [],
       createdAt: payload.createdAt,
       updatedAt: payload.createdAt,
     }) satisfies typeof VendorSchema.Type,
@@ -127,4 +128,82 @@ export const VendorDeactivated = {
 export type VendorDeactivatedEvent = AggregateEvent<
   "VendorDeactivated",
   typeof VendorDeactivatedSchema.Type
+>;
+
+const VendorItemAddedSchema = Schema.Struct({
+  item: VendorItemSchema,
+  updatedAt: Schema.Date,
+});
+
+export const VendorItemAdded = {
+  schema: VendorItemAddedSchema,
+
+  handler: (
+    snapshot: typeof VendorSchema.Type,
+    payload: typeof VendorItemAddedSchema.Type,
+  ) =>
+    ({
+      ...snapshot,
+      items: [...snapshot.items, payload.item],
+      updatedAt: payload.updatedAt,
+    }) satisfies typeof VendorSchema.Type,
+};
+
+export type VendorItemAddedEvent = AggregateEvent<
+  "VendorItemAdded",
+  typeof VendorItemAddedSchema.Type
+>;
+
+const VendorItemUpdatedSchema = Schema.Struct({
+  item: VendorItemSchema,
+  updatedAt: Schema.Date,
+});
+
+export const VendorItemUpdated = {
+  schema: VendorItemUpdatedSchema,
+
+  handler: (
+    snapshot: typeof VendorSchema.Type,
+    payload: typeof VendorItemUpdatedSchema.Type,
+  ) =>
+    ({
+      ...snapshot,
+      items: snapshot.items.map((existing) =>
+        existing.cloverItemId === payload.item.cloverItemId ?
+          payload.item
+        : existing,
+      ),
+      updatedAt: payload.updatedAt,
+    }) satisfies typeof VendorSchema.Type,
+};
+
+export type VendorItemUpdatedEvent = AggregateEvent<
+  "VendorItemUpdated",
+  typeof VendorItemUpdatedSchema.Type
+>;
+
+const VendorItemRemovedSchema = Schema.Struct({
+  cloverItemId: Schema.String,
+  updatedAt: Schema.Date,
+});
+
+export const VendorItemRemoved = {
+  schema: VendorItemRemovedSchema,
+
+  handler: (
+    snapshot: typeof VendorSchema.Type,
+    payload: typeof VendorItemRemovedSchema.Type,
+  ) =>
+    ({
+      ...snapshot,
+      items: snapshot.items.filter(
+        (existing) => existing.cloverItemId !== payload.cloverItemId,
+      ),
+      updatedAt: payload.updatedAt,
+    }) satisfies typeof VendorSchema.Type,
+};
+
+export type VendorItemRemovedEvent = AggregateEvent<
+  "VendorItemRemoved",
+  typeof VendorItemRemovedSchema.Type
 >;

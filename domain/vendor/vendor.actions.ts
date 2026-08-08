@@ -5,15 +5,22 @@ import type {
   VendorCloverCategoryLinkedEvent,
   VendorCreatedEvent,
   VendorDeactivatedEvent,
+  VendorItemAddedEvent,
+  VendorItemRemovedEvent,
+  VendorItemUpdatedEvent,
   VendorRenamedEvent,
 } from "./vendor.events";
 import { BasisPointsSchema } from "../value-objects/basis-points";
-import { VendorSchema } from "./vendor.entity";
+import { CentsSchema } from "../value-objects/cents";
+import { VendorItem, VendorSchema } from "./vendor.entity";
 import {
   VendorAlreadyActiveError,
   VendorAlreadyInactiveError,
   VendorCloverCategoryBlankError,
   VendorCommissionShareOutOfRangeError,
+  VendorItemCloverIdBlankError,
+  VendorItemDuplicateError,
+  VendorItemPriceInvalidError,
   VendorNameBlankError,
 } from "./vendor.errors";
 
@@ -32,6 +39,16 @@ export const RenameVendorSchema = Schema.Struct({
 
 export const LinkCloverCategorySchema = Schema.Struct({
   cloverCategoryId: Schema.String,
+});
+
+export const SyncCloverItemsSchema = Schema.Struct({
+  items: Schema.Array(
+    Schema.Struct({
+      cloverItemId: Schema.String,
+      name: Schema.String,
+      price: Schema.Number,
+    }),
+  ),
 });
 
 type VendorSnapshot = typeof VendorSchema.Type;
@@ -112,6 +129,45 @@ export const deactivateVendor = (snapshot: VendorSnapshot) =>
     } satisfies VendorDeactivatedEvent;
   });
 
+export const syncCloverItems = (
+  snapshot: VendorSnapshot,
+  payload: typeof SyncCloverItemsSchema.Type,
+) =>
+  Effect.gen(function* () {
+    const incoming = yield* normalizeIncomingItems(payload.items);
+    const updatedAt = yield* now;
+
+    const existingById = new Map(
+      snapshot.items.map((item) => [item.cloverItemId, item]),
+    );
+    const incomingIds = new Set(incoming.map((item) => item.cloverItemId));
+
+    const events: Array<
+      VendorItemAddedEvent | VendorItemUpdatedEvent | VendorItemRemovedEvent
+    > = [];
+
+    for (const item of incoming) {
+      const existing = existingById.get(item.cloverItemId);
+
+      if (existing === undefined) {
+        events.push({ type: "VendorItemAdded", payload: { item, updatedAt } });
+      } else if (existing.name !== item.name || existing.price !== item.price) {
+        events.push({ type: "VendorItemUpdated", payload: { item, updatedAt } });
+      }
+    }
+
+    for (const item of snapshot.items) {
+      if (!incomingIds.has(item.cloverItemId)) {
+        events.push({
+          type: "VendorItemRemoved",
+          payload: { cloverItemId: item.cloverItemId, updatedAt },
+        });
+      }
+    }
+
+    return events;
+  });
+
 const now = Effect.flatMap(Clock, (clock) => clock.now);
 
 const requireName = (raw: string) => {
@@ -138,3 +194,32 @@ const requireCommissionShare = (raw: number) =>
       () => new VendorCommissionShareOutOfRangeError({ commissionShare: raw }),
     ),
   );
+
+const decodeCents = Schema.decodeUnknown(CentsSchema);
+
+const normalizeIncomingItems = (
+  items: typeof SyncCloverItemsSchema.Type.items,
+) =>
+  Effect.gen(function* () {
+    const seen = new Set<string>();
+    const normalized: VendorItem[] = [];
+
+    for (const raw of items) {
+      const cloverItemId = raw.cloverItemId.trim();
+      if (cloverItemId.length === 0) {
+        return yield* Effect.fail(new VendorItemCloverIdBlankError());
+      }
+      if (seen.has(cloverItemId)) {
+        return yield* Effect.fail(new VendorItemDuplicateError({ cloverItemId }));
+      }
+      seen.add(cloverItemId);
+
+      const price = yield* decodeCents(raw.price).pipe(
+        Effect.mapError(() => new VendorItemPriceInvalidError({ cloverItemId })),
+      );
+
+      normalized.push({ cloverItemId, name: raw.name.trim(), price });
+    }
+
+    return normalized;
+  });

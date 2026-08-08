@@ -7,6 +7,9 @@ import {
   VendorAlreadyInactiveError,
   VendorCloverCategoryBlankError,
   VendorCommissionShareOutOfRangeError,
+  VendorItemCloverIdBlankError,
+  VendorItemDuplicateError,
+  VendorItemPriceInvalidError,
   VendorNameBlankError,
 } from "../index";
 import { BasisPointsSchema } from "../value-objects/basis-points";
@@ -37,6 +40,7 @@ describe("Vendor", () => {
       status: "active",
       commissionShare: 6000,
       cloverCategoryId: null,
+      items: [],
       createdAt: FIXED_NOW,
       updatedAt: FIXED_NOW,
     });
@@ -217,6 +221,122 @@ describe("Vendor", () => {
     );
 
     expect(expectFailure(exit)).toBeInstanceOf(VendorAlreadyInactiveError);
+  });
+
+  const syncItems = (
+    vendor: ReturnType<typeof createVendor>,
+    items: ReadonlyArray<{ cloverItemId: string; name: string; price: number }>,
+  ) => runAction(Vendor.actions.syncCloverItems(vendor, { items }));
+
+  it("adds all items on the first sync", () => {
+    const synced = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+
+    expect(synced.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+    expect(synced.version).toBe(3);
+  });
+
+  it("trims the item id and name on sync", () => {
+    const synced = syncItems(createVendor(), [
+      { cloverItemId: "  ITEM1  ", name: "  Syrup  ", price: 1200 },
+    ]);
+
+    expect(synced.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+  });
+
+  it("updates a changed item and leaves unchanged items alone", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+
+    const updated = syncItems(initial, [
+      { cloverItemId: "ITEM1", name: "Maple Syrup", price: 1500 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+
+    expect(updated.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Maple Syrup", price: 1500 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+  });
+
+  it("removes items absent from the incoming sync", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+
+    const removed = syncItems(initial, [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+
+    expect(removed.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+  });
+
+  it("clears all items when synced with an empty list", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+
+    const cleared = syncItems(initial, []);
+
+    expect(cleared.snapshot.items).toEqual([]);
+  });
+
+  it("emits no events when the incoming items match the current items", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+
+    const resynced = syncItems(initial, [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+
+    expect(resynced.version).toBe(initial.version);
+    expect(resynced.snapshot.items).toEqual(initial.snapshot.items);
+  });
+
+  it("rejects a blank Clover item id", () => {
+    const exit = runActionExit(
+      Vendor.actions.syncCloverItems(createVendor(), {
+        items: [{ cloverItemId: "  ", name: "Syrup", price: 1200 }],
+      }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemCloverIdBlankError);
+  });
+
+  it("rejects duplicate Clover item ids in one sync", () => {
+    const exit = runActionExit(
+      Vendor.actions.syncCloverItems(createVendor(), {
+        items: [
+          { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+          { cloverItemId: "ITEM1", name: "Candle", price: 800 },
+        ],
+      }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemDuplicateError);
+  });
+
+  it("rejects an invalid item price", () => {
+    const exit = runActionExit(
+      Vendor.actions.syncCloverItems(createVendor(), {
+        items: [{ cloverItemId: "ITEM1", name: "Syrup", price: -1 }],
+      }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemPriceInvalidError);
   });
 });
 
