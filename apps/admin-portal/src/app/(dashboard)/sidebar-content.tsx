@@ -1,13 +1,14 @@
+import Link from "next/link";
 import { AccountMenu } from "./account-menu";
 
 /**
- * The static contents of the portal sidebar — branding, the (currently empty)
- * navigation area, and the signed-in owner's account menu. It is a Server
- * Component rendered into both the desktop sidebar and the mobile off-canvas
- * drawer so the two stay identical.
+ * The static contents of the portal sidebar — branding, primary navigation,
+ * and the signed-in owner's account menu. It is a Server Component rendered
+ * into both the desktop sidebar and the mobile off-canvas drawer so the two
+ * stay identical.
  *
  * It returns its sections as a fragment so they become direct flex children of
- * whichever `<aside>` hosts them; the empty nav's `flex-1` then pins the account
+ * whichever `<aside>` hosts them; the nav's `flex-1` then pins the account
  * block to the bottom.
  */
 export function SidebarContent({
@@ -22,11 +23,15 @@ export function SidebarContent({
         <Brand />
       </div>
 
-      {/* Navigation — intentionally empty for now */}
-      <nav
-        className="flex-1 overflow-y-auto px-4 py-6"
-        aria-label="Primary"
-      />
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-4 py-6" aria-label="Primary">
+        <Link
+          href="/sales-review"
+          className="flex items-center gap-3 rounded-lg px-2 py-2 font-subheading text-sm font-medium text-on-secondary-500/80 transition-colors hover:bg-white/8 hover:text-on-secondary-500"
+        >
+          Sales review
+        </Link>
+      </nav>
 
       {/* Account menu (appearance + sign out) */}
       <div className="border-t border-white/10 px-4 py-4">
