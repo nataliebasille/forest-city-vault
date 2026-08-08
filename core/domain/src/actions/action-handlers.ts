@@ -38,10 +38,7 @@ export type UpdateActionHandler<
 ) => Effect.Effect<
   NoInfer<
     | Update_Events_From_EventDefinitions<Schema, ED>
-    | [
-        Update_Events_From_EventDefinitions<Schema, ED>,
-        ...Update_Events_From_EventDefinitions<Schema, ED>[],
-      ]
+    | readonly Update_Events_From_EventDefinitions<Schema, ED>[]
   >,
   E,
   R
