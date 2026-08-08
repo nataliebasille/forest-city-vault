@@ -241,6 +241,42 @@ export function exchangeCodeForTokens(merchantId: string, code: string) {
 }
 
 /**
+ * Yields a valid, decrypted access token for the merchant, preferring a
+ * statically configured token over the OAuth token store.
+ *
+ * When `CLOVER_MERCHANT_ACCESS_TOKEN` is configured **and** the requested
+ * merchant is the single configured merchant (`CLOVER_MERCHANT_ID`), that static
+ * token is returned directly — no database read, no refresh. This is the path
+ * used to talk to the Clover API directly with a token issued outside the OAuth
+ * app flow (e.g. a test merchant). For any other merchant, or when no static
+ * token is configured, this falls back to the per-merchant OAuth token store via
+ * {@link getMerchantAccessToken}.
+ */
+export function resolveMerchantAccessToken(
+  merchantId: string,
+  options?: { readonly lockTimeoutMs?: number },
+) {
+  return Effect.gen(function* () {
+    const { merchantId: configuredMerchantId, merchantAccessToken } =
+      yield* CloverConfig;
+
+    if (
+      Option.isSome(merchantAccessToken) &&
+      merchantId === configuredMerchantId
+    ) {
+      yield* Effect.logInfo("clover.auth.static_token.used", {
+        workflowStage: "resolve_token",
+        merchantId,
+        tokenSource: "static",
+      });
+      return merchantAccessToken.value;
+    }
+
+    return yield* getMerchantAccessToken(merchantId, options);
+  });
+}
+
+/**
  * Yields a valid, decrypted access token for the merchant, refreshing it first
  * when it is expired (or about to expire). Fails terminally when the merchant is
  * not connected or must re-authorize.
