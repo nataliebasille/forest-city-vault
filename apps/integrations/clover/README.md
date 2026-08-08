@@ -4,16 +4,18 @@ Backend-only Next.js service for Clover webhook handling.
 
 ## Scripts
 
-- `pnpm dev` - Run local dev server on port 3010
+- `pnpm dev` - Run local dev server on port 3103
 - `pnpm build` - Build for production
-- `pnpm start` - Start production server on port 3010
+- `pnpm start` - Start production server on port 3103
 - `pnpm lint` - Lint source
+- `pnpm import:schedule` - Run the local payment importer on an interval (see [Local interval importer](#local-interval-importer))
 
 ## API Routes
 
 - `GET /api/health` - Health check endpoint
 - `GET /api/oauth/callback` - Clover OAuth callback / Site URL (redirects to Clover authorize on launch, captures per-merchant tokens on return)
 - `POST /api/webhooks/clover` - Clover webhook receiver
+- `POST /api/import/payments` - Internal-only import trigger: lists payments from the Clover API and enqueues them into the payments inbox (authenticated bearer secret)
 - `POST /api/process/payments` - Internal-only inbox drain trigger (authenticated bearer secret)
 
 ## Notes
@@ -37,6 +39,7 @@ one configured merchant id.
 
    Invalid or unexpected values are rejected (`400`/`403`) **before** any
    redirect to Clover.
+
 2. **State + redirect.** On a valid launch the route mints a cryptographically
    random **OAuth `state` nonce**, seals the correlation data (nonce,
    `merchant_id`, `client_id`, configured `redirect_uri`, issued-at and
@@ -51,6 +54,7 @@ one configured merchant id.
    the API host used for token exchange/refresh (`CLOVER_URL`, e.g.
    `apisandbox.dev.clover.com`). Pointing authorize at the API host bounces the
    merchant back to login in a loop.
+
 3. **Callback (`code` present).** Clover redirects back to the same callback
    with a single-use `code`, plus `state`, `merchant_id` and `client_id`. Before
    exchanging the code the route re-opens the sealed state cookie and validates
@@ -68,6 +72,7 @@ one configured merchant id.
 
    Any failure returns a controlled `400`/`403` (generic message, no code/state
    echoed) and **does not** call Clover or persist tokens.
+
 4. **Token exchange.** Only after every check passes does the route exchange the
    code at `POST /oauth/v2/token` (using `CLOVER_APP_ID` and
    `CLOVER_SECRET_CODE`) for an `access_token` / `refresh_token` pair, persisting
@@ -79,6 +84,61 @@ one configured merchant id.
    token, transparently refreshing it at `POST /oauth/v2/refresh` when expired.
    If the merchant has no token, or the refresh token has expired, processing
    fails terminally and the merchant must (re)authorize.
+
+### Direct access token (test)
+
+For a test merchant whose access token was issued **outside** the OAuth app flow,
+set `CLOVER_MERCHANT_ACCESS_TOKEN` to that token. When it is set and a request is
+for the configured `CLOVER_MERCHANT_ID`, the app uses it directly against the
+Clover API (`resolveMerchantAccessToken`) instead of reading/refreshing an
+OAuth-stored token — no OAuth authorization is required. Any other merchant, or an
+unset token, falls back to the OAuth token store.
+
+This is intended for spikes/tests: the static token is not refreshed, so when it
+expires it must be reissued and updated manually.
+
+To pull a test merchant's recent payments into the database without webhooks:
+
+1. Configure `CLOVER_MERCHANT_ID`, `CLOVER_MERCHANT_ACCESS_TOKEN`, `CLOVER_URL`
+   (e.g. `https://apisandbox.dev.clover.com`) and `CLOVER_PROCESSOR_SECRET`.
+2. `POST /api/import/payments` with `Authorization: Bearer <CLOVER_PROCESSOR_SECRET>`.
+   Optional JSON body: `{ "limit": 50, "offset": 0, "filter": "createdTime>=<epochMs>" }`.
+   This lists payments from the Clover API and enqueues them into the payments
+   inbox (idempotent — re-running does not duplicate rows).
+3. `POST /api/process/payments` with the same bearer header to drain the inbox
+   into sales (the existing drain, unchanged).
+
+### Local interval importer
+
+`pnpm import:schedule` runs a local scheduler ([scripts/import-scheduler.ts](scripts/import-scheduler.ts))
+that drives the two steps above on an interval. It assumes the dev server is
+already running, so use two terminals:
+
+```sh
+# terminal 1 — the service
+pnpm dev
+
+# terminal 2 — the interval importer
+pnpm import:schedule
+```
+
+Each cycle it calls `POST /api/import/payments` then `POST /api/process/payments`
+(both with `CLOVER_PROCESSOR_SECRET`), never overlapping cycles, and logs the
+outcome. Stop it with Ctrl-C. It reads the same repo-root `.env` as the app.
+
+Configuration (all optional except the secret, read from `.env` or the shell):
+
+- `CLOVER_PROCESSOR_SECRET` - required; bearer secret for both endpoints.
+- `CLOVER_IMPORT_BASE_URL` - dev server base URL. Default `http://localhost:3103`.
+- `CLOVER_IMPORT_INTERVAL_MS` - delay between cycles. Default `60000` (60s).
+- `CLOVER_IMPORT_LIMIT` - page size passed to the import endpoint (route default 50).
+- `CLOVER_IMPORT_FILTER` - Clover query filter, e.g. `createdTime>=1700000000000`.
+
+The importer requires the merchant's Clover API token
+(`CLOVER_MERCHANT_ACCESS_TOKEN`) to have **read permission on payments**. The
+list call does not request expandable fields, so a payments-only token works; a
+token that additionally lacks order/line-item permission is fine. A `401` means
+the token is invalid or scoped to a different merchant.
 
 ### Internal payment processor endpoint
 
@@ -164,5 +224,6 @@ Tokens are encrypted with AES-256-GCM using a key derived from
 - `CLOVER_PROCESSOR_SECRET` - shared bearer secret for internal `POST /api/process/payments`
 - `CLOVER_TOKEN_ENCRYPTION_KEY` - secret used to encrypt stored OAuth tokens
 - `CLOVER_MERCHANT_ID` - the single merchant id allowed to authorize this app
+- `CLOVER_MERCHANT_ACCESS_TOKEN` - optional static Clover API access token for `CLOVER_MERCHANT_ID` that bypasses the OAuth token store (test/spike use; not refreshed)
 - `CLOVER_OAUTH_REDIRECT_URI` - exact OAuth callback URL (absolute; https in production); must match the Clover dashboard Site URL / redirect URI
 - `CLOVER_OAUTH_STATE_SECRET` - secret used to sign the OAuth CSRF state cookie (must be distinct from every other Clover secret)

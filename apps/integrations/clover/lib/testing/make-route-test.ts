@@ -1,7 +1,7 @@
 import { mock } from "node:test";
 
 import { drizzle } from "drizzle-orm/pglite";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Option, Redacted } from "effect";
 import { FetchHttpClient } from "@effect/platform";
 
 import { staticClock } from "@forest-city-vault/core-clock";
@@ -24,6 +24,7 @@ export interface MakeRouteTestOptions {
   oauthUrl?: string;
   tokenEncryptionKey?: string;
   merchantId?: string;
+  merchantAccessToken?: string;
   oauthRedirectUri?: string;
   oauthStateSecret?: string;
   fixedTime?: Date;
@@ -70,6 +71,10 @@ export async function makeRouteTest<T>(
     oauthUrl,
     tokenEncryptionKey: Redacted.make(tokenEncryptionKey),
     merchantId,
+    merchantAccessToken:
+      options.merchantAccessToken !== undefined ?
+        Option.some(Redacted.make(options.merchantAccessToken))
+      : Option.none(),
     oauthRedirectUri,
     oauthStateSecret: Redacted.make(oauthStateSecret),
   });

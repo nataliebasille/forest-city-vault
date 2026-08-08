@@ -34,6 +34,14 @@ export class CloverConfig extends Effect.Service<CloverConfig>()(
         tokenEncryptionKey: Config.redacted("CLOVER_TOKEN_ENCRYPTION_KEY"),
         // The single Clover merchant this internal app is allowed to authorize.
         merchantId: Config.string("CLOVER_MERCHANT_ID"),
+        // Optional static Clover API access token for the configured merchant.
+        // When set, it bypasses the per-merchant OAuth token store for that one
+        // merchant — used to talk to the Clover API directly (e.g. a test
+        // merchant whose token was issued outside the OAuth app flow). Absent in
+        // OAuth-only deployments. Never logged, never returned in a response.
+        merchantAccessToken: Config.option(
+          Config.redacted("CLOVER_MERCHANT_ACCESS_TOKEN"),
+        ),
         // Kept distinct from every other Clover secret so rotating it only
         // invalidates in-progress OAuth attempts (never stored tokens). Never
         // logged, never returned in a response.

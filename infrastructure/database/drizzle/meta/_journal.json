@@ -50,6 +50,13 @@
       "when": 1786144379596,
       "tag": "0006_add_vendor_items",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786226162174,
+      "tag": "0007_cute_paper_doll",
+      "breakpoints": true
     }
   ]
 }

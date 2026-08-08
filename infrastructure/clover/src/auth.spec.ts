@@ -9,7 +9,7 @@ import {
   dbSchema,
 } from "@forest-city-vault/infrastructure-database";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
-import { Effect, Exit, Layer, Logger, Redacted } from "effect";
+import { Effect, Exit, Layer, Logger, Option, Redacted } from "effect";
 
 import {
   exchangeCodeForTokens,
@@ -32,6 +32,7 @@ const config = CloverConfig.make({
   oauthUrl: "http://oauth.clover.test",
   tokenEncryptionKey: Redacted.make(ENCRYPTION_KEY),
   merchantId: "test-merchant-id",
+  merchantAccessToken: Option.none(),
   oauthRedirectUri: "http://clover.test/api/oauth/callback",
   oauthStateSecret: Redacted.make("test-oauth-state-secret"),
 });
@@ -106,10 +107,7 @@ describe("getMerchantAccessToken", () => {
     const stored = rows.find((r) => r.merchantId === "m-expired");
     assert.ok(stored);
     assert.notEqual(stored.accessToken, "new-access-token"); // stored ciphertext
-    assert.equal(
-      stored.accessTokenExpiresAt?.getTime(),
-      newExpiration * 1000,
-    );
+    assert.equal(stored.accessTokenExpiresAt?.getTime(), newExpiration * 1000);
   });
 
   test("fails with ReauthorizationRequiredError when the refresh token is expired", async () => {
@@ -153,7 +151,9 @@ describe("getMerchantAccessToken", () => {
 describe("getMerchantAccessToken refresh edge cases", () => {
   test("preserves the existing refresh token when Clover omits refresh_token", async () => {
     const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
-    const priorRefreshExpiry = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const priorRefreshExpiry = new Date(
+      NOW.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
     const { db, run, captured } = await makeDynamicContext(() => ({
       // A successful refresh that rotates only the access token — Clover does not
       // always return a new refresh_token, and must never null the existing one.
@@ -199,7 +199,9 @@ describe("getMerchantAccessToken refresh edge cases", () => {
 
   test("preserves the prior refresh-token expiration when Clover rotates the token but omits its expiration", async () => {
     const newExpiration = Math.floor(NOW.getTime() / 1000) + 3600;
-    const priorRefreshExpiry = new Date(NOW.getTime() + 15 * 24 * 60 * 60 * 1000);
+    const priorRefreshExpiry = new Date(
+      NOW.getTime() + 15 * 24 * 60 * 60 * 1000,
+    );
     const { db, run } = await makeDynamicContext(() => ({
       body: {
         access_token: "rotated-access-token",
@@ -439,7 +441,10 @@ describe("exchangeCodeForTokens", () => {
     }
 
     const rows = await db.select().from(dbSchema.cloverMerchantTokens);
-    assert.equal(rows.some((r) => r.merchantId === "m-new"), true);
+    assert.equal(
+      rows.some((r) => r.merchantId === "m-new"),
+      true,
+    );
   });
 });
 
