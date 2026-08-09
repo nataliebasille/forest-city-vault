@@ -173,6 +173,87 @@ describe("runImport", () => {
       ["p-1030"],
     );
   });
+
+  test("floors a cold cursor to the lookback window when maxLookbackMs is set", async () => {
+    const { run } = await makeContext();
+
+    const nowMs = NOW.getTime();
+    const lookbackMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const floor = nowMs - lookbackMs;
+
+    // One payment older than the window (must be skipped) and two inside it.
+    const dataset: FakeRecord[] = [
+      { id: "old", createdTime: floor - 1000 },
+      { id: "in-1", createdTime: floor + 1000 },
+      { id: "in-2", createdTime: nowMs - 1000 },
+    ];
+    const { source, listCalls, enqueued } = makeFakeSource(dataset);
+
+    const exit = await run(
+      runImport(source, {
+        merchantId: MERCHANT,
+        requestId: "req-lookback",
+        pageSize: 10,
+        maxLookbackMs: lookbackMs,
+      }),
+    );
+
+    assert.equal(Exit.isSuccess(exit), true);
+    if (Exit.isSuccess(exit)) {
+      // The run started from the floor, not 0.
+      assert.equal(exit.value.startTimestamp, floor);
+      assert.equal(exit.value.newWatermark, nowMs - 1000);
+    }
+
+    // Every page used the floor as the inclusive lower bound.
+    assert.equal(listCalls[0].startTimestamp, floor);
+    // The out-of-window record was never enqueued.
+    assert.deepEqual(
+      enqueued.map((r) => r.id).sort(),
+      ["in-1", "in-2"],
+    );
+  });
+
+  test("does not move a cursor that is already inside the lookback window", async () => {
+    const { run } = await makeContext();
+
+    const nowMs = NOW.getTime();
+    const lookbackMs = 30 * 24 * 60 * 60 * 1000;
+    const recentWatermark = nowMs - 5000; // well inside the window
+
+    await run(
+      CloverImportCursorRepository.advance({
+        merchantId: MERCHANT,
+        entityType: "payment",
+        lastTimestamp: recentWatermark,
+        runAt: NOW,
+      }),
+    );
+
+    const dataset: FakeRecord[] = [
+      { id: "at-watermark", createdTime: recentWatermark },
+      { id: "newer", createdTime: nowMs - 1000 },
+    ];
+    const { source, listCalls } = makeFakeSource(dataset);
+
+    const exit = await run(
+      runImport(source, {
+        merchantId: MERCHANT,
+        requestId: "req-recent",
+        pageSize: 10,
+        maxLookbackMs: lookbackMs,
+      }),
+    );
+
+    assert.equal(Exit.isSuccess(exit), true);
+    if (Exit.isSuccess(exit)) {
+      // The recent watermark was used unchanged (not lifted to the floor).
+      assert.equal(exit.value.startTimestamp, recentWatermark);
+    }
+    for (const call of listCalls) {
+      assert.equal(call.startTimestamp, recentWatermark);
+    }
+  });
 });
 
 function makeDataset(count: number): FakeRecord[] {
