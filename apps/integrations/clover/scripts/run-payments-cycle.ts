@@ -8,7 +8,8 @@ import { config as loadEnv } from "dotenv";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../../.env"), override: false });
 
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
+import { inspect } from "node:util";
 import { runPaymentsCycle } from "../lib/jobs/payments";
 import { JobLive } from "../lib/runtime/live";
 
@@ -40,9 +41,14 @@ const program = runPaymentsCycle({ requestId, pageSize }).pipe(
 
 const exit = await Effect.runPromiseExit(program);
 
-if (exit._tag === "Failure") {
+if (Exit.isFailure(exit)) {
   console.error(`[payments-cycle ${new Date().toISOString()}] cycle failed`);
-  console.error(exit.cause.toString());
+  // Readable stack view of the failure.
+  console.error(Cause.pretty(exit.cause));
+  // Wrapped errors (e.g. DatabaseError) hide the real driver error in their
+  // `cause` field, which the pretty view omits. Deep-inspect the whole cause so
+  // CI logs surface the underlying Postgres error (missing table, auth, SSL, …).
+  console.error(inspect(exit.cause, { depth: 12, colors: false }));
   process.exit(1);
 }
 
