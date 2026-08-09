@@ -6,7 +6,7 @@ import {
   RepositoriesSagaScoped,
 } from "@forest-city-vault/infrastructure-database";
 import { provideSagaScoped } from "@forest-city-vault/platform-saga";
-import { Config, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { paymentsImportSource, runImport } from "../import/public";
 
 /**
@@ -23,15 +23,6 @@ import { paymentsImportSource, runImport } from "../import/public";
 // budget: a bounded number of records per run, resuming from the watermark.
 const DEFAULT_PAGE_SIZE = 50;
 
-// How far back the very first import (cold cursor) reaches. Clover's production
-// payments list returns *empty* when the `createdTime` lower bound is too far in
-// the past (a `createdTime>=0` / "since epoch" filter yields zero rows on a real
-// merchant, even though recent-bounded filters return data), which would leave
-// the watermark stuck at 0 forever. Flooring the start to a recent window keeps
-// the query inside the served range; steady-state runs resume from the advanced
-// (recent) watermark and are unaffected. Override with CLOVER_IMPORT_MAX_LOOKBACK_MS.
-const DEFAULT_MAX_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
 /**
  * Incrementally pulls the configured merchant's payments from the Clover API into
  * the payments inbox, resuming from the per-stream watermark. Turning inbox rows
@@ -44,15 +35,10 @@ export function importPayments(options: {
   return Effect.gen(function* () {
     const { merchantId } = yield* CloverConfig;
 
-    const maxLookbackMs = yield* Config.integer(
-      "CLOVER_IMPORT_MAX_LOOKBACK_MS",
-    ).pipe(Config.withDefault(DEFAULT_MAX_LOOKBACK_MS));
-
     yield* runImport(paymentsImportSource, {
       merchantId,
       requestId: options.requestId,
       pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
-      maxLookbackMs,
     });
   });
 }

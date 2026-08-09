@@ -46,41 +46,20 @@ export function runImport<Element, R>(
     readonly merchantId: string;
     readonly requestId: string;
     readonly pageSize: number;
-    /**
-     * Optional cap on how far back (in epoch ms before "now") the run may start.
-     * When set, the start watermark is floored to `now - maxLookbackMs`, so a
-     * cold cursor (0) or a very stale one never asks the provider for the entire
-     * history. Clover's payments list rejects (returns empty for) filters whose
-     * lower bound is too far in the past, so the payments source sets this to keep
-     * queries inside the served window. The floor is computed once per run, so
-     * every page in the run shares the same lower bound.
-     */
-    readonly maxLookbackMs?: number;
   },
 ): Effect.Effect<ImportSummary, unknown, R | Database | Clock> {
   return Effect.gen(function* () {
-    const { merchantId, requestId, pageSize, maxLookbackMs } = options;
+    const { merchantId, requestId, pageSize } = options;
     const { entityType } = source;
 
     const cursor = yield* CloverImportCursorRepository.get(
       merchantId,
       entityType,
     );
-    let startTimestamp = Option.match(cursor, {
+    const startTimestamp = Option.match(cursor, {
       onNone: () => 0,
       onSome: (row) => row.lastTimestamp,
     });
-
-    // Floor the start to the lookback window (once, before paging) so the whole
-    // run shares one lower bound. Only lifts the start forward, never backward,
-    // so a cursor already inside the window is untouched.
-    if (maxLookbackMs !== undefined) {
-      const runStart = yield* now;
-      const floor = runStart.getTime() - maxLookbackMs;
-      if (startTimestamp < floor) {
-        startTimestamp = floor;
-      }
-    }
 
     yield* Effect.logInfo("clover.import.run.begin", {
       requestId,
