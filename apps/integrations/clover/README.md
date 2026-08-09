@@ -208,6 +208,16 @@ separately by the inbox implementation.
 - Sandbox: `CLOVER_URL=https://apisandbox.dev.clover.com`,
   `CLOVER_OAUTH_URL=https://sandbox.dev.clover.com`. `CLOVER_OAUTH_REDIRECT_URI`
   may be `http` for local/sandbox testing.
+- Production (region-specific API host for `CLOVER_URL`):
+  - North America: `https://api.clover.com`
+  - Europe: `https://api.eu.clover.com`
+  - Latin America: `https://api.la.clover.com`
+
+  The matching production OAuth web host (`CLOVER_OAUTH_URL`) is
+  `https://www.clover.com` (NA) / `https://www.eu.clover.com` /
+  `https://www.la.clover.com`. Sandbox tokens do **not** work against a production
+  host — switch `CLOVER_MERCHANT_ID` and `CLOVER_MERCHANT_ACCESS_TOKEN` to the
+  real merchant's production values when you change `CLOVER_URL`.
 - Production: `CLOVER_OAUTH_REDIRECT_URI` **must be an absolute `https` URL**
   (enforced at config load when `NODE_ENV=production`).
 - The Clover app dashboard **Site URL** and **redirect URI** must exactly match
@@ -232,8 +242,8 @@ Tokens are encrypted with AES-256-GCM using a key derived from
 
 - `CLOVER_APP_ID` - Clover app / client id
 - `CLOVER_SECRET_CODE` - Clover app / client secret
-- `CLOVER_URL` - Clover API base URL for token exchange/refresh (e.g. `https://apisandbox.dev.clover.com`)
-- `CLOVER_OAUTH_URL` - Clover merchant-facing web host for the OAuth authorize/login step (e.g. `https://sandbox.dev.clover.com`)
+- `CLOVER_URL` - Clover API base URL for token exchange/refresh (sandbox `https://apisandbox.dev.clover.com`; production NA `https://api.clover.com`, EU `https://api.eu.clover.com`, LatAm `https://api.la.clover.com`)
+- `CLOVER_OAUTH_URL` - Clover merchant-facing web host for the OAuth authorize/login step (sandbox `https://sandbox.dev.clover.com`; production NA `https://www.clover.com`)
 - `CLOVER_WEBHOOK_AUTH_CODE` - shared secret for verifying webhook `x-clover-auth`
 - `CLOVER_PROCESSOR_SECRET` - shared bearer secret for internal `POST /api/process/payments`
 - `CLOVER_TOKEN_ENCRYPTION_KEY` - secret used to encrypt stored OAuth tokens
