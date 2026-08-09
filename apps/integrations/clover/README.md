@@ -9,6 +9,7 @@ Backend-only Next.js service for Clover webhook handling.
 - `pnpm start` - Start production server on port 3103
 - `pnpm lint` - Lint source
 - `pnpm import:schedule` - Run the local payment importer on an interval (see [Local interval importer](#local-interval-importer))
+- `pnpm payments:run` - Run one import + drain cycle directly (used by the scheduled GitHub Action)
 
 ## API Routes
 
@@ -111,28 +112,41 @@ To pull a test merchant's recent payments into the database without webhooks:
 ### Local interval importer
 
 `pnpm import:schedule` runs a local scheduler ([scripts/import-scheduler.ts](scripts/import-scheduler.ts))
-that drives the two steps above on an interval. It assumes the dev server is
-already running, so use two terminals:
+that runs the import + drain code directly on an interval — no dev server or HTTP
+hop required. It shares the exact `runPaymentsCycle` job and `JobLive` layer the
+`payments:run` runner and the scheduled GitHub Action use, so behaviour matches
+production.
 
 ```sh
-# terminal 1 — the service
-pnpm dev
-
-# terminal 2 — the interval importer
 pnpm import:schedule
 ```
 
-Each cycle it calls `POST /api/import/payments` then `POST /api/process/payments`
-(both with `CLOVER_PROCESSOR_SECRET`), never overlapping cycles, and logs the
-outcome. Stop it with Ctrl-C. It reads the same repo-root `.env` as the app.
+Each cycle imports new Clover payments into the inbox, then drains the inbox into
+sales, never overlapping cycles, and logs the outcome. Stop it with Ctrl-C. It
+reads the same repo-root `.env` as the app.
 
-Configuration (all optional except the secret, read from `.env` or the shell):
+The import + drain path only reads a narrow slice of the Clover config (see
+`cloverPaymentsJobConfig` in [lib/runtime/live.ts](lib/runtime/live.ts)), so the
+runner and the local scheduler need only:
 
-- `CLOVER_PROCESSOR_SECRET` - required; bearer secret for both endpoints.
-- `CLOVER_IMPORT_BASE_URL` - dev server base URL. Default `http://localhost:3103`.
+- `DATABASE_URL` - Postgres connection string.
+- `CLOVER_URL` - Clover API base URL.
+- `CLOVER_MERCHANT_ID` - the single merchant to import.
+- `CLOVER_MERCHANT_ACCESS_TOKEN` - static Clover API token for that merchant.
+- `CLOVER_TOKEN_ENCRYPTION_KEY` - _optional_; only when relying on the OAuth token
+  store instead of a static access token.
+- `CLOVER_APP_ID` - _optional_; only used when the OAuth token store refreshes a
+  token (OAuth `client_id`). The import path no longer reads it.
+
+The OAuth/webhook/processor secrets (`CLOVER_SECRET_CODE`,
+`CLOVER_WEBHOOK_AUTH_CODE`, `CLOVER_PROCESSOR_SECRET`, `CLOVER_OAUTH_URL`,
+`CLOVER_OAUTH_STATE_SECRET`, `CLOVER_OAUTH_REDIRECT_URI`) are **not** needed to run
+the payments cycle.
+
+Configuration (all optional, read from `.env` or the shell):
+
 - `CLOVER_IMPORT_INTERVAL_MS` - delay between cycles. Default `60000` (60s).
-- `CLOVER_IMPORT_LIMIT` - page size passed to the import endpoint (route default 50).
-- `CLOVER_IMPORT_FILTER` - Clover query filter, e.g. `createdTime>=1700000000000`.
+- `CLOVER_IMPORT_PAGE_SIZE` - page size passed to the importer (default 50).
 
 The importer requires the merchant's Clover API token
 (`CLOVER_MERCHANT_ACCESS_TOKEN`) to have **read permission on payments**. The
