@@ -25,7 +25,15 @@ export const paymentsImportSource: ImportSource<
   list: ({ merchantId, startTimestamp, limit, offset }) =>
     Effect.map(
       listCloverPayments(merchantId, {
-        filter: `createdTime>=${startTimestamp}`,
+        // On a cold cursor (`startTimestamp` 0) we do a full backfill from the
+        // beginning of time. Clover's production payments list returns an *empty*
+        // result for a far-past lower bound like `createdTime>=0`, so instead of
+        // sending that bound we omit the filter entirely and rely on ascending
+        // `createdTime` paging to walk the whole history. Once records are
+        // imported the watermark advances, and subsequent runs send a real
+        // `createdTime>=<recent watermark>` bound (which Clover serves normally).
+        filter:
+          startTimestamp > 0 ? `createdTime>=${startTimestamp}` : undefined,
         orderBy: "createdTime ASC",
         limit,
         offset,

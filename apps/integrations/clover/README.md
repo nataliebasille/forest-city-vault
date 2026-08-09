@@ -147,14 +147,14 @@ Configuration (all optional, read from `.env` or the shell):
 
 - `CLOVER_IMPORT_INTERVAL_MS` - delay between cycles. Default `60000` (60s).
 - `CLOVER_IMPORT_PAGE_SIZE` - page size passed to the importer (default 50).
-- `CLOVER_IMPORT_MAX_LOOKBACK_MS` - how far back the **first** import (cold cursor)
-  reaches. Default `2592000000` (30 days). Clover's production payments list
-  returns an **empty** result when the `createdTime` lower bound is too far in the
-  past (e.g. a `createdTime>=0` / since-epoch filter yields zero rows on a real
-  merchant, even though recent-bounded filters return data), which would leave the
-  watermark stuck at `0`. Flooring the start to a recent window keeps the query
-  inside the served range; steady-state runs resume from the advanced (recent)
-  watermark and are unaffected. Raise it if your account serves a wider window.
+
+On the **first** run (no stored cursor) the importer does a full backfill from the
+beginning of time: it omits the `createdTime` filter and pages through the
+merchant's payments in ascending `createdTime` order. This is deliberate — Clover's
+production payments list returns an **empty** result for a far-past lower bound
+like `createdTime>=0`, so a since-epoch filter would import nothing. Once records
+are imported the per-stream watermark advances, and subsequent runs resume with a
+real `createdTime>=<watermark>` bound (which Clover serves normally).
 
 The importer requires the merchant's Clover API token
 (`CLOVER_MERCHANT_ACCESS_TOKEN`) to have **read permission on payments**. The
