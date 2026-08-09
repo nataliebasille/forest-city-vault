@@ -37,7 +37,6 @@ export const paymentsImportSource: ImportSource<
 
   enqueue: (payments, { merchantId, requestId, receivedAt }) =>
     Effect.gen(function* () {
-      const { appId } = yield* CloverConfig;
       const db = yield* Database;
       const inbox = db.schema.inboxes.payments.inbox;
 
@@ -48,7 +47,7 @@ export const paymentsImportSource: ImportSource<
           requestId,
           status: "received",
           provider: "clover",
-          idempotencyKey: `${appId}:${merchantId}:${providerEventId}`,
+          idempotencyKey: `${merchantId}:${providerEventId}`,
           providerEventId,
           providerObjectId: payment.id,
           eventType: "payment",

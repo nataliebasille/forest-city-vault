@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p 3103",
     "import:schedule": "tsx scripts/import-scheduler.ts",
+    "payments:run": "tsx scripts/run-payments-cycle.ts",
     "test": "node --import tsx --experimental-test-module-mocks --test \"app/**/*.spec.ts\" \"lib/**/*.spec.ts\"",
     "lint": "biome lint .",
     "format": "prettier --write .",

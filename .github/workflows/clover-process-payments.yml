@@ -1,11 +1,31 @@
 name: Clover process payments
 
 # Vercel Hobby cron jobs can only run once per day, which is too infrequent for
-# draining the Clover payments inbox. Instead we drive the internal processor
-# endpoint from GitHub Actions on a short schedule. Requires two repository
-# secrets:
-#   - CLOVER_APP_URL          e.g. https://clover-webhooks.vercel.app
-#   - CLOVER_PROCESSOR_SECRET the bearer secret configured on the deployment
+# draining the Clover payments inbox. Instead of curling a deployed endpoint, this
+# workflow checks out the repo and runs the real import + drain code directly
+# (apps/integrations/clover → `pnpm payments:run`).
+#
+# Because it runs the code itself, the runner needs direct access to the database
+# and Clover API. The import + drain path reads only a narrow slice of the Clover
+# config (see `cloverPaymentsJobConfig` in lib/runtime/live.ts), so only these
+# repository secrets are required:
+#   - DATABASE_URL                 Postgres connection string (must accept
+#                                  connections from GitHub-hosted runners).
+#   - CLOVER_URL                   Clover API base URL.
+#   - CLOVER_MERCHANT_ID           the single merchant to import.
+#   - CLOVER_MERCHANT_ACCESS_TOKEN static Clover API token for that merchant (the
+#                                  intended mode for this job).
+#
+# Optional:
+#   - CLOVER_TOKEN_ENCRYPTION_KEY  only if you drop CLOVER_MERCHANT_ACCESS_TOKEN
+#                                  and rely on the OAuth token store instead.
+#   - CLOVER_APP_ID                only used when the OAuth token store refreshes
+#                                  a token (OAuth `client_id`); the import path no
+#                                  longer reads it.
+#
+# The OAuth/webhook/processor secrets (CLOVER_SECRET_CODE, CLOVER_WEBHOOK_AUTH_CODE,
+# CLOVER_PROCESSOR_SECRET, CLOVER_OAUTH_URL, CLOVER_OAUTH_STATE_SECRET,
+# CLOVER_OAUTH_REDIRECT_URI) are NOT needed here — this job never touches them.
 on:
   schedule:
     # Every 5 minutes is the minimum interval GitHub Actions allows. Scheduled
@@ -13,7 +33,8 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
-# Avoid overlapping runs; the endpoint also has its own in-process overlap guard.
+# Avoid overlapping runs; each run is a fresh process, so this concurrency group
+# replaces the old in-process overlap guard the HTTP endpoint relied on.
 concurrency:
   group: clover-process-payments
   cancel-in-progress: false
@@ -21,30 +42,30 @@ concurrency:
 jobs:
   process-payments:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Trigger payment inbox drain
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Clover payments cycle
         env:
-          CLOVER_APP_URL: ${{ secrets.CLOVER_APP_URL }}
-          CLOVER_PROCESSOR_SECRET: ${{ secrets.CLOVER_PROCESSOR_SECRET }}
-        run: |
-          if [ -z "$CLOVER_APP_URL" ] || [ -z "$CLOVER_PROCESSOR_SECRET" ]; then
-            echo "Missing CLOVER_APP_URL or CLOVER_PROCESSOR_SECRET repository secret." >&2
-            exit 1
-          fi
-
-          status=$(curl --silent --show-error --fail-with-body \
-            --output /tmp/response.txt --write-out "%{http_code}" \
-            --max-time 120 \
-            --request POST \
-            --header "Authorization: Bearer ${CLOVER_PROCESSOR_SECRET}" \
-            "${CLOVER_APP_URL%/}/api/process/payments") || true
-
-          echo "HTTP ${status}"
-          cat /tmp/response.txt || true
-
-          # 409 means a run is already active (overlap guard) — treat as success.
-          case "$status" in
-            2??|409) exit 0 ;;
-            *) exit 1 ;;
-          esac
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CLOVER_URL: ${{ secrets.CLOVER_URL }}
+          CLOVER_MERCHANT_ID: ${{ secrets.CLOVER_MERCHANT_ID }}
+          CLOVER_MERCHANT_ACCESS_TOKEN: ${{ secrets.CLOVER_MERCHANT_ACCESS_TOKEN }}
+          # Optional: only needed in OAuth-token-store mode (no static token).
+          CLOVER_TOKEN_ENCRYPTION_KEY: ${{ secrets.CLOVER_TOKEN_ENCRYPTION_KEY }}
+          CLOVER_APP_ID: ${{ secrets.CLOVER_APP_ID }}
+        run: pnpm --filter @forest-city-vault/integration-clover run payments:run

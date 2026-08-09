@@ -3,45 +3,50 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 
 // Load the canonical repo-root `.env` the same way `next.config.ts` does, so the
-// scheduler and the dev server it drives read the exact same configuration.
+// scheduler reads the exact same configuration as the app it shares code with.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../../.env"), override: false });
 
+import { ManagedRuntime } from "effect";
+import { runPaymentsCycle } from "../lib/jobs/payments";
+import { JobLive } from "../lib/runtime/live";
+
 /**
- * Local-only scheduler that drives the Clover payment importer on an interval.
+ * Local-only scheduler that drives the Clover payment importer on an interval by
+ * running the real import + drain code directly — no dev server, no HTTP hop. It
+ * shares the exact {@link runPaymentsCycle} job and {@link JobLive} layer
+ * the routes and the GitHub Action runner use, so behaviour matches production.
  *
- * It assumes the Clover integration dev server is already running separately
- * (`pnpm dev`, port 3103 by default). Each cycle it calls, in order:
- *   1. `POST /api/import/payments`  — list payments from Clover into the inbox.
- *   2. `POST /api/process/payments` — drain the inbox into sales.
- * Both are internal endpoints authenticated with `CLOVER_PROCESSOR_SECRET`.
+ * Each cycle runs, in order:
+ *   1. import — list payments from Clover into the inbox.
+ *   2. process — drain the inbox into sales.
+ *
+ * The dependency layer (including the database pool) is built once via a
+ * {@link ManagedRuntime} and reused for every cycle, then disposed on shutdown.
  *
  * Cycles never overlap: the next run is scheduled only after the current one
- * settles. A failed request is logged and the loop continues.
+ * settles. A failed cycle is logged and the loop continues.
  *
  * Configuration (env / repo-root `.env`):
- *   - CLOVER_PROCESSOR_SECRET   (required) bearer secret for both endpoints.
- *   - CLOVER_IMPORT_BASE_URL    base URL of the dev server. Default http://localhost:3103.
- *   - CLOVER_IMPORT_INTERVAL_MS interval between cycle starts' completions. Default 60000.
- *   - CLOVER_IMPORT_LIMIT       optional page size passed to the import endpoint.
- *   - CLOVER_IMPORT_FILTER      optional Clover query filter, e.g. createdTime>=1700000000000.
+ *   - DATABASE_URL              (required) Postgres connection string.
+ *   - CLOVER_* config           (required) the same keys `CloverConfig` reads.
+ *   - CLOVER_IMPORT_INTERVAL_MS interval between cycle completions. Default 60000.
+ *   - CLOVER_IMPORT_PAGE_SIZE   optional page size passed to the importer.
  */
 
-const DEFAULT_BASE_URL = "http://localhost:3103";
 const DEFAULT_INTERVAL_MS = 60_000;
 
 const settings = readSettings();
+const runtime = ManagedRuntime.make(JobLive);
 let stopping = false;
 
 main();
 
 function main(): void {
   log(
-    `starting importer scheduler → ${settings.baseUrl} every ${Math.round(
+    `starting importer scheduler → running code directly every ${Math.round(
       settings.intervalMs / 1000,
-    )}s (import limit: ${settings.limit ?? "default"}, filter: ${
-      settings.filter ?? "none"
-    })`,
+    )}s (page size: ${settings.pageSize ?? "default"})`,
   );
 
   process.on("SIGINT", requestStop);
@@ -58,60 +63,21 @@ async function runLoop(): Promise<void> {
     }
     await sleep(settings.intervalMs);
   }
+  await runtime.dispose();
   log("scheduler stopped");
   process.exit(0);
 }
 
 async function runCycle(): Promise<void> {
-  const importBody: Record<string, unknown> = {};
-  if (settings.limit !== undefined) {
-    importBody.limit = settings.limit;
-  }
-  if (settings.filter !== undefined) {
-    importBody.filter = settings.filter;
-  }
-
-  await callEndpoint(
-    "import",
-    "/api/import/payments",
-    Object.keys(importBody).length > 0 ? JSON.stringify(importBody) : undefined,
-  );
-
-  if (stopping) {
-    return;
-  }
-
-  await callEndpoint("process", "/api/process/payments", undefined);
-}
-
-async function callEndpoint(
-  label: string,
-  route: string,
-  body: string | undefined,
-): Promise<void> {
-  const url = `${settings.baseUrl}${route}`;
+  const requestId = crypto.randomUUID();
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${settings.processorSecret}`,
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body,
-    });
-
-    const text = await response.text();
-    const summary = text.length > 300 ? `${text.slice(0, 300)}…` : text;
-    if (response.ok) {
-      log(`${label} ok (${response.status}) ${summary}`);
-    } else {
-      log(`${label} FAILED (${response.status}) ${summary}`);
-    }
+    await runtime.runPromise(
+      runPaymentsCycle({ requestId, pageSize: settings.pageSize }),
+    );
+    log(`cycle ok (requestId ${requestId})`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    log(
-      `${label} ERROR calling ${url}: ${message} (is the dev server running?)`,
-    );
+    log(`cycle FAILED (requestId ${requestId}): ${message}`);
   }
 }
 
@@ -124,27 +90,17 @@ function requestStop(): void {
 }
 
 function readSettings() {
-  const processorSecret = process.env.CLOVER_PROCESSOR_SECRET;
-  if (!processorSecret) {
-    console.error(
-      "[importer] CLOVER_PROCESSOR_SECRET is not set. Add it to the repo-root .env.",
-    );
-    process.exit(1);
-  }
-
-  const baseUrl = (
-    process.env.CLOVER_IMPORT_BASE_URL ?? DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
-
   const intervalMs = parsePositiveInt(
     process.env.CLOVER_IMPORT_INTERVAL_MS,
     DEFAULT_INTERVAL_MS,
   );
 
-  const limit = parsePositiveInt(process.env.CLOVER_IMPORT_LIMIT, undefined);
-  const filter = process.env.CLOVER_IMPORT_FILTER || undefined;
+  const pageSize = parsePositiveInt(
+    process.env.CLOVER_IMPORT_PAGE_SIZE,
+    undefined,
+  );
 
-  return { processorSecret, baseUrl, intervalMs, limit, filter };
+  return { intervalMs, pageSize };
 }
 
 function parsePositiveInt<T extends number | undefined>(
