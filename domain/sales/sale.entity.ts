@@ -18,6 +18,11 @@ export const SaleSourceSchema = CloverSaleSourceSchema;
 
 export const SaleItemSchema = Schema.Struct({
   vendorId: Schema.String,
+  /**
+   * The Clover item id this line came from, or `null` when the sale has no
+   * per-item provenance (e.g. a payment with no line items, or seeded data).
+   */
+  cloverItemId: Schema.NullOr(Schema.String),
   name: Schema.String,
   quantity: Schema.Number.pipe(Schema.int(), Schema.positive()),
   grossAmount: CentsSchema,

@@ -139,6 +139,7 @@ function mapCloverPaymentToSaleItems(
     return [
       {
         vendorId: "",
+        cloverItemId: null,
         name: "Payment",
         quantity: 1,
         grossAmount: payment.amount,
@@ -151,6 +152,7 @@ function mapCloverPaymentToSaleItems(
 
   return lineItems.map((item) => ({
     vendorId: "",
+    cloverItemId: item.id,
     name: item.name,
     quantity: item.quantity,
     grossAmount: item.price * item.quantity,

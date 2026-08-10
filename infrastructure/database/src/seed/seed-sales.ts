@@ -71,6 +71,7 @@ export const seedSales = (input: SeedSalesInput = {}) =>
           },
           items: seed.items.map((item) => ({
             vendorId: "",
+            cloverItemId: null,
             name: item.name,
             quantity: 1,
             grossAmount: item.amountCents,

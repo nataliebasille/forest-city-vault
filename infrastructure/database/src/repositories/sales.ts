@@ -69,6 +69,7 @@ export const SalesRepositoryLive = Sales.repository.make(
               },
               items: lineItemRows.map((item) => ({
                 vendorId: item.vendorId ?? "",
+                cloverItemId: item.cloverItemId,
                 name: item.name,
                 quantity: Number(item.quantity),
                 grossAmount: Number(item.grossAmountCents),
@@ -148,7 +149,7 @@ export const SalesRepositoryLive = Sales.repository.make(
                           grossAmountCents: BigInt(item.grossAmount),
                           discountAmountCents: BigInt(item.discountAmount),
                           netAmountCents: BigInt(item.netAmount),
-                          cloverItemId: null,
+                          cloverItemId: item.cloverItemId,
                           createdAt: now,
                           updatedAt: now,
                         }) satisfies typeof salesLineItems.$inferInsert,
