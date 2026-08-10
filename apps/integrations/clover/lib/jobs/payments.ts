@@ -11,7 +11,7 @@ import {
   RepositoriesSagaScoped,
 } from "@forest-city-vault/infrastructure-database";
 import { provideSagaScoped } from "@forest-city-vault/platform-saga";
-import { Effect, Schema } from "effect";
+import { Config, Duration, Effect, Schema } from "effect";
 import { paymentsImportSource, runImport } from "../import/public";
 
 /**
@@ -27,6 +27,14 @@ import { paymentsImportSource, runImport } from "../import/public";
 // Default page size when a caller does not specify one. Matches the Clover Hobby
 // budget: a bounded number of records per run, resuming from the watermark.
 const DEFAULT_PAGE_SIZE = 50;
+
+// How many inbox messages a single drain pulls, and how long to wait between
+// them. Each message costs two Clover calls (payment, then its order), so the
+// drain is paced to stay under Clover's per-merchant rate limit rather than
+// bursting a whole batch and provoking 429s. Both are overridable via env for
+// tuning without a redeploy.
+const DEFAULT_DRAIN_BATCH_SIZE = 30;
+const DEFAULT_DRAIN_MESSAGE_DELAY_MS = 250;
 
 /**
  * Incrementally pulls the configured merchant's payments from the Clover API into
@@ -64,9 +72,18 @@ export function processPayments(options: { readonly requestId: string }) {
       inbox: "payments",
     });
 
+    const batchSize = yield* Config.integer("CLOVER_DRAIN_BATCH_SIZE").pipe(
+      Config.withDefault(DEFAULT_DRAIN_BATCH_SIZE),
+    );
+    const messageDelayMs = yield* Config.integer(
+      "CLOVER_DRAIN_MESSAGE_DELAY_MS",
+    ).pipe(Config.withDefault(DEFAULT_DRAIN_MESSAGE_DELAY_MS));
+
     const processed = yield* drain({
       inbox: "payments",
       requestId,
+      batchSize,
+      delayBetweenMessages: Duration.millis(messageDelayMs),
       action: (message) =>
         Effect.gen(function* () {
           const { merchantId } = yield* decodePaymentPayload(

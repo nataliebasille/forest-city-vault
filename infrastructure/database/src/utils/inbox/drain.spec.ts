@@ -94,10 +94,16 @@ describe("drain", () => {
       Effect.gen(function* () {
         const db = yield* Database;
         yield* db.query((sql) =>
-          sql.insert(inbox).values([
-            makeItem({ idempotencyKey: "k1", status: "received", attempts: 0 }),
-            makeItem({ idempotencyKey: "k2", status: "failed", attempts: 2 }),
-          ]),
+          sql
+            .insert(inbox)
+            .values([
+              makeItem({
+                idempotencyKey: "k1",
+                status: "received",
+                attempts: 0,
+              }),
+              makeItem({ idempotencyKey: "k2", status: "failed", attempts: 2 }),
+            ]),
         );
 
         let callCount = 0;
@@ -311,6 +317,31 @@ describe("drain", () => {
         });
 
         assert.equal(callCount, 30);
+      }),
+    );
+  });
+
+  test("honors a custom batchSize", async () => {
+    await runWith(
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const items = Array.from({ length: 10 }, (_, i) =>
+          makeItem({ idempotencyKey: `key-${i}` }),
+        );
+        yield* db.query((sql) => sql.insert(inbox).values(items));
+
+        let callCount = 0;
+        yield* drain({
+          inbox: "payments",
+          requestId: "req-1",
+          batchSize: 5,
+          action: () => {
+            callCount++;
+            return Effect.void;
+          },
+        });
+
+        assert.equal(callCount, 5);
       }),
     );
   });

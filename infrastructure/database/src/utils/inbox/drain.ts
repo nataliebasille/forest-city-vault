@@ -1,5 +1,5 @@
 import { withSaga } from "@forest-city-vault/platform-saga";
-import { Effect, Either } from "effect";
+import { Duration, Effect, Either } from "effect";
 import { eq, or } from "drizzle-orm/sql/expressions/conditions";
 import * as inboxes from "../../schema/inboxes";
 import { Database, DatabaseError, tryDb } from "../..";
@@ -14,9 +14,18 @@ type InboxKeys = keyof Inbox;
 
 const MAX_ATTEMPTS = 5;
 
+// The most messages a single drain call pulls when a caller does not override it.
+const DEFAULT_BATCH_SIZE = 30;
+
 /**
- * Processes up to 30 `received` or `failed` items from an inbox, running each one
- * as its own saga.
+ * Processes up to `batchSize` (default {@link DEFAULT_BATCH_SIZE}) `received` or
+ * `failed` items from an inbox, running each one as its own saga.
+ *
+ * When `delayBetweenMessages` is set, the drain waits that long before each
+ * message after the first. Messages are processed sequentially, so this paces a
+ * batch that fans out to a rate-limited provider API (e.g. Clover) instead of
+ * bursting every call back-to-back. It defaults to no delay, leaving existing
+ * callers unpaced.
  *
  * Every message is a self-contained unit of work:
  *
@@ -48,11 +57,19 @@ const MAX_ATTEMPTS = 5;
 export function drain<I extends InboxKeys, RAction, A, E>(opt: {
   inbox: I;
   requestId: string;
+  batchSize?: number;
+  delayBetweenMessages?: Duration.DurationInput;
   action: (
     message: Inbox[I]["inbox"]["$inferSelect"],
   ) => Effect.Effect<A, E, RAction>;
 }) {
-  const { inbox: inboxKey, requestId, action } = opt;
+  const {
+    inbox: inboxKey,
+    requestId,
+    action,
+    batchSize = DEFAULT_BATCH_SIZE,
+    delayBetweenMessages = Duration.zero,
+  } = opt;
   return Effect.gen(function* () {
     const db = yield* Database;
 
@@ -64,7 +81,7 @@ export function drain<I extends InboxKeys, RAction, A, E>(opt: {
         .from(inbox)
         .where(or(eq(inbox.status, "received"), eq(inbox.status, "failed")))
         .orderBy(inbox.receivedAt)
-        .limit(30),
+        .limit(batchSize),
     );
 
     yield* Effect.logInfo("inbox.drain.batch.loaded", {
@@ -74,8 +91,15 @@ export function drain<I extends InboxKeys, RAction, A, E>(opt: {
       workflowStage: "load_batch",
     });
 
-    const processed = yield* Effect.forEach(toProcess, (item) =>
+    const processed = yield* Effect.forEach(toProcess, (item, index) =>
       Effect.gen(function* () {
+        // Pace the batch: wait before every message after the first so a run
+        // that fans out to a rate-limited provider API does not burst past its
+        // per-caller limit. A zero delay (the default) is a no-op.
+        if (index > 0) {
+          yield* Effect.sleep(delayBetweenMessages);
+        }
+
         const attemptNumber = item.attempts + 1;
 
         yield* Effect.logInfo("inbox.message.processing.started", {
@@ -165,7 +189,8 @@ export function drain<I extends InboxKeys, RAction, A, E>(opt: {
           attemptNumber,
           maxAttempts: MAX_ATTEMPTS,
           status,
-          failureDisposition: status === "dead_letter" ? "terminal" : "retryable",
+          failureDisposition:
+            status === "dead_letter" ? "terminal" : "retryable",
           error: toSafeErrorDetails(outcome.left),
         });
 
