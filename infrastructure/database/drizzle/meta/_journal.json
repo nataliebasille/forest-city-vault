@@ -71,6 +71,13 @@
       "when": 1786365346234,
       "tag": "0009_derive_sale_line_item_vendor_from_clover_item",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786391932271,
+      "tag": "0010_add_better_auth_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 // PROTOTYPE — throwaway. Host route for the chosen logged-in admin-portal design
 // exploration (Variant B, "Sidebar workspace"), kept for reference during future
 // development. This is a *public* route rendering stub data on purpose: the real
-// logged-in home ("/") is auth-gated behind a live Supabase session + database,
+// logged-in home ("/") is auth-gated behind a live session + database,
 // which isn't available in a bare checkout, so the fully-fleshed design lives
 // here. Delete this whole `prototype/` folder once the real portal has caught up.
 

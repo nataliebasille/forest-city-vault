@@ -17,13 +17,15 @@ export const storeMembershipStatus = pgEnum("store_membership_status", [
 ]);
 
 /**
- * Snapshot table for the `StoreMembership` aggregate: one Supabase user's access
- * to one store.
+ * Snapshot table for the `StoreMembership` aggregate: one user's access to one
+ * store, keyed for authorization by `email`.
  *
- * `user_id` holds the Supabase Auth user UUID. It is intentionally **not** a
- * foreign key into Supabase-managed `auth.*` tables — the repo has no
- * established convention for referencing auth schema objects, and coupling this
- * table to them would make migrations and local testing depend on that schema.
+ * `email` is the identity the admin portal gates on: the auth provider (Better
+ * Auth) proves email ownership at sign-in, and the matching active membership is
+ * what grants access. `user_id` is an opaque, non-authoritative identifier kept
+ * only to satisfy its NOT NULL constraint and the historical unique index; it is
+ * **not** a foreign key into the auth provider's tables and nothing reads it to
+ * authorize a request.
  *
  * The `(store_id, user_id)` unique index enforces "a user may have only one
  * membership in a given store" at the database, backing the same rule in the

@@ -18,12 +18,13 @@ export type MagicLinkState =
 
 export const initialMagicLinkState: MagicLinkState = { status: "idle" };
 
-/** Human-readable copy for a `/login?error=` code set by the callback route. */
+/** Human-readable copy for a `/login?error=` code set by Better Auth's magic-link verify. */
 export function messageForLoginError(code: string | undefined): string | null {
   switch (code) {
     case undefined:
     case "":
       return null;
+    case "INVALID_TOKEN":
     case "link_expired":
     case "link_invalid":
       return "That sign-in link is invalid or has expired. Request a new one below.";

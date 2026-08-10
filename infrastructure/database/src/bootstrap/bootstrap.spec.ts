@@ -75,9 +75,9 @@ describe("bootstrapStore", () => {
 });
 
 describe("bootstrapOwnerMembership", () => {
-  test("creates an owner membership once and is idempotent for the same user", async () => {
+  test("creates an owner membership once and is idempotent for the same email", async () => {
     const database = await freshDatabase();
-    const userId = crypto.randomUUID();
+    const email = "owner@example.com";
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -86,23 +86,21 @@ describe("bootstrapOwnerMembership", () => {
         const first = yield* runBootstrap(
           bootstrapOwnerMembership({
             storeId: BOOTSTRAP_STORE_ID,
-            userId,
-            email: "owner@example.com",
+            email,
           }),
           database,
         );
         const second = yield* runBootstrap(
           bootstrapOwnerMembership({
             storeId: BOOTSTRAP_STORE_ID,
-            userId,
-            email: "owner@example.com",
+            email,
           }),
           database,
         );
 
-        const membership = yield* StoreMembershipQueries.findByStoreAndUser(
+        const membership = yield* StoreMembershipQueries.findByStoreAndEmail(
           BOOTSTRAP_STORE_ID,
-          userId,
+          email,
         );
         const ownerCount =
           yield* StoreMembershipQueries.countActiveOwners(BOOTSTRAP_STORE_ID);

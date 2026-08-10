@@ -15,7 +15,7 @@ export { AppLive } from "./live";
 /**
  * The app's route factory. Every Route Handler in the portal is built with it so
  * they share one dependency surface — the {@link AppLive} base layer (database,
- * Supabase auth, Supabase config) — and the Effect route pipeline (logging,
+ * Better Auth session) — and the Effect route pipeline (logging,
  * request-state, `HttpResult` handling). Handlers may `yield*` any service the
  * layer provides without naming it; the request `Cookies`/`Headers` the layer
  * needs are supplied per request from `next/headers`. This is the admin-portal

@@ -1,5 +1,6 @@
 export * as inboxes from "./inboxes/index";
 export * from "./event-store";
+export * from "./better-auth";
 export * from "./sales";
 export * from "./vendors";
 export * from "./vendor-items";

@@ -10,6 +10,19 @@
   and helper constants are only referenced from within functions invoked at call
   time.
 
+## Types
+
+- **Let return types be inferred; do not annotate them unless absolutely
+  necessary.** New functions (including exported ones and those returning
+  `Effect`s or `Promise`s) should rely on TypeScript's inference for their return
+  type rather than carrying an explicit annotation — an inferred type stays
+  correct as the body evolves and avoids widening (e.g. writing
+  `Effect.Effect<unknown, E>` when the real success type is more precise). Only
+  add an explicit return type when inference genuinely cannot express the intent
+  or is required to break a circular/recursive inference — and when you do, treat
+  it as the exception, not the default. Parameter types are unaffected: annotate
+  those as usual.
+
 ## Database migrations
 
 - **Never generate a migration without a meaningful name.** Bare

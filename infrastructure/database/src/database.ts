@@ -345,10 +345,9 @@ export const DatabaseLayer: Layer.Layer<
 
 const PgLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    // The database connection depends only on `DATABASE_URL` — it deliberately
-    // does not pull the full `SupabaseConfig`, so opening a pooled connection
-    // never requires the Supabase Auth keys (`SUPABASE_URL` / `_ANON_KEY` /
-    // `_SECRET_KEY`). Those are only needed by code that actually calls Supabase.
+    // The database connection depends only on `DATABASE_URL`, read directly here
+    // rather than through any wider config object, so opening a pooled connection
+    // never requires unrelated service credentials.
     const databaseUrl = yield* Config.string("DATABASE_URL");
 
     // Translate libpq TLS params (e.g. PlanetScale's `sslmode=verify-full&
@@ -369,7 +368,6 @@ export const DatabaseLive: Layer.Layer<
   never
 > = DatabaseLayer.pipe(Layer.provide(PgLive));
 
-export { SupabaseConfig } from "@forest-city-vault/core-config";
 export * as dbSchema from "./schema";
 
 function tryDatabasePromise<A>(

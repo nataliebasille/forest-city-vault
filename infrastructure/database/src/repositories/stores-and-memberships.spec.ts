@@ -161,6 +161,53 @@ describe("StoreMembership repository (pooled)", () => {
     assert.ok(Option.isNone(missing));
   });
 
+  test("findByStoreAndEmail matches case-insensitively and is scoped to the store", async () => {
+    const storeId = crypto.randomUUID();
+    const otherStoreId = crypto.randomUUID();
+    const membershipId = crypto.randomUUID();
+
+    const { exact, mixedCase, otherStore, missing } = await runPooled(
+      Effect.gen(function* () {
+        yield* makeStore(storeId);
+        yield* makeStore(otherStoreId, "Second Store");
+        yield* makeMembership(
+          membershipId,
+          storeId,
+          crypto.randomUUID(),
+          "owner",
+          "Owner@Example.com",
+        );
+
+        const exact = yield* StoreMembershipQueries.findByStoreAndEmail(
+          storeId,
+          "Owner@Example.com",
+        );
+        // The auth gate lowercases the verified email; the row keeps its case.
+        const mixedCase = yield* StoreMembershipQueries.findByStoreAndEmail(
+          storeId,
+          "owner@example.com",
+        );
+        // The same email in a different store must not resolve here.
+        const otherStore = yield* StoreMembershipQueries.findByStoreAndEmail(
+          otherStoreId,
+          "owner@example.com",
+        );
+        const missing = yield* StoreMembershipQueries.findByStoreAndEmail(
+          storeId,
+          "nobody@example.com",
+        );
+        return { exact, mixedCase, otherStore, missing };
+      }),
+    );
+
+    assert.ok(Option.isSome(exact));
+    assert.equal(String(exact.value.id), membershipId);
+    assert.ok(Option.isSome(mixedCase), "match is case-insensitive");
+    assert.equal(String(mixedCase.value.id), membershipId);
+    assert.ok(Option.isNone(otherStore), "scoped to the store");
+    assert.ok(Option.isNone(missing));
+  });
+
   test("enforces the unique (storeId, userId) constraint", async () => {
     const storeId = crypto.randomUUID();
     const userId = crypto.randomUUID();

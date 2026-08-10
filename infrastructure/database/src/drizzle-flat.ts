@@ -4,6 +4,10 @@
 import { dbSchema } from "..";
 
 export const aggregateEvents = dbSchema.aggregateEvents;
+export const authAccount = dbSchema.authAccount;
+export const authSession = dbSchema.authSession;
+export const authUser = dbSchema.authUser;
+export const authVerification = dbSchema.authVerification;
 export const cloverImportCursors = dbSchema.cloverImportCursors;
 export const cloverMerchantTokens = dbSchema.cloverMerchantTokens;
 export const inboxes_eventType = dbSchema.inboxes.eventType;

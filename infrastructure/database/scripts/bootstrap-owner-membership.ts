@@ -4,7 +4,6 @@ try {
   loadEnvFile("../../.env");
 } catch {}
 
-import { ensureAuthUser } from "@forest-city-vault/core-auth";
 import { Effect, Layer } from "effect";
 import { DatabaseLive } from "../src/database";
 import { runBootstrap } from "../src/bootstrap/runtime";
@@ -16,10 +15,11 @@ import { BOOTSTRAP_STORE_ID } from "../src/bootstrap/bootstrap-store";
  *   tsx scripts/bootstrap-owner-membership.ts <email> [storeId]
  * or via BOOTSTRAP_OWNER_EMAIL / BOOTSTRAP_STORE_ID.
  *
- * The flow is `ensureAuthUser(email)` → `bootstrapOwnerMembership`: the Supabase
- * auth user is created (or reused, idempotently) here, and its id — never typed
- * by hand — is handed to the Supabase-free database bootstrap. Refuses to run
- * without an email; the initial membership is never created implicitly.
+ * The membership is keyed by email, which is the admin portal's auth gate key:
+ * on first sign-in Better Auth proves ownership of this email and provisions its
+ * own auth-user row, while access is granted by this membership. No auth user is
+ * created here — the identity provider handles that on first login. Refuses to
+ * run without an email; the initial membership is never created implicitly.
  */
 const [, , emailArg, storeIdArg] = process.argv;
 
@@ -34,22 +34,16 @@ if (!email) {
   process.exit(1);
 }
 
-const program = Effect.gen(function* () {
-  const userId = yield* ensureAuthUser(email);
-
-  const result = yield* runBootstrap(
-    bootstrapOwnerMembership({ storeId, userId, email }),
-    DatabaseLive.pipe(Layer.orDie),
-  );
-
-  return { userId, result };
-}).pipe(
-  Effect.tap(({ userId, result }) =>
+const program = runBootstrap(
+  bootstrapOwnerMembership({ storeId, email }),
+  DatabaseLive.pipe(Layer.orDie),
+).pipe(
+  Effect.tap((result) =>
     Effect.sync(() =>
       console.log(
         result.created ?
-          `Created owner membership ${result.membershipId} for user ${userId} (${email}) in store ${storeId}.`
-        : `Owner membership ${result.membershipId} already exists for user ${userId} (${email}) in store ${storeId}; nothing to do.`,
+          `Created owner membership ${result.membershipId} for ${email} in store ${storeId}.`
+        : `Owner membership ${result.membershipId} already exists for ${email} in store ${storeId}; nothing to do.`,
       ),
     ),
   ),

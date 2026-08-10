@@ -7,7 +7,7 @@ import {
 } from "@forest-city-vault/core-domain";
 import { StoreMembership } from "@forest-city-vault/domain";
 import { Effect, Option } from "effect";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { Database } from "../database";
 import { storeMemberships } from "../schema/store-memberships";
 
@@ -151,6 +151,35 @@ export const StoreMembershipQueries = {
             and(
               eq(storeMemberships.storeId, storeId),
               eq(storeMemberships.userId, userId),
+            ),
+          )
+          .limit(1),
+      );
+
+      return Option.fromNullable(rows[0]).pipe(Option.map(toAggregate));
+    }),
+
+  /**
+   * Looks up the single membership an email has in a store, matched
+   * case-insensitively. This is the admin portal's auth gate key: the identity
+   * provider (Better Auth) proves email ownership, and the membership resolved
+   * here — not the provider's user id — is what grants access. Returns `None`
+   * when the store has no membership for that email.
+   */
+  findByStoreAndEmail: (storeId: string, email: string) =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.query((query) =>
+        query
+          .select()
+          .from(storeMemberships)
+          .where(
+            and(
+              eq(storeMemberships.storeId, storeId),
+              eq(
+                sql`lower(${storeMemberships.email})`,
+                email.trim().toLowerCase(),
+              ),
             ),
           )
           .limit(1),

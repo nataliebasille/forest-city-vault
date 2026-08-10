@@ -5,7 +5,6 @@ import { StoreMembershipQueries } from "../repositories/store-memberships";
 
 export type BootstrapOwnerMembershipInput = {
   readonly storeId: string;
-  readonly userId: string;
   readonly email: string;
 };
 
@@ -15,25 +14,28 @@ export type BootstrapOwnerMembershipResult = {
 };
 
 /**
- * Ensures an owner membership exists for `(storeId, userId)`, idempotently.
+ * Ensures an owner membership exists for `(storeId, email)`, idempotently.
  *
- * - No membership for the pair → create one with the `owner` role via the
+ * - No membership for the email → create one with the `owner` role via the
  *   `StoreMembership` aggregate and repository, returning `created: true`.
  * - A membership already exists → no-op, returning `created: false` and the
  *   existing membership id.
  *
- * Idempotency keys off the `(store_id, user_id)` unique index via
- * {@link StoreMembershipQueries.findByStoreAndUser}, so a re-run with the same
- * store and user never creates a second membership (and could never, since the
- * unique constraint would reject it).
+ * Idempotency keys off the **email** (via
+ * {@link StoreMembershipQueries.findByStoreAndEmail}), because email is the admin
+ * portal's auth gate key: the identity provider (Better Auth) proves email
+ * ownership on sign-in, and this membership — matched by email — is what grants
+ * access. The `user_id` column is filled with a generated id purely to satisfy
+ * its NOT NULL constraint; it is an opaque placeholder, decoupled from the auth
+ * provider's user id, and nothing reads it for authorization.
  */
 export const bootstrapOwnerMembership = (
   input: BootstrapOwnerMembershipInput,
 ) =>
   Effect.gen(function* () {
-    const existing = yield* StoreMembershipQueries.findByStoreAndUser(
+    const existing = yield* StoreMembershipQueries.findByStoreAndEmail(
       input.storeId,
-      input.userId,
+      input.email,
     );
 
     if (Option.isSome(existing)) {
@@ -45,12 +47,13 @@ export const bootstrapOwnerMembership = (
 
     const idGenerator = yield* IdGenerator;
     const membershipId = yield* idGenerator.next;
+    const userId = yield* idGenerator.next;
 
     const created = yield* StoreMembership.actions.create(
       StoreMembership.pristine(membershipId),
       {
         storeId: input.storeId,
-        userId: input.userId,
+        userId,
         email: input.email,
         role: "owner",
       },
