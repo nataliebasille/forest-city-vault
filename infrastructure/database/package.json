@@ -13,7 +13,8 @@
   "scripts": {
     "test": "node --import tsx --test src/**/*.spec.ts",
     "db:generate:drizzle-schema": "tsx scripts/generate-drizzle-flat-schema.ts",
-    "db:generate": "pnpm db:generate:drizzle-schema && drizzle-kit generate",
+    "db:generate:migration": "tsx scripts/generate-migration.ts",
+    "db:generate": "pnpm db:generate:drizzle-schema && pnpm db:generate:migration",
     "db:migrate": "tsx src/migrate.ts",
     "db:migrate:prod": "tsx src/migrate.ts .env.production",
     "db:studio": "drizzle-kit studio",

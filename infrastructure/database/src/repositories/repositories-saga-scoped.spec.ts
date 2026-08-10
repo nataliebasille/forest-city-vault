@@ -18,6 +18,10 @@ const salePayload = (merchantId: string, paymentId: string) => ({
     merchantId,
     paymentId,
     timestamp: new Date(),
+    subtotal: 0,
+    tax: 0,
+    discount: 0,
+    total: 0,
   },
   items: [] as const,
 });
@@ -134,9 +138,7 @@ type RepoScoped = Layer.Layer.Success<typeof RepositoriesSagaScoped>;
 
 /** Runs an Effect against a fresh in-memory database, with the saga's scoped
  * repositories declared at the boundary so `withSaga` rebuilds them per saga. */
-function runWith<A>(
-  effect: Effect.Effect<A, unknown, RepoScoped>,
-): Promise<A> {
+function runWith<A>(effect: Effect.Effect<A, unknown, RepoScoped>): Promise<A> {
   return Effect.runPromise(
     effect.pipe(
       Effect.provide(provideSagaScoped(RepositoriesSagaScoped)),

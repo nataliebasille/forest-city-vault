@@ -59,6 +59,10 @@ export const seedSales = (input: SeedSalesInput = {}) =>
 
     for (const seed of seeds) {
       const timestamp = new Date(nowMs - seed.hoursAgo * MS_PER_HOUR);
+      const totalCents = seed.items.reduce(
+        (sum, item) => sum + item.amountCents,
+        0,
+      );
 
       const sale = yield* Sales.actions.fromCloverPayment(
         Sales.pristine(seed.id),
@@ -68,9 +72,14 @@ export const seedSales = (input: SeedSalesInput = {}) =>
             paymentId: seed.paymentId,
             idempotencyKey: `seed:${merchantId}:${seed.paymentId}`,
             timestamp,
+            subtotal: totalCents,
+            tax: 0,
+            discount: 0,
+            total: totalCents,
           },
           items: seed.items.map((item) => ({
             vendorId: "",
+            cloverItemId: "",
             name: item.name,
             quantity: 1,
             grossAmount: item.amountCents,

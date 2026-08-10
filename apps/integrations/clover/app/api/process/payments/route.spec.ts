@@ -21,17 +21,13 @@ process.env.CLOVER_PROCESSOR_SECRET = PROCESSOR_SECRET;
 const {
   db,
   module: { POST, internalProcessorRoute },
-} = await makeRouteTest<typeof import("./route")>(
-  import.meta.url,
-  "./route",
-  {
-    tokenEncryptionKey: ENCRYPTION_KEY,
-    processorSecret: PROCESSOR_SECRET,
-    onPooledRuntimeAcquire: () => {
-      pooledRuntimeAcquireCount += 1;
-    },
+} = await makeRouteTest<typeof import("./route")>(import.meta.url, "./route", {
+  tokenEncryptionKey: ENCRYPTION_KEY,
+  processorSecret: PROCESSOR_SECRET,
+  onPooledRuntimeAcquire: () => {
+    pooledRuntimeAcquireCount += 1;
   },
-);
+});
 
 describe("POST /api/process/payments", () => {
   test("processes a payment when called with the correct bearer token", async () => {
@@ -53,6 +49,21 @@ describe("POST /api/process/payments", () => {
 
     const sales = await db.select().from(dbSchema.sales);
     assert.equal(sales.length, 1, "expected one sale to be created");
+
+    // The stubbed payment has no line items, so the sale must carry its header
+    // totals from the payment yet record zero line items — never a fabricated
+    // placeholder item.
+    assert.equal(Number(sales[0].totalCents), 1000);
+    assert.equal(Number(sales[0].subtotalCents), 1000);
+
+    const lineItems = (await db.select().from(dbSchema.salesLineItems)).filter(
+      (row) => row.saleId === sales[0].id,
+    );
+    assert.equal(
+      lineItems.length,
+      0,
+      "expected no line item for a payment with no line items",
+    );
   });
 
   test("returns 401 when authorization header is missing", async () => {

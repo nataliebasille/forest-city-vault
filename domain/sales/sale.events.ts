@@ -5,6 +5,10 @@ import { CentsSchema } from "../value-objects/cents";
 const SaleRecordedSchema = Schema.Struct({
   source: SaleSourceSchema,
   timestamp: Schema.Date,
+  subtotal: CentsSchema,
+  tax: CentsSchema,
+  discount: CentsSchema,
+  total: CentsSchema,
 });
 
 export const SaleRecorded = {
@@ -14,10 +18,10 @@ export const SaleRecorded = {
     return {
       source: payload.source,
       items: [],
-      subtotal: null,
-      tax: null,
-      discount: null,
-      total: null,
+      subtotal: payload.subtotal,
+      tax: payload.tax,
+      discount: payload.discount,
+      total: payload.total,
       recordedAt: payload.timestamp,
       completedAt: null,
     } satisfies typeof SaleSchema.Type;
@@ -26,6 +30,7 @@ export const SaleRecorded = {
 
 const SaleItemRecordedSchema = Schema.Struct({
   vendorId: Schema.String,
+  cloverItemId: Schema.String,
   name: Schema.String,
   quantity: Schema.Number.pipe(Schema.int(), Schema.positive()),
   grossAmount: CentsSchema,
@@ -44,10 +49,6 @@ export const SaleItemRecorded = {
     return {
       ...snapshot,
       items: [...snapshot.items, payload],
-      subtotal: (snapshot.subtotal ?? 0) + payload.grossAmount,
-      tax: (snapshot.tax ?? 0) + payload.taxAmount,
-      discount: (snapshot.discount ?? 0) + payload.discountAmount,
-      total: (snapshot.total ?? 0) + payload.netAmount,
     } satisfies typeof SaleSchema.Type;
   },
 };

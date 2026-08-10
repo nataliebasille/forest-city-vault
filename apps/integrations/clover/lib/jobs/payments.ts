@@ -82,6 +82,10 @@ export function processPayments(options: { readonly requestId: string }) {
               paymentId: message.providerObjectId,
               timestamp: new Date(cloverPayment.createdTime),
               idempotencyKey: message.idempotencyKey,
+              subtotal: cloverPayment.amount,
+              tax: cloverPayment.taxAmount ?? 0,
+              discount: cloverPayment.discountAmount ?? 0,
+              total: cloverPayment.amount,
             },
             items: saleItems,
           };
@@ -134,23 +138,12 @@ function mapCloverPaymentToSaleItems(
 ): (typeof FromCloverPaymentSchema.Type)["items"] {
   const lineItems = payment.lineItems?.elements ?? [];
 
-  if (lineItems.length === 0) {
-    // If no line items, create one aggregate item for the total
-    return [
-      {
-        vendorId: "",
-        name: "Payment",
-        quantity: 1,
-        grossAmount: payment.amount,
-        discountAmount: payment.discountAmount ?? 0,
-        taxAmount: payment.taxAmount ?? 0,
-        netAmount: payment.amount,
-      },
-    ];
-  }
-
+  // Only real Clover line items become sale items. A payment with no line items
+  // records a sale with its header totals but no line detail — never a
+  // fabricated placeholder item.
   return lineItems.map((item) => ({
     vendorId: "",
+    cloverItemId: item.id,
     name: item.name,
     quantity: item.quantity,
     grossAmount: item.price * item.quantity,

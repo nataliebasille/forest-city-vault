@@ -18,6 +18,7 @@ export const SaleSourceSchema = CloverSaleSourceSchema;
 
 export const SaleItemSchema = Schema.Struct({
   vendorId: Schema.String,
+  cloverItemId: Schema.String,
   name: Schema.String,
   quantity: Schema.Number.pipe(Schema.int(), Schema.positive()),
   grossAmount: CentsSchema,
@@ -29,10 +30,10 @@ export const SaleItemSchema = Schema.Struct({
 export const SaleSchema = Schema.Struct({
   source: SaleSourceSchema,
   items: Schema.Array(SaleItemSchema),
-  subtotal: Schema.NullOr(CentsSchema),
-  tax: Schema.NullOr(CentsSchema),
-  discount: Schema.NullOr(CentsSchema),
-  total: Schema.NullOr(CentsSchema),
+  subtotal: CentsSchema,
+  tax: CentsSchema,
+  discount: CentsSchema,
+  total: CentsSchema,
   recordedAt: Schema.Date,
   completedAt: Schema.NullOr(Schema.Date),
 });

@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { SaleItemSchema } from "./sale.entity";
+import { CentsSchema } from "../value-objects/cents";
 import * as events from "./sale.events";
 
 const CloverPaymentSchema = Schema.Struct({
@@ -7,6 +8,10 @@ const CloverPaymentSchema = Schema.Struct({
   paymentId: Schema.String,
   timestamp: Schema.Date,
   idempotencyKey: Schema.String,
+  subtotal: CentsSchema,
+  tax: CentsSchema,
+  discount: CentsSchema,
+  total: CentsSchema,
 });
 
 export const FromCloverPaymentSchema = Schema.Struct({
@@ -37,6 +42,10 @@ export function fromCloverPayment(
         idempotencyKey: payload.payment.idempotencyKey,
       },
       timestamp: payload.payment.timestamp,
+      subtotal: payload.payment.subtotal,
+      tax: payload.payment.tax,
+      discount: payload.payment.discount,
+      total: payload.payment.total,
     },
   };
 

@@ -63,7 +63,7 @@ export const salesLineItems = fcvTable(
     discountAmountCents: cents("discount_amount_cents").notNull(),
     netAmountCents: cents("net_amount_cents").notNull(),
 
-    cloverItemId: text("clover_item_id"),
+    cloverItemId: text("clover_item_id").notNull(),
 
     createdAt,
     updatedAt,

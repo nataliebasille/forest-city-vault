@@ -1,0 +1,1 @@
+ALTER TABLE "fcv_sales_line_items" ALTER COLUMN "clover_item_id" SET NOT NULL;
