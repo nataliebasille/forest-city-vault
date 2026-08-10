@@ -26,11 +26,29 @@ name: Clover process payments
 # The OAuth/webhook/processor secrets (CLOVER_SECRET_CODE, CLOVER_WEBHOOK_AUTH_CODE,
 # CLOVER_PROCESSOR_SECRET, CLOVER_OAUTH_URL, CLOVER_OAUTH_STATE_SECRET,
 # CLOVER_OAUTH_REDIRECT_URI) are NOT needed here — this job never touches them.
+# Desired cadence, expressed in EASTERN time (America/New_York, DST-aware):
+#   - Wed–Sun, 10:00–21:00 ET: process every 5 minutes (peak window).
+#   - Wed–Sun, outside that window (before 10:00, after 21:00): every 6 hours.
+#   - Mon–Tue: every 6 hours, all day.
+# GitHub Actions cron only understands UTC and cannot honor DST, so cron alone
+# cannot express an Eastern-time window that shifts by an hour twice a year.
+# Instead, the cron lines below are a *superset* — they wake a runner slightly
+# more often than needed, covering both EST (UTC-5) and EDT (UTC-4). The `gate`
+# job then applies the exact Eastern-time rules (using the America/New_York time
+# zone, which handles DST automatically) and decides whether the heavy
+# process-payments job actually runs. Every 5 minutes is also GitHub's minimum
+# interval, and scheduled runs are best-effort and may be delayed under load.
 on:
   schedule:
-    # Every 5 minutes is the minimum interval GitHub Actions allows. Scheduled
-    # runs are best-effort and may be delayed under load.
-    - cron: "*/5 * * * *"
+    # Peak window (every 5 min). ET 10:00–21:00 maps to UTC 14:00–01:59 across
+    # EST/EDT; the after-midnight UTC tail belongs to the *next* UTC weekday,
+    # hence the two day-of-week lists (0=Sun … 6=Sat). The gate trims the edges.
+    - cron: "*/5 14-23 * * 3,4,5,6,0"
+    - cron: "*/5 0-1 * * 4,5,6,0,1"
+    # 6-hour anchors (ET 00/06/12/18) as a UTC superset across EST (+5) and
+    # EDT (+4): hours 4,5,10,11,16,17,22,23. Covers Mon–Tue all day and the
+    # Wed–Sun off-peak ticks; the gate keeps only the correct Eastern anchors.
+    - cron: "0 4,5,10,11,16,17,22,23 * * *"
   workflow_dispatch: {}
 
 # Avoid overlapping runs; each run is a fresh process, so this concurrency group
@@ -50,7 +68,47 @@ permissions:
   packages: read
 
 jobs:
+  # Evaluate the Eastern-time schedule (DST-aware) and decide whether the heavy
+  # job should run for this trigger. Kept tiny so the frequent scheduled wake-ups
+  # that fall outside the desired window cost only a few seconds of runner time.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Decide whether to run (Eastern-time schedule)
+        id: check
+        run: |
+          node -e '
+            const parts = Object.fromEntries(
+              new Intl.DateTimeFormat("en-US", {
+                timeZone: "America/New_York",
+                weekday: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23",
+              })
+                .formatToParts(new Date())
+                .map((p) => [p.type, p.value])
+            );
+            const dow = parts.weekday;
+            const hour = Number(parts.hour);
+            const minute = Number(parts.minute);
+            // Peak: Wed–Sun, 10:00–20:59 ET (every 5-minute tick runs).
+            const peakDays = ["Wed", "Thu", "Fri", "Sat", "Sun"];
+            const isPeak = peakDays.includes(dow) && hour >= 10 && hour <= 20;
+            // Off-peak / Mon–Tue: only the 6-hour anchors (00/06/12/18 ET),
+            // matched on the first tick of the hour.
+            const isAnchor = [0, 6, 12, 18].includes(hour) && minute < 5;
+            const run = isPeak || isAnchor;
+            console.log(`ET ${dow} ${parts.hour}:${parts.minute} -> run=${run} (peak=${isPeak}, anchor=${isAnchor})`);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `run=${run}\n`);
+          '
+
   process-payments:
+    needs: gate
+    # Always run on manual dispatch; otherwise only when the gate approves.
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.gate.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
