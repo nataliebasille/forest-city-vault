@@ -9,7 +9,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { vendors } from "./vendors";
 
 export const salesSource = pgEnum("sales_source", ["clover"]);
 
@@ -54,8 +53,6 @@ export const salesLineItems = fcvTable(
       .notNull()
       .references(() => sales.id, { onDelete: "no action" }),
 
-    vendorId: uuid("vendor_id").references(() => vendors.id),
-
     name: text("name").notNull(),
 
     quantity: cents("quantity").notNull(),
@@ -70,7 +67,7 @@ export const salesLineItems = fcvTable(
   },
   (table) => [
     index("sale_line_items_sale_id_idx").on(table.saleId),
-    index("sale_line_items_vendor_id_idx").on(table.vendorId),
+    index("sale_line_items_clover_item_id_idx").on(table.cloverItemId),
 
     check("sale_line_items_quantity_check", sql`${table.quantity} > 0`),
     check(

@@ -29,7 +29,6 @@ export const SaleRecorded = {
 };
 
 const SaleItemRecordedSchema = Schema.Struct({
-  vendorId: Schema.String,
   cloverItemId: Schema.String,
   name: Schema.String,
   quantity: Schema.Number.pipe(Schema.int(), Schema.positive()),

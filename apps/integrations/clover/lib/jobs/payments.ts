@@ -142,7 +142,6 @@ function mapCloverPaymentToSaleItems(
   // records a sale with its header totals but no line detail — never a
   // fabricated placeholder item.
   return lineItems.map((item) => ({
-    vendorId: "",
     cloverItemId: item.id,
     name: item.name,
     quantity: item.quantity,

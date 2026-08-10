@@ -7,6 +7,7 @@ import {
   sales,
   salesLineItems,
   stores,
+  vendorItems,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { eq, sql } from "drizzle-orm";
@@ -27,9 +28,10 @@ export type VendorRollup = {
  * vendor, and keeps only the top {@link TOP_VENDORS_LIMIT}.
  *
  * "Month to date" is anchored to the store's own time zone via the same
- * `bounds` shape `salesReviewMetrics` uses. Line items with no linked vendor
- * (custom items) have nothing to name, so the inner join to `vendors` drops
- * them rather than the rollup guessing a label.
+ * `bounds` shape `salesReviewMetrics` uses. A line item's vendor is resolved by
+ * joining `vendor_items` on `clover_item_id`; items whose Clover item has no
+ * matching vendor record (custom items, or items not yet synced) have nothing to
+ * name, so the inner join drops them rather than the rollup guessing a label.
  */
 export const salesReviewVendors = Effect.gen(function* () {
   const queryable = yield* SapphoQueryable;
@@ -63,7 +65,11 @@ export const salesReviewVendors = Effect.gen(function* () {
       })
       .from(salesLineItems)
       .innerJoin(sales, eq(sales.id, salesLineItems.saleId))
-      .innerJoin(vendors, eq(vendors.id, salesLineItems.vendorId))
+      .innerJoin(
+        vendorItems,
+        eq(vendorItems.cloverItemId, salesLineItems.cloverItemId),
+      )
+      .innerJoin(vendors, eq(vendors.id, vendorItems.vendorId))
       .innerJoin(bounds, sql`true`)
       .where(
         sql`${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'`,

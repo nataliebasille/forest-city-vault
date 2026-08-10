@@ -68,7 +68,6 @@ export const SalesRepositoryLive = Sales.repository.make(
                 idempotencyKey: saleRow.cloverIdempotencyKey ?? "",
               },
               items: lineItemRows.map((item) => ({
-                vendorId: item.vendorId ?? "",
                 cloverItemId: item.cloverItemId,
                 name: item.name,
                 quantity: Number(item.quantity),
@@ -143,7 +142,6 @@ export const SalesRepositoryLive = Sales.repository.make(
                         ({
                           id: crypto.randomUUID(),
                           saleId: id,
-                          vendorId: item.vendorId || null,
                           name: item.name,
                           quantity: BigInt(item.quantity),
                           grossAmountCents: BigInt(item.grossAmount),

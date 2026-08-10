@@ -11,8 +11,10 @@ export const vendorStatus = pgEnum("vendor_status", ["active", "inactive"]);
  * repository can reload the correct optimistic-concurrency version.
  *
  * The `default_vendor_share` column is the persisted commission share (in basis
- * points); the domain exposes it as `commissionShare`. `fcv_sales_line_items`
- * references this table by `vendor_id`.
+ * points); the domain exposes it as `commissionShare`. Sale line items resolve
+ * their vendor by joining `fcv_vendor_items` on `clover_item_id`, so this table
+ * is reached through that mapping rather than a direct reference from
+ * `fcv_sales_line_items`.
  */
 export const vendors = fcvTable(
   "vendors",

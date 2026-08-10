@@ -8,6 +8,7 @@ import {
   sales,
   salesLineItems,
   stores,
+  vendorItems,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { makeDatabaseTestContext } from "@forest-city-vault/infrastructure-database/testing";
@@ -50,6 +51,15 @@ describe("recentSales", () => {
       { id: VENDOR_B, name: "Birch & Co.", ...timestamps() },
     ]);
 
+    // The vendor a line item belongs to is resolved by joining vendor_items on
+    // clover_item_id, so each vendor-owned item needs a mapping row here.
+    await db.insert(vendorItems).values([
+      makeVendorItem(VENDOR_B, "LAMP", "Vintage brass lamp", 6000),
+      makeVendorItem(VENDOR_A, "MUG", "Ceramic mug", 2500),
+      makeVendorItem(VENDOR_A, "PIN", "Enamel pin", 1200),
+      makeVendorItem(VENDOR_A, "BLANKET", "Wool throw blanket", 2500),
+    ]);
+
     const newest = saleId(3);
     const middle = saleId(2);
     const oldest = saleId(1);
@@ -64,14 +74,14 @@ describe("recentSales", () => {
 
     await db.insert(salesLineItems).values([
       // Newest sale: three items across two vendors; the $60 lamp is the lead.
-      makeLineItem(newest, "Vintage brass lamp", 6000, VENDOR_B),
-      makeLineItem(newest, "Ceramic mug", 2500, VENDOR_A),
-      makeLineItem(newest, "Enamel pin", 1200, VENDOR_A),
+      makeLineItem(newest, "Vintage brass lamp", 6000, "LAMP"),
+      makeLineItem(newest, "Ceramic mug", 2500, "MUG"),
+      makeLineItem(newest, "Enamel pin", 1200, "PIN"),
       // Middle sale: single item, single vendor.
-      makeLineItem(middle, "Wool throw blanket", 2500, VENDOR_A),
-      // Oldest sale: two items, both with no linked vendor.
-      makeLineItem(oldest, "Hand-thrown vase", 3000, null),
-      makeLineItem(oldest, "Soy candle", 1200, null),
+      makeLineItem(middle, "Wool throw blanket", 2500, "BLANKET"),
+      // Oldest sale: two items whose clover items map to no vendor.
+      makeLineItem(oldest, "Hand-thrown vase", 3000, "VASE"),
+      makeLineItem(oldest, "Soy candle", 1200, "CANDLE"),
     ]);
 
     const result = await runRecentSales(layer);
@@ -221,16 +231,31 @@ function makeLineItem(
   saleIdValue: string,
   name: string,
   grossAmountCents: number,
-  vendorId: string | null,
+  cloverItemId: string,
 ) {
   return {
     saleId: saleIdValue,
-    vendorId,
+    cloverItemId,
     name,
     quantity: BigInt(1),
     grossAmountCents: BigInt(grossAmountCents),
     discountAmountCents: BigInt(0),
     netAmountCents: BigInt(grossAmountCents),
+    ...timestamps(),
+  };
+}
+
+function makeVendorItem(
+  vendorId: string,
+  cloverItemId: string,
+  name: string,
+  priceCents: number,
+) {
+  return {
+    vendorId,
+    cloverItemId,
+    name,
+    priceCents: BigInt(priceCents),
     ...timestamps(),
   };
 }

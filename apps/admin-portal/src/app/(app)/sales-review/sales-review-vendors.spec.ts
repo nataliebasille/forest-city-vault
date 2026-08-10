@@ -6,6 +6,7 @@ import {
   sales,
   salesLineItems,
   stores,
+  vendorItems,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { BOOTSTRAP_STORE_ID } from "@forest-city-vault/infrastructure-database";
@@ -67,6 +68,10 @@ describe("salesReviewVendors", () => {
 
     for (const [index, vendor] of vendorIds.entries()) {
       const saleId = await insertSale(db, "2024-06-05T14:00:00.000Z", index);
+      const cloverItemId = `item-${index}`;
+      await db
+        .insert(vendorItems)
+        .values(makeVendorItem(vendor.id, cloverItemId, `${vendor.name} item`));
       await db
         .insert(salesLineItems)
         .values(
@@ -74,7 +79,7 @@ describe("salesReviewVendors", () => {
             saleId,
             `${vendor.name} item`,
             grossByVendor[vendor.name] ?? 0,
-            vendor.id,
+            cloverItemId,
           ),
         );
     }
@@ -102,22 +107,25 @@ describe("salesReviewVendors", () => {
     // Before this month entirely — should not appear at all.
     const oldSaleId = await insertSale(db, "2024-05-20T12:00:00.000Z", 1);
     await db
+      .insert(vendorItems)
+      .values(makeVendorItem(vendor!.id, "late-item", "Old item"));
+    await db
       .insert(salesLineItems)
-      .values(makeLineItem(oldSaleId, "Old item", 9999, vendor!.id));
+      .values(makeLineItem(oldSaleId, "Old item", 9999, "late-item"));
 
     const result = await runVendors(layer);
 
     assert.deepEqual(result, []);
   });
 
-  test("excludes line items with no linked vendor", async () => {
+  test("excludes line items whose clover item maps to no vendor", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
     const saleId = await insertSale(db, "2024-06-05T14:00:00.000Z", 2);
     await db
       .insert(salesLineItems)
-      .values(makeLineItem(saleId, "Custom item", 9999, null));
+      .values(makeLineItem(saleId, "Custom item", 9999, "unmapped-item"));
 
     const result = await runVendors(layer);
 
@@ -156,16 +164,26 @@ function makeLineItem(
   saleIdValue: string,
   name: string,
   grossAmountCents: number,
-  vendorId: string | null,
+  cloverItemId: string,
 ) {
   return {
     saleId: saleIdValue,
-    vendorId,
+    cloverItemId,
     name,
     quantity: BigInt(1),
     grossAmountCents: BigInt(grossAmountCents),
     discountAmountCents: BigInt(0),
     netAmountCents: BigInt(grossAmountCents),
+    ...timestamps(),
+  };
+}
+
+function makeVendorItem(vendorId: string, cloverItemId: string, name: string) {
+  return {
+    vendorId,
+    cloverItemId,
+    name,
+    priceCents: BigInt(0),
     ...timestamps(),
   };
 }

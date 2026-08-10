@@ -6,6 +6,7 @@ import {
   sales,
   salesLineItems,
   stores,
+  vendorItems,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { asc, desc, eq, sql } from "drizzle-orm";
@@ -50,12 +51,13 @@ export type RecentSale = {
  * database round-trip: the newest {@link RECENT_SALES_LIMIT} sales ordered by
  * `occurredAt` (ties broken by id for a stable order).
  *
- * Each sale's line items are folded in by left-joining them (and their vendors)
- * and aggregating into a single `items` JSON array per sale, ordered lead-first
- * by gross amount (ties broken by name). A sale with no line items yields an
- * empty array. Building the array in one `json_agg` keeps each item's name,
- * vendor, and amount aligned. The store's time zone is folded in as a scalar
- * subquery so the view can localize each `occurredAt` without another query.
+ * Each sale's line items are folded in by left-joining them (and their vendors,
+ * resolved through `vendor_items` on `clover_item_id`) and aggregating into a
+ * single `items` JSON array per sale, ordered lead-first by gross amount (ties
+ * broken by name). A sale with no line items yields an empty array. Building the
+ * array in one `json_agg` keeps each item's name, vendor, and amount aligned.
+ * The store's time zone is folded in as a scalar subquery so the view can
+ * localize each `occurredAt` without another query.
  */
 export const recentSales = Effect.gen(function* () {
   const queryable = yield* SapphoQueryable;
@@ -77,7 +79,11 @@ export const recentSales = Effect.gen(function* () {
       })
       .from(sales)
       .leftJoin(salesLineItems, eq(salesLineItems.saleId, sales.id))
-      .leftJoin(vendors, eq(vendors.id, salesLineItems.vendorId))
+      .leftJoin(
+        vendorItems,
+        eq(vendorItems.cloverItemId, salesLineItems.cloverItemId),
+      )
+      .leftJoin(vendors, eq(vendors.id, vendorItems.vendorId))
       .groupBy(sales.id)
       .orderBy(desc(sales.occurredAt), asc(sales.id))
       .limit(RECENT_SALES_LIMIT),
