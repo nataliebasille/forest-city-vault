@@ -8,21 +8,11 @@ export const CloverPaymentSchema = Schema.Struct({
   taxAmount: Schema.optional(Schema.Number),
   discountAmount: Schema.optional(Schema.Number),
   createdTime: Schema.Number,
-  lineItems: Schema.optional(
-    Schema.Struct({
-      elements: Schema.optional(
-        Schema.Array(
-          Schema.Struct({
-            id: Schema.String,
-            name: Schema.String,
-            price: Schema.Number,
-            quantity: Schema.Number,
-            note: Schema.optional(Schema.String),
-          }),
-        ),
-      ),
-    }),
-  ),
+  // A payment carries no line items of its own — only a reference to the order it
+  // paid. Line items live on that order and are fetched separately via
+  // `getCloverOrder` (see resources/orders.ts). `order` can be absent for
+  // payments not tied to an order (e.g. some manual/standalone transactions).
+  order: Schema.optional(Schema.Struct({ id: Schema.String })),
 });
 
 export type CloverPayment = typeof CloverPaymentSchema.Type;

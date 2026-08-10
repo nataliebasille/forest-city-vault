@@ -1,6 +1,11 @@
 import { CloverConfig } from "@forest-city-vault/core-config";
 import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
-import { getCloverPayment } from "@forest-city-vault/infrastructure-clover";
+import {
+  type CloverOrder,
+  type CloverOrderLineItem,
+  getCloverOrder,
+  getCloverPayment,
+} from "@forest-city-vault/infrastructure-clover";
 import {
   drain,
   RepositoriesSagaScoped,
@@ -73,7 +78,17 @@ export function processPayments(options: { readonly requestId: string }) {
             message.providerObjectId,
           );
 
-          const saleItems = mapCloverPaymentToSaleItems(cloverPayment);
+          // Line items live on the order the payment paid, not on the payment
+          // itself, so they are fetched in a second call. A payment with no
+          // associated order records a sale with its header totals but no line
+          // detail — never a fabricated placeholder item.
+          const orderId = cloverPayment.order?.id;
+          const saleItems =
+            orderId === undefined ?
+              []
+            : mapCloverOrderToSaleItems(
+                yield* getCloverOrder(merchantId, orderId),
+              );
 
           const newSale = Sales.pristine(crypto.randomUUID());
           const actionPayload: typeof FromCloverPaymentSchema.Type = {
@@ -133,21 +148,69 @@ const decodePaymentPayload = Schema.decodeUnknown(
   Schema.parseJson(PaymentPayloadSchema),
 );
 
-function mapCloverPaymentToSaleItems(
-  payment: Effect.Effect.Success<ReturnType<typeof getCloverPayment>>,
+function mapCloverOrderToSaleItems(
+  order: CloverOrder,
 ): (typeof FromCloverPaymentSchema.Type)["items"] {
-  const lineItems = payment.lineItems?.elements ?? [];
+  const lineItems = order.lineItems?.elements ?? [];
 
-  // Only real Clover line items become sale items. A payment with no line items
+  // Only real Clover line items become sale items. An order with no line items
   // records a sale with its header totals but no line detail — never a
   // fabricated placeholder item.
-  return lineItems.map((item) => ({
-    cloverItemId: item.id,
-    name: item.name,
-    quantity: item.quantity,
-    grossAmount: item.price * item.quantity,
-    discountAmount: 0, // Clover item-level discounts would be here
-    taxAmount: 0, // Clover item-level taxes would be here
-    netAmount: item.price * item.quantity,
-  }));
+  return lineItems
+    .filter((item) => item.exchanged !== true)
+    .map((item) => {
+      const unitPrice = item.price ?? 0;
+
+      // Weighted (PER_UNIT) items price by quantity: extended = price ×
+      // unitQty/1000. Per-each items have no unit quantity and each element is a
+      // single unit, so the extended amount is just the price. Quantity is not a
+      // reliable numeric field on a per-each Clover line item (each unit is its
+      // own record), so each element maps to a single sale line of quantity 1;
+      // multiple units of the same item arrive as multiple elements.
+      const grossAmount =
+        item.unitQty === undefined ?
+          unitPrice
+        : Math.round((unitPrice * item.unitQty) / 1000);
+
+      const discountAmount = sumLineDiscounts(item, grossAmount);
+
+      return {
+        cloverItemId: item.item?.id ?? "",
+        name: item.name ?? "",
+        quantity: 1,
+        grossAmount,
+        discountAmount,
+        taxAmount: 0,
+        // Not clamped: an order whose line discounts exceed the gross is
+        // malformed, and letting the net go negative fails the message (via the
+        // non-negative DB check) rather than silently persisting wrong revenue.
+        netAmount: grossAmount - discountAmount,
+      };
+    });
+}
+
+// Sums a line item's discounts into a positive cents amount. Clover expresses a
+// discount as either a fixed `amount` (stored non-positive, so its magnitude is
+// the reduction) or a percentage of the gross (`percentageDecimal` is percent ×
+// 10000; `percentage` is a whole percent).
+function sumLineDiscounts(
+  item: CloverOrderLineItem,
+  grossAmount: number,
+): number {
+  const discounts = item.discounts?.elements ?? [];
+
+  let total = 0;
+  for (const discount of discounts) {
+    if (discount.amount !== undefined) {
+      total += Math.abs(discount.amount);
+    } else if (discount.percentageDecimal !== undefined) {
+      total += Math.round(
+        (grossAmount * discount.percentageDecimal) / 1_000_000,
+      );
+    } else if (discount.percentage !== undefined) {
+      total += Math.round((grossAmount * discount.percentage) / 100);
+    }
+  }
+
+  return total;
 }

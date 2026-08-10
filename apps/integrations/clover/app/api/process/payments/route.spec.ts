@@ -50,7 +50,7 @@ describe("POST /api/process/payments", () => {
     const sales = await db.select().from(dbSchema.sales);
     assert.equal(sales.length, 1, "expected one sale to be created");
 
-    // The stubbed payment has no line items, so the sale must carry its header
+    // The stubbed order has no line items, so the sale must carry its header
     // totals from the payment yet record zero line items — never a fabricated
     // placeholder item.
     assert.equal(Number(sales[0].totalCents), 1000);
@@ -62,8 +62,49 @@ describe("POST /api/process/payments", () => {
     assert.equal(
       lineItems.length,
       0,
-      "expected no line item for a payment with no line items",
+      "expected no line item for an order with no line items",
     );
+  });
+
+  test("records a sale line item from the payment's order line items", async () => {
+    await seedMerchantToken("merchant-items", "valid-access-token");
+    await insertInboxMessage(
+      "merchant-items",
+      "payment-items",
+      "P:payment-items",
+    );
+    stubCloverOrderFlow("payment-items", "order-items", [
+      {
+        id: "line-1",
+        name: "Vintage denim jacket",
+        // Clover returns monetary values as strings in cents.
+        price: "2499",
+        item: { id: "clover-item-1" },
+      },
+    ]);
+
+    const response = await POST(processRequest(authHeader()));
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 200);
+
+    const sales = await db.select().from(dbSchema.sales);
+    const sale = sales.find((s) => s.cloverPaymentId === "payment-items");
+    assert.ok(sale, "expected the sale to be created");
+
+    const lineItems = (await db.select().from(dbSchema.salesLineItems)).filter(
+      (row) => row.saleId === sale.id,
+    );
+    assert.equal(lineItems.length, 1, "expected one sale line item");
+    // The Clover *item* id (not the line item id) is stored, so the line item
+    // resolves its vendor via vendor_items.clover_item_id.
+    assert.equal(lineItems[0].cloverItemId, "clover-item-1");
+    assert.equal(lineItems[0].name, "Vintage denim jacket");
+    assert.equal(Number(lineItems[0].quantity), 1);
+    assert.equal(Number(lineItems[0].grossAmountCents), 2499);
+    assert.equal(Number(lineItems[0].discountAmountCents), 0);
+    assert.equal(Number(lineItems[0].netAmountCents), 2499);
   });
 
   test("returns 401 when authorization header is missing", async () => {
@@ -211,7 +252,18 @@ describe("POST /api/process/payments", () => {
       "payment-writefail",
       "P:payment-writefail",
     );
-    stubCloverPaymentWithLineItem("payment-writefail", { quantity: 0 });
+    // A line discount larger than the gross drives the net amount negative,
+    // which the non-negative DB check rejects — so the line-item insert fails
+    // *after* the sale row is written, exercising the transactional rollback.
+    stubCloverOrderFlow("payment-writefail", "order-writefail", [
+      {
+        id: "line-writefail",
+        name: "Test item",
+        price: 1000,
+        item: { id: "clover-item-writefail" },
+        discounts: { elements: [{ amount: -2000 }] },
+      },
+    ]);
 
     const salesBefore = (await db.select().from(dbSchema.sales)).length;
     const lineItemsBefore = (await db.select().from(dbSchema.salesLineItems))
@@ -350,26 +402,15 @@ async function insertInboxMessage(
 }
 
 function stubCloverPayment(paymentId: string) {
-  mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
-    const url = String(input instanceof Request ? input.url : input);
-    if (url.includes(`/payments/${paymentId}`)) {
-      return new Response(
-        JSON.stringify({
-          id: paymentId,
-          amount: 1000,
-          createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
-          lineItems: { elements: [] },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    }
-    return new Response("not found", { status: 404 });
-  });
+  stubCloverOrderFlow(paymentId, `${paymentId}-order`, []);
 }
 
-function stubCloverPaymentWithLineItem(
+// Stubs the two-step fetch the drain performs: GET the payment (which references
+// an order), then GET that order with its line items expanded.
+function stubCloverOrderFlow(
   paymentId: string,
-  lineItem: { quantity: number },
+  orderId: string,
+  lineItems: ReadonlyArray<Record<string, unknown>>,
 ) {
   mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -379,17 +420,14 @@ function stubCloverPaymentWithLineItem(
           id: paymentId,
           amount: 1000,
           createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
-          lineItems: {
-            elements: [
-              {
-                id: `${paymentId}-item`,
-                name: "Test item",
-                price: 1000,
-                quantity: lineItem.quantity,
-              },
-            ],
-          },
+          order: { id: orderId },
         }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (url.includes(`/orders/${orderId}`)) {
+      return new Response(
+        JSON.stringify({ id: orderId, lineItems: { elements: lineItems } }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }
