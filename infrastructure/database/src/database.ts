@@ -14,6 +14,7 @@ import {
 } from "effect";
 import { PgRemoteDatabase } from "drizzle-orm/pg-proxy";
 import * as schema from "./schema";
+import { parseConnectionString } from "./utils/connection-ssl";
 
 export type SapphoDatabase = PgRemoteDatabase<typeof schema>;
 
@@ -350,8 +351,14 @@ const PgLive = Layer.unwrapEffect(
     // `_SECRET_KEY`). Those are only needed by code that actually calls Supabase.
     const databaseUrl = yield* Config.string("DATABASE_URL");
 
+    // Translate libpq TLS params (e.g. PlanetScale's `sslmode=verify-full&
+    // sslrootcert=system`) into an explicit `ssl` config; `pg` cannot parse the
+    // `system` value from the URL itself.
+    const { url, ssl } = parseConnectionString(databaseUrl);
+
     return PgClient.layer({
-      url: Redacted.make(databaseUrl),
+      url: Redacted.make(url),
+      ssl,
     });
   }),
 );

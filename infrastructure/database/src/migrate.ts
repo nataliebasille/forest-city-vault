@@ -1,11 +1,11 @@
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { parseConnectionString } from "./utils/connection-ssl";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -47,48 +47,13 @@ try {
 
 /**
  * Builds a node-postgres client config from a connection string, translating
- * libpq TLS params that `pg` does not understand into an explicit `ssl` object.
- *
- * PlanetScale's connection string uses `sslmode=verify-full&sslrootcert=system`.
- * The `system` value tells libpq to trust the OS certificate store, but
- * `pg-connection-string` treats `sslrootcert` as a file path and crashes trying
- * to read a file named "system". Node already trusts PlanetScale's public CA
- * chain, so we strip the ssl query params and set `ssl` from `sslmode` instead —
- * `verify-full` maps to full verification (cert chain + hostname), which Node's
- * default `checkServerIdentity` enforces when `rejectUnauthorized` is true.
+ * libpq TLS params (e.g. PlanetScale's `sslmode=verify-full&sslrootcert=system`)
+ * into an explicit `ssl` config that `pg` understands. See
+ * {@link parseConnectionString} for the details.
  */
 function buildClientConfig(rawConnectionString: string): pg.ClientConfig {
-  let url: URL;
-  try {
-    url = new URL(rawConnectionString);
-  } catch {
-    return { connectionString: rawConnectionString };
-  }
-
-  const sslmode = url.searchParams.get("sslmode");
-  const sslrootcert = url.searchParams.get("sslrootcert");
-
-  for (const param of ["sslmode", "sslrootcert", "sslcert", "sslkey"]) {
-    url.searchParams.delete(param);
-  }
-
-  const config: pg.ClientConfig = { connectionString: url.toString() };
-
-  if (sslmode && sslmode !== "disable") {
-    // `require` (and `prefer`/`allow`) encrypt without verifying; the `verify-*`
-    // modes enforce the certificate chain. A file-backed `sslrootcert` is honored
-    // as an explicit CA; `system` (or none) falls back to Node's trust store.
-    const verify = sslmode === "verify-ca" || sslmode === "verify-full";
-    const ssl: pg.ClientConfig["ssl"] = { rejectUnauthorized: verify };
-
-    if (sslrootcert && sslrootcert !== "system") {
-      ssl.ca = readFileSync(sslrootcert, "utf8");
-    }
-
-    config.ssl = ssl;
-  }
-
-  return config;
+  const { url, ssl } = parseConnectionString(rawConnectionString);
+  return { connectionString: url, ssl };
 }
 
 function maskConnectionString(connectionString: string): string {
