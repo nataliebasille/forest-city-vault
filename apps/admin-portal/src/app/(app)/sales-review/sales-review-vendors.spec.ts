@@ -131,6 +131,37 @@ describe("salesReviewVendors", () => {
 
     assert.deepEqual(result, []);
   });
+
+  test("excludes line items belonging to a sale that was not captured", async () => {
+    const { layer, db } = await makeDatabaseTestContext();
+    await seedStore(db);
+
+    const [vendor] = await db
+      .insert(vendors)
+      .values({ name: "Rejected Vendor", ...timestamps() })
+      .returning({ id: vendors.id });
+
+    // In-window sale, mapped vendor — but the payment was rejected, so its
+    // items must not count toward the vendor rollup.
+    const rejectedSaleId = await insertSale(
+      db,
+      "2024-06-05T14:00:00.000Z",
+      3,
+      "rejected",
+    );
+    await db
+      .insert(vendorItems)
+      .values(makeVendorItem(vendor!.id, "rejected-item", "Rejected item"));
+    await db
+      .insert(salesLineItems)
+      .values(
+        makeLineItem(rejectedSaleId, "Rejected item", 5000, "rejected-item"),
+      );
+
+    const result = await runVendors(layer);
+
+    assert.deepEqual(result, []);
+  });
 });
 
 function timestamps() {
@@ -145,11 +176,13 @@ async function insertSale(
   db: Db,
   occurredAt: string,
   n: number,
+  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
 ): Promise<string> {
   const id = saleId(n + 1000);
   await db.insert(sales).values({
     id,
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: BigInt(0),
     taxCents: BigInt(0),

@@ -49,6 +49,14 @@ describe("salesReviewMetrics", () => {
       // Month to date (June 1–8 local).
       makeSale("2024-06-08T14:00:00.000Z", BigInt(1500)), // June 8, 10:00 local
       makeSale("2024-06-03T13:00:00.000Z", BigInt(700)), // June 3, 09:00 local
+      // Month to date, with a $2 discount — proves net = gross - discount.
+      makeSale("2024-06-04T13:00:00.000Z", BigInt(1000), {
+        discountCents: BigInt(200),
+      }),
+      // Month to date, but not captured — excluded from every figure.
+      makeSale("2024-06-05T13:00:00.000Z", BigInt(4200), {
+        paymentStatus: "rejected",
+      }),
       // After the month-to-date cutoff — excluded.
       makeSale("2024-06-10T12:00:00.000Z", BigInt(9999)),
       // Previous month, within the same 8-day window (May 1–8 local) —
@@ -63,8 +71,9 @@ describe("salesReviewMetrics", () => {
     const metrics = await runMetrics(layer);
 
     assert.deepEqual(metrics, {
-      monthToDateSaleCount: 2,
-      monthToDateGrossCents: 2200,
+      monthToDateSaleCount: 3,
+      monthToDateGrossCents: 3200,
+      monthToDateNetCents: 3000,
       previousMonthPaceGrossCents: 1200,
       monthStartYear: 2024,
       monthStartMonth: 6,
@@ -80,6 +89,7 @@ describe("salesReviewMetrics", () => {
     assert.deepEqual(metrics, {
       monthToDateSaleCount: 0,
       monthToDateGrossCents: 0,
+      monthToDateNetCents: 0,
       previousMonthPaceGrossCents: 0,
       monthStartYear: 2024,
       monthStartMonth: 6,
@@ -115,13 +125,22 @@ describe("salesReviewMetrics", () => {
   });
 });
 
-function makeSale(occurredAt: string, totalCents: bigint) {
+function makeSale(
+  occurredAt: string,
+  totalCents: bigint,
+  options: {
+    paymentStatus?: "paid" | "rejected" | "incomplete";
+    discountCents?: bigint;
+  } = {},
+) {
+  const { paymentStatus = "paid", discountCents = BigInt(0) } = options;
   return {
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: totalCents,
     taxCents: BigInt(0),
-    discountCents: BigInt(0),
+    discountCents,
     totalCents,
     createdAt: SEED_TS,
     updatedAt: SEED_TS,

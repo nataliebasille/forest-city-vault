@@ -48,6 +48,8 @@ describe("salesReviewHistory", () => {
       // Current month (June 2024): two sales.
       makeSale("2024-06-03T14:00:00.000Z", BigInt(1500)),
       makeSale("2024-06-05T14:00:00.000Z", BigInt(700)),
+      // Current month, but rejected — excluded from June's gross and count.
+      makeSale("2024-06-06T14:00:00.000Z", BigInt(9999), "rejected"),
       // Two months back (April 2024): one sale.
       makeSale("2024-04-10T14:00:00.000Z", BigInt(4200)),
       // Nine months back (September 2023) — outside the trailing 8, excluded.
@@ -138,9 +140,14 @@ describe("salesReviewHistory", () => {
   });
 });
 
-function makeSale(occurredAt: string, totalCents: bigint) {
+function makeSale(
+  occurredAt: string,
+  totalCents: bigint,
+  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+) {
   return {
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: totalCents,
     taxCents: BigInt(0),

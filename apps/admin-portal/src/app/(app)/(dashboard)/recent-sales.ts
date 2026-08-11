@@ -48,8 +48,10 @@ export type RecentSale = {
 
 /**
  * Reads the store's most recent sales for the dashboard preview in a single
- * database round-trip: the newest {@link RECENT_SALES_LIMIT} sales ordered by
- * `occurredAt` (ties broken by id for a stable order).
+ * database round-trip: the newest {@link RECENT_SALES_LIMIT} captured (`paid`)
+ * sales ordered by `occurredAt` (ties broken by id for a stable order).
+ * Rejected/incomplete payments are ingested for reconciliation but never shown
+ * in this preview.
  *
  * Each sale's line items are folded in by left-joining them (and their vendors,
  * resolved through `vendor_items` on `clover_item_id`) and aggregating into a
@@ -84,6 +86,7 @@ export const recentSales = Effect.gen(function* () {
         eq(vendorItems.cloverItemId, salesLineItems.cloverItemId),
       )
       .leftJoin(vendors, eq(vendors.id, vendorItems.vendorId))
+      .where(eq(sales.paymentStatus, "paid"))
       .groupBy(sales.id)
       .orderBy(desc(sales.occurredAt), asc(sales.id))
       .limit(RECENT_SALES_LIMIT),

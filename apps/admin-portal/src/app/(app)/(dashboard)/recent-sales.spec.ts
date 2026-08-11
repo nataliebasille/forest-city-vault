@@ -196,6 +196,30 @@ describe("recentSales", () => {
     );
   });
 
+  test("excludes sales whose payment was not captured", async () => {
+    const { layer, db } = await makeDatabaseTestContext();
+    await seedStore(db);
+
+    const paid = saleId(3);
+    const rejected = saleId(2);
+    const incomplete = saleId(1);
+
+    await db
+      .insert(sales)
+      .values([
+        makeSale(paid, "2024-06-01T18:00:00.000Z", 5000),
+        makeSale(rejected, "2024-06-01T17:00:00.000Z", 9999, "rejected"),
+        makeSale(incomplete, "2024-06-01T16:00:00.000Z", 8888, "incomplete"),
+      ]);
+
+    const result = await runRecentSales(layer);
+
+    assert.deepEqual(
+      result.map((sale) => sale.id),
+      [paid],
+    );
+  });
+
   test("returns an empty list when the store has no sales", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
@@ -214,10 +238,16 @@ function saleId(n: number): string {
   return `01920000-0000-7000-8000-${String(n).padStart(12, "0")}`;
 }
 
-function makeSale(id: string, occurredAt: string, totalCents: number) {
+function makeSale(
+  id: string,
+  occurredAt: string,
+  totalCents: number,
+  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+) {
   return {
     id,
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: BigInt(totalCents),
     taxCents: BigInt(0),

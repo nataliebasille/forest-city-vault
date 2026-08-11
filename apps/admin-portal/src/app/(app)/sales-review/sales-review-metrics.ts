@@ -15,13 +15,17 @@ import { Effect, Schema } from "effect";
  * is in whole cents and all counts are whole numbers; formatting and the
  * pace-delta ratio are the presentation layer's job, not this read model's.
  *
- * TODO: `monthToDateGrossCents` and `previousMonthPaceGrossCents` include every
- * sale — `sales` has no refund/status concept yet. Once one exists, both sums
- * should exclude refunded sales (and a refunds figure can be added here).
+ * Only captured (`paid`) sales are counted — rejected/incomplete payments are
+ * ingested for reconciliation but never contribute to these figures. `gross`
+ * and `net` follow Clover's reporting definitions: gross is item sales before
+ * discounts (the sale total), and net is gross less discounts (Clover's
+ * `net = gross − discounts − refunds`; refunds are not modeled here, so
+ * `net = gross − discounts`).
  */
 export type SalesReviewMetrics = {
   readonly monthToDateSaleCount: number;
   readonly monthToDateGrossCents: number;
+  readonly monthToDateNetCents: number;
   readonly previousMonthPaceGrossCents: number;
   /** The current month, in the store's own time zone (1 = January). */
   readonly monthStartYear: number;
@@ -30,9 +34,11 @@ export type SalesReviewMetrics = {
 
 /**
  * Reads the sales-review page's headline metrics in a single database
- * round-trip: gross and sale count for the current month to date, plus the
- * same calendar-day window of the previous month (e.g. days 1–8) so the pace
- * comparison is against an equally partial month rather than a full one.
+ * round-trip: gross, net, and sale count for the current month to date, plus
+ * the same calendar-day window of the previous month (e.g. days 1–8) so the
+ * pace comparison is against an equally partial month rather than a full one.
+ * Every figure counts only captured (`paid`) sales; net is gross less discounts
+ * (Clover's `net = gross − discounts`, refunds not modeled).
  *
  * "Month to date" and "today" are anchored to the store's own time zone, so
  * the windows roll over at local midnight rather than UTC. The current
@@ -77,15 +83,19 @@ export const salesReviewMetrics = Effect.gen(function* () {
       .with(bounds)
       .select({
         monthToDateSaleCount:
-          sql<string>`count(${sales.id}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day')`.as(
+          sql<string>`count(${sales.id}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day')`.as(
             "month_to_date_sale_count",
           ),
         monthToDateGrossCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
+          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
             "month_to_date_gross_cents",
           ),
+        monthToDateNetCents:
+          sql<string>`coalesce(sum(${sales.totalCents} - ${sales.discountCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
+            "month_to_date_net_cents",
+          ),
         previousMonthPaceGrossCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.prev_month_start and ${sales.occurredAt} at time zone bounds.zone < least(bounds.prev_month_start + (extract(day from bounds.day_start) * interval '1 day'), bounds.month_start)), 0)`.as(
+          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.prev_month_start and ${sales.occurredAt} at time zone bounds.zone < least(bounds.prev_month_start + (extract(day from bounds.day_start) * interval '1 day'), bounds.month_start)), 0)`.as(
             "previous_month_pace_gross_cents",
           ),
         monthStartYear:
@@ -116,6 +126,7 @@ const MetricValue = Schema.transform(
 const MetricRow = Schema.Struct({
   monthToDateSaleCount: MetricValue,
   monthToDateGrossCents: MetricValue,
+  monthToDateNetCents: MetricValue,
   previousMonthPaceGrossCents: MetricValue,
   monthStartYear: MetricValue,
   monthStartMonth: MetricValue,

@@ -32,9 +32,11 @@ export type DashboardMetrics = {
  * read from the {@link Clock} (not SQL `now()`) so the query is deterministic
  * and testable. A `bounds` CTE computes the store's zone and the local day/week
  * starts once; the outer aggregate then filters sales against those bounds and
- * folds in the vendor count as a scalar subquery. `from
- * bounds left join sales on true` guarantees exactly one result row even when
- * the store has no sales yet.
+ * folds in the vendor count as a scalar subquery. Only `paid` sales count toward
+ * the sale-count and revenue figures — rejected/incomplete payments are ingested
+ * for reconciliation but never counted as sales or revenue. `from bounds left
+ * join sales on true` guarantees exactly one result row even when the store has
+ * no sales yet.
  */
 export const dashboardMetrics = Effect.gen(function* () {
   const queryable = yield* SapphoQueryable;
@@ -62,19 +64,19 @@ export const dashboardMetrics = Effect.gen(function* () {
       .with(bounds)
       .select({
         salesToday:
-          sql<string>`count(${sales.id}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.day_start)`.as(
+          sql<string>`count(${sales.id}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.day_start)`.as(
             "sales_today",
           ),
         revenueTodayCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.day_start), 0)`.as(
+          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.day_start), 0)`.as(
             "revenue_today_cents",
           ),
         salesWeek:
-          sql<string>`count(${sales.id}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.week_start)`.as(
+          sql<string>`count(${sales.id}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.week_start)`.as(
             "sales_week",
           ),
         revenueWeekCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.occurredAt} at time zone bounds.zone >= bounds.week_start), 0)`.as(
+          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.week_start), 0)`.as(
             "revenue_week_cents",
           ),
         vendorCount: sql<string>`(select count(*) from ${vendors})`.as(

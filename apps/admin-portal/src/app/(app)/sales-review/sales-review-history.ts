@@ -26,7 +26,8 @@ export type MonthRollup = {
  * Reads gross and sale count per month for the trailing
  * {@link TRAILING_MONTHS_COUNT} months (including the current, partial month),
  * newest first, zero-filled for months with no sales — the same shape
- * {@link salesReviewDaily} uses for days, but grouped by month instead.
+ * {@link salesReviewDaily} uses for days, but grouped by month instead. Only
+ * captured (`paid`) sales contribute to either figure.
  *
  * Months are anchored to the store's own time zone, and the whole read is one
  * database round-trip via a correlated `json_agg` subquery.
@@ -60,7 +61,7 @@ export const salesReviewHistory = Effect.gen(function* () {
             "anchor_month",
           ),
         months:
-          sql<unknown>`coalesce((select json_agg(json_build_object('year', m.year, 'month', m.month, 'grossCents', m.gross, 'saleCount', m.cnt) order by m.year desc, m.month desc) from (select extract(year from date_trunc('month', ${sales.occurredAt} at time zone bounds.zone))::int as year, extract(month from date_trunc('month', ${sales.occurredAt} at time zone bounds.zone))::int as month, sum(${sales.totalCents}) as gross, count(${sales.id}) as cnt from ${sales} where ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start - interval '${sql.raw(String(TRAILING_MONTHS_COUNT - 1))} months' group by year, month) m), '[]'::json)`.as(
+          sql<unknown>`coalesce((select json_agg(json_build_object('year', m.year, 'month', m.month, 'grossCents', m.gross, 'saleCount', m.cnt) order by m.year desc, m.month desc) from (select extract(year from date_trunc('month', ${sales.occurredAt} at time zone bounds.zone))::int as year, extract(month from date_trunc('month', ${sales.occurredAt} at time zone bounds.zone))::int as month, sum(${sales.totalCents}) as gross, count(${sales.id}) as cnt from ${sales} where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start - interval '${sql.raw(String(TRAILING_MONTHS_COUNT - 1))} months' group by year, month) m), '[]'::json)`.as(
             "months",
           ),
       })

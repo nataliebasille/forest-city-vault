@@ -13,6 +13,7 @@ import {
 const BASE: SalesReviewMetrics = {
   monthToDateSaleCount: 40,
   monthToDateGrossCents: 400000,
+  monthToDateNetCents: 360000,
   previousMonthPaceGrossCents: 350000,
   monthStartYear: 2026,
   monthStartMonth: 8,
@@ -23,15 +24,19 @@ function tiles(overrides: Partial<SalesReviewMetrics> = {}) {
 }
 
 describe("toSalesReviewMetricTiles", () => {
-  test("renders exactly Gross, Sales, and Avg. sale tiles, in order", () => {
+  test("renders exactly Gross, Net, Sales, and Avg. sale tiles, in order", () => {
     assert.deepEqual(
       tiles().map((tile) => tile.key),
-      ["gross", "sales", "avg"],
+      ["gross", "net", "sales", "avg"],
     );
   });
 
   test("formats the gross tile as whole-dollar USD", () => {
     assert.equal(tiles().find((t) => t.key === "gross")?.value, "$4,000");
+  });
+
+  test("formats the net tile as whole-dollar USD", () => {
+    assert.equal(tiles().find((t) => t.key === "net")?.value, "$3,600");
   });
 
   test("computes a positive pace delta vs. the previous month's same-day window", () => {

@@ -57,6 +57,10 @@ describe("dashboardMetrics", () => {
       makeSale("2024-05-28T12:00:00.000Z", BigInt(2500)),
       // Before this week.
       makeSale("2024-05-20T12:00:00.000Z", BigInt(9999)),
+      // Today and this week, but not a captured payment — excluded from both the
+      // sale counts and revenue.
+      makeSale("2024-06-01T10:30:00.000Z", BigInt(4200), "rejected"),
+      makeSale("2024-06-01T10:45:00.000Z", BigInt(3100), "incomplete"),
     ]);
 
     await db
@@ -90,9 +94,14 @@ describe("dashboardMetrics", () => {
   });
 });
 
-function makeSale(occurredAt: string, totalCents: bigint) {
+function makeSale(
+  occurredAt: string,
+  totalCents: bigint,
+  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+) {
   return {
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: totalCents,
     taxCents: BigInt(0),

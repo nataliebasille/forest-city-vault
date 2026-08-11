@@ -50,6 +50,8 @@ describe("salesReviewDaily", () => {
       makeSale("2024-06-03T17:00:00.000Z", BigInt(700)), // 13:00 local
       // One sale on June 8 (day 8, today).
       makeSale("2024-06-08T14:00:00.000Z", BigInt(1200)),
+      // A rejected payment on June 3 — excluded from the day's gross.
+      makeSale("2024-06-03T18:00:00.000Z", BigInt(9999), "rejected"),
       // After the cutoff — excluded.
       makeSale("2024-06-10T12:00:00.000Z", BigInt(9999)),
     ]);
@@ -83,9 +85,14 @@ describe("salesReviewDaily", () => {
   });
 });
 
-function makeSale(occurredAt: string, totalCents: bigint) {
+function makeSale(
+  occurredAt: string,
+  totalCents: bigint,
+  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+) {
   return {
     source: "clover" as const,
+    paymentStatus,
     occurredAt: new Date(occurredAt),
     subtotalCents: totalCents,
     taxCents: BigInt(0),

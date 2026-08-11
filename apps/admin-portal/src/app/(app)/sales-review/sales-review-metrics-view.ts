@@ -6,10 +6,9 @@ import type { SalesReviewMetrics } from "./sales-review-metrics";
  * page's metric-strip tiles, in display order, and computes the pace delta
  * (this month to date vs. the same calendar-day window last month).
  *
- * TODO: once `sales` gains a refund/status concept, add "Net this month" and
- * "Refunds" tiles here — mirroring the sales-review prototype's Variant B,
- * which only showed them when `refundCount > 0` — and exclude refunded sales
- * from `monthToDateGrossCents`/`previousMonthPaceGrossCents` upstream.
+ * Gross and net follow Clover's reporting split: gross is item sales before
+ * discounts, net is gross less discounts. Both count only captured (`paid`)
+ * sales upstream.
  */
 export function toSalesReviewMetricTiles(
   metrics: SalesReviewMetrics,
@@ -19,9 +18,15 @@ export function toSalesReviewMetricTiles(
   return [
     {
       key: "gross",
-      label: "Gross · to date",
+      label: "Gross · this month",
       value: formatDollars(metrics.monthToDateGrossCents),
       delta: `${toPaceDeltaLabel(metrics)} vs last month`,
+    },
+    {
+      key: "net",
+      label: "Net · this month",
+      value: formatDollars(metrics.monthToDateNetCents),
+      hint: "after discounts",
     },
     {
       key: "sales",

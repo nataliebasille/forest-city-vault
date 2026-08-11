@@ -46,6 +46,9 @@ export default privatePage("sales-review", () =>
       <div className="flex flex-1 flex-col">
         <header className="hidden h-[var(--shell-header-h)] items-center justify-between gap-4 border-b border-ink/10 px-6 md:flex md:px-8">
           <h1 className="font-heading font-semibold text-ink">Sales review</h1>
+          <span className="font-subheading text-sm font-medium text-on-surface-50/60">
+            {monthLabel}
+          </span>
         </header>
 
         <main className="flex flex-1 flex-col gap-6 px-6 py-6 md:px-8">
@@ -53,7 +56,7 @@ export default privatePage("sales-review", () =>
 
           <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
             <Card>
-              <SectionHeader title={`Daily gross — ${monthLabel}`}>
+              <SectionHeader title="Daily gross">
                 <span
                   className={`rounded-full px-2.5 py-0.5 font-subheading text-xs font-semibold ${
                     pacingAhead ?
