@@ -12,6 +12,11 @@ import { runImport } from "./run-import";
 const NOW = new Date("2024-06-01T00:00:00.000Z");
 const MERCHANT = "m-1";
 
+// Cold-start backfill window used by the tests. The first run starts from
+// `NOW - LOOKBACK_MS` instead of 0.
+const LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+const COLD_FLOOR = NOW.getTime() - LOOKBACK_MS;
+
 type FakeRecord = { id: string; createdTime: number };
 
 type ListCall = { startTimestamp: number; limit: number; offset: number };
@@ -48,9 +53,16 @@ function makeFakeSource(dataset: readonly FakeRecord[]) {
 }
 
 describe("runImport", () => {
-  test("first run backfills from 0, pages to the end, and advances the cursor", async () => {
+  test("first run backfills from the cold-start floor, pages to the end, and advances the cursor", async () => {
     const { run } = await makeContext();
-    const dataset = makeDataset(31); // timestamps 1000..1030
+    // One record before the floor (must be excluded) plus 31 at/after it.
+    const dataset = [
+      { id: "before-floor", createdTime: COLD_FLOOR - 1000 },
+      ...Array.from({ length: 31 }, (_, i) => ({
+        id: `p-${i}`,
+        createdTime: COLD_FLOOR + i,
+      })),
+    ];
     const { source, listCalls, enqueued } = makeFakeSource(dataset);
 
     const exit = await run(
@@ -58,32 +70,39 @@ describe("runImport", () => {
         merchantId: MERCHANT,
         requestId: "req-1",
         pageSize: 10,
+        coldStartLookbackMs: LOOKBACK_MS,
       }),
     );
 
     assert.equal(Exit.isSuccess(exit), true);
     if (Exit.isSuccess(exit)) {
-      assert.equal(exit.value.startTimestamp, 0);
+      // Cold cursor starts from `NOW - lookback`, never 0.
+      assert.equal(exit.value.startTimestamp, COLD_FLOOR);
       assert.equal(exit.value.listed, 31);
       assert.equal(exit.value.enqueued, 31);
-      assert.equal(exit.value.newWatermark, 1030);
+      assert.equal(exit.value.newWatermark, COLD_FLOOR + 30);
     }
 
-    // First list call starts at 0 (full backfill); paging walked 4 pages
+    // First list call starts at the floor; paging walked 4 pages
     // (10 + 10 + 10 + 1) with growing offsets.
-    assert.equal(listCalls[0].startTimestamp, 0);
+    assert.equal(listCalls[0].startTimestamp, COLD_FLOOR);
     assert.deepEqual(
       listCalls.map((c) => c.offset),
       [0, 10, 20, 30],
     );
+    // The record before the floor is filtered out, never enqueued.
     assert.equal(enqueued.length, 31);
+    assert.equal(
+      enqueued.some((r) => r.id === "before-floor"),
+      false,
+    );
 
     // The cursor was advanced to the newest createdTime.
     const cursor = await run(
       CloverImportCursorRepository.get(MERCHANT, "payment"),
     );
     if (Exit.isSuccess(cursor) && Option.isSome(cursor.value)) {
-      assert.equal(cursor.value.value.lastTimestamp, 1030);
+      assert.equal(cursor.value.value.lastTimestamp, COLD_FLOOR + 30);
     } else {
       assert.fail("expected cursor to be advanced");
     }
@@ -118,6 +137,7 @@ describe("runImport", () => {
         merchantId: MERCHANT,
         requestId: "req-2",
         pageSize: 10,
+        coldStartLookbackMs: LOOKBACK_MS,
       }),
     );
 
@@ -159,6 +179,7 @@ describe("runImport", () => {
         merchantId: MERCHANT,
         requestId: "req-3",
         pageSize: 10,
+        coldStartLookbackMs: LOOKBACK_MS,
       }),
     );
 

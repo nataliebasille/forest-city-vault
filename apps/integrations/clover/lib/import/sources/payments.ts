@@ -25,15 +25,15 @@ export const paymentsImportSource: ImportSource<
   list: ({ merchantId, startTimestamp, limit, offset }) =>
     Effect.map(
       listCloverPayments(merchantId, {
-        // On a cold cursor (`startTimestamp` 0) we do a full backfill from the
-        // beginning of time. Clover's production payments list returns an *empty*
-        // result for a far-past lower bound like `createdTime>=0`, so instead of
-        // sending that bound we omit the filter entirely and rely on ascending
-        // `createdTime` paging to walk the whole history. Once records are
-        // imported the watermark advances, and subsequent runs send a real
-        // `createdTime>=<recent watermark>` bound (which Clover serves normally).
-        filter:
-          startTimestamp > 0 ? `createdTime>=${startTimestamp}` : undefined,
+        // Always send an explicit `createdTime>=<startTimestamp>` lower bound.
+        // The engine guarantees `startTimestamp` is a real, recent-enough epoch
+        // (the stored watermark, or a cold-start backfill floor of
+        // `now - coldStartLookbackMs`) — never `0`. This matters on Clover's
+        // production payments list: omitting the filter returns only a recent
+        // ~90-day window, and a `createdTime>=0` (or older-than-~8-months) bound
+        // returns nothing. A real floor lands in the range Clover serves, and
+        // ascending `createdTime` paging then walks the history forward.
+        filter: `createdTime>=${startTimestamp}`,
         orderBy: "createdTime ASC",
         limit,
         offset,

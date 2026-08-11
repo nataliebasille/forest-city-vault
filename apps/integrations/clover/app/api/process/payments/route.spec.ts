@@ -50,6 +50,9 @@ describe("POST /api/process/payments", () => {
     const sales = await db.select().from(dbSchema.sales);
     assert.equal(sales.length, 1, "expected one sale to be created");
 
+    // A captured Clover payment ("SUCCESS") normalizes to `paid`.
+    assert.equal(sales[0].paymentStatus, "paid");
+
     // The stubbed order has no line items, so the sale must carry its header
     // totals from the payment yet record zero line items — never a fabricated
     // placeholder item.
@@ -105,6 +108,98 @@ describe("POST /api/process/payments", () => {
     assert.equal(Number(lineItems[0].grossAmountCents), 2499);
     assert.equal(Number(lineItems[0].discountAmountCents), 0);
     assert.equal(Number(lineItems[0].netAmountCents), 2499);
+  });
+
+  test("ingests a non-SUCCESS (failed) payment and stores its result", async () => {
+    await seedMerchantToken("merchant-fail", "valid-access-token");
+    await insertInboxMessage("merchant-fail", "payment-fail", "P:payment-fail");
+
+    // The payment fetch reports a failed attempt. It is still ingested as a sale
+    // (never skipped), carrying its Clover result so it can be reconciled
+    // downstream.
+    mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/payments/payment-fail")) {
+        return new Response(
+          JSON.stringify({
+            id: "payment-fail",
+            amount: 899,
+            createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
+            order: { id: "order-fail" },
+            result: "FAIL",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/orders/order-fail")) {
+        return new Response(
+          JSON.stringify({ id: "order-fail", lineItems: { elements: [] } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const response = await POST(processRequest(authHeader()));
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 200);
+    assert.equal(await response.json(), true);
+
+    const inboxRows = await db.select().from(dbSchema.inboxes.payments.inbox);
+    const message = inboxRows.find(
+      (r) => r.providerObjectId === "payment-fail",
+    );
+    assert.ok(message, "expected the inbox message to exist");
+    assert.equal(message.status, "processed");
+
+    const sales = await db.select().from(dbSchema.sales);
+    const sale = sales.find((s) => s.cloverPaymentId === "payment-fail");
+    assert.ok(sale, "expected the failed payment to be ingested as a sale");
+    assert.equal(sale.paymentStatus, "rejected");
+    assert.equal(Number(sale.totalCents), 899);
+  });
+
+  test("normalizes an in-progress Clover result to `incomplete`", async () => {
+    await seedMerchantToken("merchant-auth", "valid-access-token");
+    await insertInboxMessage("merchant-auth", "payment-auth", "P:payment-auth");
+
+    // An authorized-but-not-captured payment ("AUTH") is neither paid nor
+    // rejected; it normalizes to `incomplete` and is still ingested.
+    mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/payments/payment-auth")) {
+        return new Response(
+          JSON.stringify({
+            id: "payment-auth",
+            amount: 500,
+            createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
+            order: { id: "order-auth" },
+            result: "AUTH",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/orders/order-auth")) {
+        return new Response(
+          JSON.stringify({ id: "order-auth", lineItems: { elements: [] } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const response = await POST(processRequest(authHeader()));
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 200);
+
+    const sales = await db.select().from(dbSchema.sales);
+    const sale = sales.find((s) => s.cloverPaymentId === "payment-auth");
+    assert.ok(sale, "expected the payment to be ingested as a sale");
+    assert.equal(sale.paymentStatus, "incomplete");
   });
 
   test("returns 401 when authorization header is missing", async () => {
@@ -419,6 +514,7 @@ function stubCloverOrderFlow(
         JSON.stringify({
           id: paymentId,
           amount: 1000,
+          result: "SUCCESS",
           createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
           order: { id: orderId },
         }),

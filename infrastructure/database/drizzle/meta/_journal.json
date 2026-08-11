@@ -78,6 +78,20 @@
       "when": 1786391932271,
       "tag": "0010_add_better_auth_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786465496516,
+      "tag": "0011_add_sale_payment_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786465528269,
+      "tag": "0012_enforce_sale_payment_status_not_null",
+      "breakpoints": true
     }
   ]
 }

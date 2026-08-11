@@ -12,6 +12,15 @@ import {
 
 export const salesSource = pgEnum("sales_source", ["clover"]);
 
+// Normalized payment outcome. Provider dispositions (e.g. Clover's "SUCCESS"/
+// "FAIL") are mapped to this vocabulary before storage, so no raw vendor strings
+// are persisted.
+export const salePaymentStatus = pgEnum("sale_payment_status", [
+  "paid",
+  "rejected",
+  "incomplete",
+]);
+
 export const sales = fcvTable(
   "sales",
   {
@@ -22,6 +31,10 @@ export const sales = fcvTable(
     cloverMerchantId: text("clover_merchant_id"),
     cloverPaymentId: text("clover_payment_id"),
     cloverIdempotencyKey: text("clover_idempotency_key"),
+
+    // Normalized outcome of the payment this sale was recorded from. NOT NULL:
+    // every ingested payment carries a normalized status.
+    paymentStatus: salePaymentStatus("payment_status").notNull(),
 
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
 

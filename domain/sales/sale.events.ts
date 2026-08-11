@@ -1,9 +1,10 @@
 import { Schema } from "effect";
-import { SaleSchema, SaleSourceSchema } from "./sale.entity";
+import { SaleSchema, SalePaymentStatusSchema, SaleSourceSchema } from "./sale.entity";
 import { CentsSchema } from "../value-objects/cents";
 
 const SaleRecordedSchema = Schema.Struct({
   source: SaleSourceSchema,
+  paymentStatus: SalePaymentStatusSchema,
   timestamp: Schema.Date,
   subtotal: CentsSchema,
   tax: CentsSchema,
@@ -17,6 +18,7 @@ export const SaleRecorded = {
   handler: (payload: typeof SaleRecordedSchema.Type) => {
     return {
       source: payload.source,
+      paymentStatus: payload.paymentStatus,
       items: [],
       subtotal: payload.subtotal,
       tax: payload.tax,

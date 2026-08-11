@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { SaleItemSchema } from "./sale.entity";
+import { SaleItemSchema, SalePaymentStatusSchema } from "./sale.entity";
 import { CentsSchema } from "../value-objects/cents";
 import * as events from "./sale.events";
 
@@ -8,6 +8,10 @@ const CloverPaymentSchema = Schema.Struct({
   paymentId: Schema.String,
   timestamp: Schema.Date,
   idempotencyKey: Schema.String,
+  // Normalized payment outcome. The Clover-specific `result` string is mapped to
+  // this vocabulary at the integration boundary, so the domain never sees raw
+  // vendor values. Every payment is recorded regardless of outcome.
+  paymentStatus: SalePaymentStatusSchema,
   subtotal: CentsSchema,
   tax: CentsSchema,
   discount: CentsSchema,
@@ -41,6 +45,7 @@ export function fromCloverPayment(
         paymentId: payload.payment.paymentId,
         idempotencyKey: payload.payment.idempotencyKey,
       },
+      paymentStatus: payload.payment.paymentStatus,
       timestamp: payload.payment.timestamp,
       subtotal: payload.payment.subtotal,
       tax: payload.payment.tax,

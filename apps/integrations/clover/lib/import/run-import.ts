@@ -9,7 +9,10 @@ import type { ImportSource } from "./import-source";
 export type ImportSummary = {
   readonly entityType: string;
   readonly merchantId: string;
-  /** Watermark the run started from (epoch ms); `0` means a full backfill. */
+  /**
+   * Watermark the run started from (epoch ms). On a cold cursor this is the
+   * backfill floor (`now - coldStartLookbackMs`), never `0`.
+   */
   readonly startTimestamp: number;
   /** Watermark the cursor was advanced to (epoch ms). */
   readonly newWatermark: number;
@@ -36,6 +39,14 @@ const MAX_PAGES = 100;
  * boundary re-includes the last record(s) so nothing is skipped when timestamps
  * tie; the source's idempotent enqueue absorbs that overlap.
  *
+ * On a cold cursor (no stored watermark) the run starts from a backfill floor of
+ * `now - coldStartLookbackMs` rather than `0`. This matters for Clover: its
+ * payments list returns only a recent window (~90 days) when queried with *no*
+ * `createdTime` filter, and returns *nothing* for a lower bound that is either
+ * `0` or older than its ~8-month ceiling. A real, recent-enough floor sits in the
+ * window where Clover serves the full history, so the backfill actually reaches
+ * the oldest records instead of only the last ~90 days.
+ *
  * The cursor is advanced only after the pages were enqueued, so a mid-run
  * failure leaves the watermark untouched and the next run safely reprocesses
  * from the same point (again idempotently).
@@ -46,6 +57,12 @@ export function runImport<Element, R>(
     readonly merchantId: string;
     readonly requestId: string;
     readonly pageSize: number;
+    /**
+     * How far back (in ms) a cold run reaches. The first run starts from
+     * `now - coldStartLookbackMs`; steady-state runs resume from the stored
+     * watermark and ignore this.
+     */
+    readonly coldStartLookbackMs: number;
   },
 ): Effect.Effect<ImportSummary, unknown, R | Database | Clock> {
   return Effect.gen(function* () {
@@ -56,8 +73,10 @@ export function runImport<Element, R>(
       merchantId,
       entityType,
     );
+    const runStart = yield* now;
+    const coldStartFloor = runStart.getTime() - options.coldStartLookbackMs;
     const startTimestamp = Option.match(cursor, {
-      onNone: () => 0,
+      onNone: () => coldStartFloor,
       onSome: (row) => row.lastTimestamp,
     });
 

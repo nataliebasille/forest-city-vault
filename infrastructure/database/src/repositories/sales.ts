@@ -67,6 +67,7 @@ export const SalesRepositoryLive = Sales.repository.make(
                 paymentId: saleRow.cloverPaymentId ?? "",
                 idempotencyKey: saleRow.cloverIdempotencyKey ?? "",
               },
+              paymentStatus: saleRow.paymentStatus,
               items: lineItemRows.map((item) => ({
                 cloverItemId: item.cloverItemId,
                 name: item.name,
@@ -104,6 +105,7 @@ export const SalesRepositoryLive = Sales.repository.make(
                       cloverMerchantId: snapshot.source.merchantId,
                       cloverPaymentId: snapshot.source.paymentId,
                       cloverIdempotencyKey: snapshot.source.idempotencyKey,
+                      paymentStatus: snapshot.paymentStatus,
                       occurredAt: snapshot.recordedAt,
                       subtotalCents: BigInt(snapshot.subtotal),
                       taxCents: BigInt(snapshot.tax),
@@ -120,6 +122,7 @@ export const SalesRepositoryLive = Sales.repository.make(
                       cloverMerchantId: snapshot.source.merchantId,
                       cloverPaymentId: snapshot.source.paymentId,
                       cloverIdempotencyKey: snapshot.source.idempotencyKey,
+                      paymentStatus: snapshot.paymentStatus,
                       occurredAt: snapshot.recordedAt,
                       subtotalCents: BigInt(snapshot.subtotal),
                       taxCents: BigInt(snapshot.tax),

@@ -29,13 +29,17 @@ const config = CloverConfig.make({
 type CapturedRequest = { url: string; params: URLSearchParams };
 
 describe("paymentsImportSource.list", () => {
-  test("omits the createdTime filter on a cold cursor (startTimestamp 0)", async () => {
+  test("always sends the createdTime lower bound it is given (cold-start floor)", async () => {
     const { run, captured } = await makeContext({ elements: [] });
 
+    // The engine passes a real backfill floor (never 0) on a cold cursor, so the
+    // source always sends an explicit `createdTime>=` bound. Omitting it makes
+    // Clover return only its recent ~90-day window and miss older history.
+    const coldStartFloor = 1_699_000_000_000;
     const exit = await run(
       paymentsImportSource.list({
         merchantId: MERCHANT_ID,
-        startTimestamp: 0,
+        startTimestamp: coldStartFloor,
         limit: 50,
         offset: 0,
       }),
@@ -44,9 +48,7 @@ describe("paymentsImportSource.list", () => {
     assert.equal(Exit.isSuccess(exit), true);
     assert.equal(captured.length, 1);
     const { params } = captured[0];
-    // Full backfill: no lower-bound filter, but still ordered ascending so paging
-    // walks the whole history and the watermark advances predictably.
-    assert.equal(params.has("filter"), false);
+    assert.equal(params.get("filter"), `createdTime>=${coldStartFloor}`);
     assert.equal(params.get("orderBy"), "createdTime ASC");
     assert.equal(params.get("limit"), "50");
     assert.equal(params.get("offset"), "0");

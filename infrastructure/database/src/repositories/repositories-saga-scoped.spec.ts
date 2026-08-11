@@ -18,6 +18,7 @@ const salePayload = (merchantId: string, paymentId: string) => ({
     merchantId,
     paymentId,
     timestamp: new Date(),
+    paymentStatus: "paid" as const,
     subtotal: 0,
     tax: 0,
     discount: 0,

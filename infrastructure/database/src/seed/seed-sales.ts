@@ -72,6 +72,7 @@ export const seedSales = (input: SeedSalesInput = {}) =>
             paymentId: seed.paymentId,
             idempotencyKey: `seed:${merchantId}:${seed.paymentId}`,
             timestamp,
+            paymentStatus: "paid",
             subtotal: totalCents,
             tax: 0,
             discount: 0,

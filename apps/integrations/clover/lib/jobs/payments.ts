@@ -3,6 +3,7 @@ import { FromCloverPaymentSchema, Sales } from "@forest-city-vault/domain";
 import {
   type CloverOrder,
   type CloverOrderLineItem,
+  type CloverPaymentResult,
   getCloverOrder,
   getCloverPayment,
 } from "@forest-city-vault/infrastructure-clover";
@@ -28,6 +29,13 @@ import { paymentsImportSource, runImport } from "../import/public";
 // budget: a bounded number of records per run, resuming from the watermark.
 const DEFAULT_PAGE_SIZE = 50;
 
+// How far back a cold (first) run reaches when there is no stored watermark, in
+// ms. Clover's payments list only returns ~90 days with no `createdTime` filter,
+// and returns nothing for a bound older than its ~8-month ceiling, so the floor
+// must sit between those: ~6 months captures full history while staying safely
+// inside the window Clover serves. Overridable via CLOVER_IMPORT_BACKFILL_LOOKBACK_MS.
+const DEFAULT_BACKFILL_LOOKBACK_MS = 180 * 24 * 60 * 60 * 1000;
+
 // How many inbox messages a single drain pulls, and how long to wait between
 // them. Each message costs two Clover calls (payment, then its order), so the
 // drain is paced to stay under Clover's per-merchant rate limit rather than
@@ -48,10 +56,15 @@ export function importPayments(options: {
   return Effect.gen(function* () {
     const { merchantId } = yield* CloverConfig;
 
+    const coldStartLookbackMs = yield* Config.integer(
+      "CLOVER_IMPORT_BACKFILL_LOOKBACK_MS",
+    ).pipe(Config.withDefault(DEFAULT_BACKFILL_LOOKBACK_MS));
+
     yield* runImport(paymentsImportSource, {
       merchantId,
       requestId: options.requestId,
       pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
+      coldStartLookbackMs,
     });
   });
 }
@@ -114,6 +127,10 @@ export function processPayments(options: { readonly requestId: string }) {
               paymentId: message.providerObjectId,
               timestamp: new Date(cloverPayment.createdTime),
               idempotencyKey: message.idempotencyKey,
+              // Normalize Clover's raw result ("SUCCESS"/"FAIL") into our own
+              // payment-status vocabulary at this boundary, so the domain and
+              // storage never carry vendor strings. Every payment is recorded.
+              paymentStatus: toPaymentStatus(cloverPayment.result),
               subtotal: cloverPayment.amount,
               tax: cloverPayment.taxAmount ?? 0,
               discount: cloverPayment.discountAmount ?? 0,
@@ -160,6 +177,28 @@ export function runPaymentsCycle(options: {
 const PaymentPayloadSchema = Schema.Struct({
   merchantId: Schema.String,
 });
+
+// Maps Clover's payment `result` to our normalized payment status. Clover's
+// `Result` enum has 11 values; they collapse into three outcomes. The mapping is
+// total (the `default` covers the in-progress states and any value added to the
+// enum later) and revenue-safe: a value is only `paid` when Clover confirms the
+// money was captured, so nothing ambiguous is ever counted as revenue.
+//   paid:       SUCCESS, AUTH_COMPLETED
+//   rejected:   FAIL, VOIDED
+//   incomplete: INITIATED, VOIDING, VOID_FAILED, AUTH, DISCOUNT,
+//               OFFLINE_RETRYING, PENDING
+function toPaymentStatus(cloverResult: CloverPaymentResult) {
+  switch (cloverResult) {
+    case "SUCCESS":
+    case "AUTH_COMPLETED":
+      return "paid";
+    case "FAIL":
+    case "VOIDED":
+      return "rejected";
+    default:
+      return "incomplete";
+  }
+}
 
 const decodePaymentPayload = Schema.decodeUnknown(
   Schema.parseJson(PaymentPayloadSchema),

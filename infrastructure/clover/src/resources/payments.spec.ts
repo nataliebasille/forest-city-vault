@@ -85,8 +85,8 @@ describe("listCloverPayments", () => {
   test("GETs the merchant payments endpoint with query params and decodes elements", async () => {
     const { run, captured } = await makeContext(staticTokenConfig, {
       elements: [
-        { id: "PAY1", amount: 1200, createdTime: 1_700_000_000_000 },
-        { id: "PAY2", amount: 3400, createdTime: 1_700_000_100_000 },
+        { id: "PAY1", amount: 1200, createdTime: 1_700_000_000_000, result: "SUCCESS" },
+        { id: "PAY2", amount: 3400, createdTime: 1_700_000_100_000, result: "FAIL" },
       ],
     });
 
@@ -102,7 +102,9 @@ describe("listCloverPayments", () => {
     if (Exit.isSuccess(exit)) {
       assert.equal(exit.value.elements.length, 2);
       assert.equal(exit.value.elements[0].id, "PAY1");
+      assert.equal(exit.value.elements[0].result, "SUCCESS");
       assert.equal(exit.value.elements[1].amount, 3400);
+      assert.equal(exit.value.elements[1].result, "FAIL");
     }
 
     assert.equal(captured.length, 1);

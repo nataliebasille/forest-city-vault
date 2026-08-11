@@ -147,14 +147,35 @@ Configuration (all optional, read from `.env` or the shell):
 
 - `CLOVER_IMPORT_INTERVAL_MS` - delay between cycles. Default `60000` (60s).
 - `CLOVER_IMPORT_PAGE_SIZE` - page size passed to the importer (default 50).
+- `CLOVER_IMPORT_BACKFILL_LOOKBACK_MS` - how far back the **first** (cold-cursor)
+  run reaches. Default `15552000000` (180 days / ~6 months). See the backfill note
+  below for why this is bounded.
 
-On the **first** run (no stored cursor) the importer does a full backfill from the
-beginning of time: it omits the `createdTime` filter and pages through the
-merchant's payments in ascending `createdTime` order. This is deliberate — Clover's
-production payments list returns an **empty** result for a far-past lower bound
-like `createdTime>=0`, so a since-epoch filter would import nothing. Once records
-are imported the per-stream watermark advances, and subsequent runs resume with a
-real `createdTime>=<watermark>` bound (which Clover serves normally).
+On the **first** run (no stored cursor) the importer backfills from a floor of
+`now - CLOVER_IMPORT_BACKFILL_LOOKBACK_MS` (default ~6 months), sending an explicit
+`createdTime>=<floor>` lower bound and paging the merchant's payments in ascending
+`createdTime` order. Once records are imported the per-stream watermark advances,
+and subsequent runs resume with a `createdTime>=<watermark>` bound.
+
+Why a floor rather than "from the beginning of time": Clover's production payments
+list is quirky about the `createdTime` lower bound.
+
+- Omitting the filter entirely returns only a **recent ~90-day window** — so a
+  no-filter backfill silently misses everything older than ~90 days.
+- A lower bound of `createdTime>=0` (or one older than Clover's **~8-month
+  ceiling**) returns an **empty** list.
+- A `createdTime>=X` query returns only **~90 days starting at `X`** — not the
+  whole history from `X` to now.
+
+The default floor sits between the first two failure modes: old enough to reach
+well past the 90-day window, recent enough to stay inside the range Clover actually
+serves. Because each query only yields ~90 days from its lower bound, a cold
+backfill does not reach the present in a single run: it imports the oldest window
+first, advances the watermark, and **walks forward one ~90-day window per run**
+until it catches up (the scheduled cadence closes the gap within a few runs).
+Because of the ~8-month ceiling, payments older than that are not retrievable
+through this endpoint at all; keep the scheduled job running so the forward-moving
+watermark never falls behind it.
 
 The importer requires the merchant's Clover API token
 (`CLOVER_MERCHANT_ACCESS_TOKEN`) to have **read permission on payments**. The
