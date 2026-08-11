@@ -17,8 +17,11 @@ const BASE: RecentSale = {
   ],
 };
 
-function row(overrides: Partial<RecentSale> = {}) {
-  return toRecentSaleRows([{ ...BASE, ...overrides }])[0];
+function row(
+  overrides: Partial<RecentSale> = {},
+  now: Date = new Date("2024-06-01T23:00:00.000Z"),
+) {
+  return toRecentSaleRows([{ ...BASE, ...overrides }], now)[0];
 }
 
 describe("toRecentSaleRows", () => {
@@ -33,9 +36,57 @@ describe("toRecentSaleRows", () => {
 
   test("formats the time in the sale's store time zone", () => {
     // 18:14 UTC is 2:14 PM in America/New_York (EDT, UTC-4).
-    assert.equal(row().time, "2:14 PM");
+    assert.equal(
+      row({}, new Date("2024-06-01T23:00:00.000Z")).time,
+      "Today, 2:14 PM",
+    );
     // The same instant is 11:14 AM on the US west coast.
-    assert.equal(row({ timeZone: "America/Los_Angeles" }).time, "11:14 AM");
+    assert.equal(
+      row(
+        { timeZone: "America/Los_Angeles" },
+        new Date("2024-06-01T23:00:00.000Z"),
+      ).time,
+      "Today, 11:14 AM",
+    );
+  });
+
+  test("labels a sale on the current local day 'Today'", () => {
+    // Still June 1 in New York when now is 7 PM local that day.
+    assert.equal(
+      row({}, new Date("2024-06-01T23:00:00.000Z")).time,
+      "Today, 2:14 PM",
+    );
+  });
+
+  test("labels a sale on the previous local day 'Yesterday'", () => {
+    // Now is June 2 local; the sale is one calendar day earlier.
+    assert.equal(
+      row({}, new Date("2024-06-02T18:00:00.000Z")).time,
+      "Yesterday, 2:14 PM",
+    );
+  });
+
+  test("labels a sale earlier in the past week by weekday", () => {
+    // June 1 2024 is a Saturday; now is June 4 (three days later).
+    assert.equal(
+      row({}, new Date("2024-06-04T18:00:00.000Z")).time,
+      "Saturday, 2:14 PM",
+    );
+  });
+
+  test("labels a sale older than a week by its date, dropping the current year", () => {
+    // More than six days back, same year as now → "Jun 1".
+    assert.equal(
+      row({}, new Date("2024-06-20T18:00:00.000Z")).time,
+      "Jun 1, 2:14 PM",
+    );
+  });
+
+  test("carries the year when an older sale falls outside now's year", () => {
+    assert.equal(
+      row({}, new Date("2025-01-10T18:00:00.000Z")).time,
+      "Jun 1, 2024, 2:14 PM",
+    );
   });
 
   test("shows the lead item alone for a single-item sale", () => {
@@ -112,10 +163,13 @@ describe("toRecentSaleRows", () => {
   });
 
   test("carries the sale id through as the row key and preserves order", () => {
-    const rows = toRecentSaleRows([
-      { ...BASE, id: "sale-a" },
-      { ...BASE, id: "sale-b" },
-    ]);
+    const rows = toRecentSaleRows(
+      [
+        { ...BASE, id: "sale-a" },
+        { ...BASE, id: "sale-b" },
+      ],
+      new Date("2024-06-01T23:00:00.000Z"),
+    );
     assert.deepEqual(
       rows.map((r) => r.id),
       ["sale-a", "sale-b"],

@@ -17,8 +17,8 @@ export type RecentSaleVendorGroup = {
  * the derived summary string ("… + N more" or the lone item name, "—" for none),
  * `vendorGroups` is the full breakdown revealed on hover — the sale's items
  * grouped by vendor (empty when the sale has no line items) — `time` is the
- * sale's local time, and `total` is the preformatted currency amount. The table
- * does no formatting itself.
+ * sale's relative day and local time (e.g. "Today, 2:14 PM"), and `total` is the
+ * preformatted currency amount. The table does no formatting itself.
  */
 export type RecentSaleRow = {
   readonly id: string;

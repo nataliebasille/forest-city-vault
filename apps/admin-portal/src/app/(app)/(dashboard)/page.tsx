@@ -1,4 +1,5 @@
 import { privatePage } from "@/runtime";
+import { now } from "@forest-city-vault/core-clock";
 import { dashboardMetrics } from "./dashboard-metrics";
 import { toDashboardMetricTiles } from "./dashboard-metrics-view";
 import { recentSales } from "./recent-sales";
@@ -17,7 +18,7 @@ export default privatePage("admin-dashboard", () =>
     const tiles = toDashboardMetricTiles(metrics);
 
     const sales = yield* recentSales;
-    const saleRows = toRecentSaleRows(sales);
+    const saleRows = toRecentSaleRows(sales, yield* now);
 
     return (
       <div className="flex flex-1 flex-col">
