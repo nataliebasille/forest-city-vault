@@ -4,8 +4,9 @@ import { Effect, Layer } from "effect";
 import { Clock, staticClock } from "@forest-city-vault/core-clock";
 import { Vendor } from "@forest-city-vault/domain";
 import { Database } from "../index";
-import { RepositoriesLive } from "./index";
+import { RepositoriesLive, VendorQueries } from "./index";
 import { DatabaseTest } from "../testing";
+import { Option } from "effect";
 
 const NOW = new Date("2024-01-02T03:04:05.000Z");
 
@@ -104,5 +105,78 @@ describe("Vendor repository (pooled)", () => {
     );
 
     assert.deepEqual([...reloaded.snapshot.items], []);
+  });
+});
+
+const makeVendorWithCategory = (
+  vendorId: string,
+  cloverCategoryId: string,
+  name = "Maple & Co.",
+) =>
+  Effect.gen(function* () {
+    const vendor = yield* Vendor.actions.create(Vendor.pristine(vendorId), {
+      name,
+      cloverCategoryId,
+    });
+    yield* Vendor.repository.save(vendor);
+    return vendor;
+  });
+
+describe("VendorQueries", () => {
+  test("getByCloverCategoryId returns the vendor with its items, or None", async () => {
+    const vendorId = crypto.randomUUID();
+
+    const { found, missing } = await runPooled(
+      Effect.gen(function* () {
+        const vendor = yield* makeVendorWithCategory(vendorId, "CAT1");
+        const synced = yield* Vendor.actions.syncCloverItems(vendor, {
+          items: [{ cloverItemId: "ITEM1", name: "Syrup", price: 1200 }],
+        });
+        yield* Vendor.repository.save(synced);
+
+        return {
+          found: yield* VendorQueries.getByCloverCategoryId("CAT1"),
+          missing: yield* VendorQueries.getByCloverCategoryId("CAT_ABSENT"),
+        };
+      }),
+    );
+
+    assert.equal(Option.isSome(found), true);
+    if (Option.isSome(found)) {
+      assert.equal(String(found.value.id), vendorId);
+      assert.deepEqual([...found.value.snapshot.items], [
+        { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      ]);
+    }
+    assert.equal(Option.isNone(missing), true);
+  });
+
+  test("getByCloverItemId returns the owning vendor, or None", async () => {
+    const vendorId = crypto.randomUUID();
+
+    const { found, missing } = await runPooled(
+      Effect.gen(function* () {
+        const vendor = yield* makeVendorWithCategory(vendorId, "CAT1");
+        const synced = yield* Vendor.actions.syncCloverItems(vendor, {
+          items: [
+            { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+            { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+          ],
+        });
+        yield* Vendor.repository.save(synced);
+
+        return {
+          found: yield* VendorQueries.getByCloverItemId("ITEM2"),
+          missing: yield* VendorQueries.getByCloverItemId("ITEM_ABSENT"),
+        };
+      }),
+    );
+
+    assert.equal(Option.isSome(found), true);
+    if (Option.isSome(found)) {
+      assert.equal(String(found.value.id), vendorId);
+      assert.equal(found.value.snapshot.items.length, 2);
+    }
+    assert.equal(Option.isNone(missing), true);
   });
 });

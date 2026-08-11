@@ -6,9 +6,9 @@ import {
   RepositoryError,
 } from "@forest-city-vault/core-domain";
 import { Vendor } from "@forest-city-vault/domain";
-import { Effect } from "effect";
-import { eq, getTableColumns, sql as sqlExpr } from "drizzle-orm";
-import { Database } from "../database";
+import { Effect, Option } from "effect";
+import { eq, getTableColumns, SQL, sql as sqlExpr } from "drizzle-orm";
+import { Database, DatabaseService } from "../database";
 import { vendors } from "../schema/vendors";
 import { vendorItems } from "../schema/vendor-items";
 import { tryDb } from "../utils/try-db";
@@ -38,6 +38,62 @@ const toAggregate = (row: VendorRow, items: VendorSnapshot["items"]) => ({
 });
 
 /**
+ * Loads a single vendor plus its items in one `leftJoin`, returning `undefined`
+ * when the `where` predicate matches no vendor. Shared by `getById` and the
+ * bespoke finders so the item-folding logic lives in one place. Two details make
+ * the join work over the effect-sql/drizzle driver, which maps result columns by
+ * name rather than position:
+ *  - Both `fcv_vendors` and `fcv_vendor_items` have a `name` column, so the
+ *    item's is aliased to `item_name` to avoid the two colliding in the returned
+ *    row. `${vendorItems}."name"` keeps the reference qualified (a bare `sql`
+ *    column reference would be emitted unqualified and bind ambiguously across
+ *    the joined tables).
+ *  - `price_cents` is cast to text so drizzle's `bigint` column mapper is not
+ *    applied to the NULL the left join produces for a vendor with no items; that
+ *    mapper would otherwise throw "Cannot convert undefined to a BigInt" on the
+ *    unmatched row.
+ *
+ * The `where` predicate must select at most one vendor (the callers key on the
+ * vendor id or a unique/one-vendor column), so every joined row belongs to the
+ * same vendor and the first row carries the snapshot columns.
+ */
+const loadVendorWithItems = (db: DatabaseService, where: SQL) =>
+  Effect.gen(function* () {
+    const rows = yield* db.query((sql) =>
+      sql
+        .select({
+          ...getTableColumns(vendors),
+          itemCloverItemId: vendorItems.cloverItemId,
+          itemName: sqlExpr<string | null>`${vendorItems}."name"`.as(
+            "item_name",
+          ),
+          itemPrice: sqlExpr<
+            string | null
+          >`${vendorItems}."price_cents"::text`.as("item_price"),
+        })
+        .from(vendors)
+        .leftJoin(vendorItems, eq(vendorItems.vendorId, vendors.id))
+        .where(where)
+        .orderBy(vendorItems.cloverItemId),
+    );
+
+    const first = rows[0];
+    if (!first) {
+      return undefined;
+    }
+
+    const items = rows
+      .filter((row) => row.itemCloverItemId !== null)
+      .map((row) => ({
+        cloverItemId: row.itemCloverItemId as string,
+        name: row.itemName as string,
+        price: Number(row.itemPrice),
+      }));
+
+    return toAggregate(first, items);
+  });
+
+/**
  * Persistence for the `Vendor` aggregate. Follows the same build-time
  * `Database` capture as the other repositories, reading/writing the
  * `fcv_vendors` snapshot table plus the `fcv_vendor_items` child table, while
@@ -53,65 +109,19 @@ export const VendorRepositoryLive = Vendor.repository.make(
 
     return {
       getById: (id: VendorId) =>
-        Effect.gen(function* () {
-          // Vendor + items load in a single `leftJoin`. Two details make it work
-          // over the effect-sql/drizzle driver, which maps result columns by
-          // name rather than position:
-          //  - Both `fcv_vendors` and `fcv_vendor_items` have a `name` column, so
-          //    the item's is aliased to `item_name` to avoid the two colliding in
-          //    the returned row. `${vendorItems}."name"` keeps the reference
-          //    qualified (a bare `sql` column reference would be emitted
-          //    unqualified and bind ambiguously across the joined tables).
-          //  - `price_cents` is cast to text so drizzle's `bigint` column mapper
-          //    is not applied to the NULL the left join produces for a vendor
-          //    with no items; that mapper would otherwise throw "Cannot convert
-          //    undefined to a BigInt" on the unmatched row.
-          const rows = yield* db
-            .query((sql) =>
-              sql
-                .select({
-                  ...getTableColumns(vendors),
-                  itemCloverItemId: vendorItems.cloverItemId,
-                  itemName: sqlExpr<string | null>`${vendorItems}."name"`.as(
-                    "item_name",
-                  ),
-                  itemPrice: sqlExpr<
-                    string | null
-                  >`${vendorItems}."price_cents"::text`.as("item_price"),
-                })
-                .from(vendors)
-                .leftJoin(vendorItems, eq(vendorItems.vendorId, vendors.id))
-                .where(eq(vendors.id, id))
-                .orderBy(vendorItems.cloverItemId),
-            )
-            .pipe(
-              Effect.mapError(
-                (error) =>
-                  new RepositoryError({
-                    aggType: "Vendor",
-                    aggId: id,
-                    error,
-                  }),
-              ),
-            );
-
-          const first = rows[0];
-          if (!first) {
-            return yield* Effect.fail(
-              new AggregateNotFoundError({ aggType: "Vendor", aggId: id }),
-            );
-          }
-
-          const items = rows
-            .filter((row) => row.itemCloverItemId !== null)
-            .map((row) => ({
-              cloverItemId: row.itemCloverItemId as string,
-              name: row.itemName as string,
-              price: Number(row.itemPrice),
-            }));
-
-          return toAggregate(first, items);
-        }),
+        loadVendorWithItems(db, eq(vendors.id, id)).pipe(
+          Effect.mapError(
+            (error) =>
+              new RepositoryError({ aggType: "Vendor", aggId: id, error }),
+          ),
+          Effect.flatMap((aggregate) =>
+            aggregate === undefined ?
+              Effect.fail(
+                new AggregateNotFoundError({ aggType: "Vendor", aggId: id }),
+              )
+            : Effect.succeed(aggregate),
+          ),
+        ),
 
       save: (aggregate: VendorAggregate) =>
         Effect.gen(function* () {
@@ -185,3 +195,91 @@ export const VendorRepositoryLive = Vendor.repository.make(
     };
   }),
 );
+
+/**
+ * Read queries the Clover items sync needs to resolve an inbound item to the
+ * vendor that owns it. They live beside the repository (like
+ * `StoreMembershipQueries`) and read the {@link Database} at call time, naming it
+ * honestly in their requirements — so inside a saga they run on the same
+ * transaction as the vendor mutation, while the composition root discharges the
+ * `Database` requirement. Both return `None` when no vendor matches, so an item
+ * for an unknown category or a delete for an item no vendor holds is a caller-
+ * visible miss rather than an error.
+ */
+export const VendorQueries = {
+  /**
+   * Loads the vendor linked to a Clover category. A Clover category is a vendor,
+   * so `clover_category_id` identifies at most one vendor; used to route a
+   * created/updated Clover item to its vendor.
+   */
+  getByCloverCategoryId: (cloverCategoryId: string) =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const aggregate = yield* loadVendorWithItems(
+        db,
+        eq(vendors.cloverCategoryId, cloverCategoryId),
+      ).pipe(
+        Effect.mapError(
+          (error) =>
+            new RepositoryError({
+              aggType: "Vendor",
+              aggId: cloverCategoryId,
+              error,
+            }),
+        ),
+      );
+
+      return Option.fromNullable(aggregate);
+    }),
+
+  /**
+   * Loads the vendor that currently holds a given Clover item, resolved through
+   * the persisted `fcv_vendor_items.clover_item_id`. Used to process a Clover
+   * item DELETE, whose event carries only the item id (the item is already gone
+   * from Clover, so its category can no longer be fetched).
+   */
+  getByCloverItemId: (cloverItemId: string) =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+
+      const owning = yield* db
+        .query((sql) =>
+          sql
+            .select({ vendorId: vendorItems.vendorId })
+            .from(vendorItems)
+            .where(eq(vendorItems.cloverItemId, cloverItemId))
+            .limit(1),
+        )
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new RepositoryError({
+                aggType: "Vendor",
+                aggId: cloverItemId,
+                error,
+              }),
+          ),
+        );
+
+      const vendorId = owning[0]?.vendorId;
+      if (vendorId === undefined) {
+        return Option.none<VendorAggregate>();
+      }
+
+      const aggregate = yield* loadVendorWithItems(
+        db,
+        eq(vendors.id, vendorId),
+      ).pipe(
+        Effect.mapError(
+          (error) =>
+            new RepositoryError({
+              aggType: "Vendor",
+              aggId: vendorId,
+              error,
+            }),
+        ),
+      );
+
+      return Option.fromNullable(aggregate);
+    }),
+} as const;

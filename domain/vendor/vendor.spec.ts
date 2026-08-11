@@ -338,6 +338,127 @@ describe("Vendor", () => {
 
     expect(expectFailure(exit)).toBeInstanceOf(VendorItemPriceInvalidError);
   });
+
+  const applyItem = (
+    vendor: ReturnType<typeof createVendor>,
+    item: { cloverItemId: string; name: string; price: number },
+  ) => runAction(Vendor.actions.applyCloverItem(vendor, { item }));
+
+  it("adds a single item via applyCloverItem", () => {
+    const applied = applyItem(createVendor(), {
+      cloverItemId: "ITEM1",
+      name: "Syrup",
+      price: 1200,
+    });
+
+    expect(applied.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+    expect(applied.version).toBe(2);
+  });
+
+  it("trims the item id and name via applyCloverItem", () => {
+    const applied = applyItem(createVendor(), {
+      cloverItemId: "  ITEM1  ",
+      name: "  Syrup  ",
+      price: 1200,
+    });
+
+    expect(applied.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+  });
+
+  it("updates an existing item via applyCloverItem", () => {
+    const initial = applyItem(createVendor(), {
+      cloverItemId: "ITEM1",
+      name: "Syrup",
+      price: 1200,
+    });
+
+    const updated = applyItem(initial, {
+      cloverItemId: "ITEM1",
+      name: "Maple Syrup",
+      price: 1500,
+    });
+
+    expect(updated.snapshot.items).toEqual([
+      { cloverItemId: "ITEM1", name: "Maple Syrup", price: 1500 },
+    ]);
+  });
+
+  it("emits no event when applyCloverItem matches the existing item", () => {
+    const initial = applyItem(createVendor(), {
+      cloverItemId: "ITEM1",
+      name: "Syrup",
+      price: 1200,
+    });
+
+    const reapplied = applyItem(initial, {
+      cloverItemId: "ITEM1",
+      name: "Syrup",
+      price: 1200,
+    });
+
+    expect(reapplied.version).toBe(initial.version);
+    expect(reapplied.snapshot.items).toEqual(initial.snapshot.items);
+  });
+
+  it("rejects a blank Clover item id on applyCloverItem", () => {
+    const exit = runActionExit(
+      Vendor.actions.applyCloverItem(createVendor(), {
+        item: { cloverItemId: "  ", name: "Syrup", price: 1200 },
+      }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemCloverIdBlankError);
+  });
+
+  it("rejects an invalid price on applyCloverItem", () => {
+    const exit = runActionExit(
+      Vendor.actions.applyCloverItem(createVendor(), {
+        item: { cloverItemId: "ITEM1", name: "Syrup", price: -1 },
+      }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemPriceInvalidError);
+  });
+
+  it("removes an existing item via removeCloverItem", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+
+    const removed = runAction(
+      Vendor.actions.removeCloverItem(initial, { cloverItemId: "ITEM1" }),
+    );
+
+    expect(removed.snapshot.items).toEqual([
+      { cloverItemId: "ITEM2", name: "Candle", price: 800 },
+    ]);
+  });
+
+  it("emits no event when removeCloverItem targets an absent item", () => {
+    const initial = syncItems(createVendor(), [
+      { cloverItemId: "ITEM1", name: "Syrup", price: 1200 },
+    ]);
+
+    const removed = runAction(
+      Vendor.actions.removeCloverItem(initial, { cloverItemId: "MISSING" }),
+    );
+
+    expect(removed.version).toBe(initial.version);
+    expect(removed.snapshot.items).toEqual(initial.snapshot.items);
+  });
+
+  it("rejects a blank Clover item id on removeCloverItem", () => {
+    const exit = runActionExit(
+      Vendor.actions.removeCloverItem(createVendor(), { cloverItemId: "  " }),
+    );
+
+    expect(expectFailure(exit)).toBeInstanceOf(VendorItemCloverIdBlankError);
+  });
 });
 
 describe("BasisPoints", () => {

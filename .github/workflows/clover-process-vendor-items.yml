@@ -1,0 +1,89 @@
+name: Clover process vendor items
+
+# Mirrors the Clover payments job, but for inventory items -> vendor items.
+# Instead of curling a deployed endpoint, this workflow checks out the repo and
+# runs the real import + drain code directly
+# (apps/integrations/clover -> `pnpm vendor-items:run`).
+#
+# Because it runs the code itself, the runner needs direct access to the database
+# and Clover API. Unlike payments, the item fetch requires the Clover token to
+# hold **Read inventory** permission (items are expanded with their categories to
+# resolve each item's vendor).
+#
+# Required repository secrets:
+#   - DATABASE_URL                 Postgres connection string (must accept
+#                                  connections from GitHub-hosted runners).
+#   - CLOVER_URL                   Clover API base URL.
+#   - CLOVER_MERCHANT_ID           the single merchant to import.
+#   - CLOVER_MERCHANT_ACCESS_TOKEN static Clover API token for that merchant (the
+#                                  intended mode for this job).
+#
+# Optional:
+#   - CLOVER_TOKEN_ENCRYPTION_KEY  only if you drop CLOVER_MERCHANT_ACCESS_TOKEN
+#                                  and rely on the OAuth token store instead.
+#   - CLOVER_APP_ID                only used when the OAuth token store refreshes
+#                                  a token (OAuth `client_id`).
+#
+# Inventory changes far less often than sales, so this runs on a light 6-hour
+# cadence (plus manual dispatch) rather than the payments peak-window schedule.
+# Scheduled runs are best-effort and may be delayed under load.
+on:
+  schedule:
+    # Every 6 hours (UTC). A tighter cadence is unnecessary because the drain also
+    # reacts to Clover item webhooks, so this job is mainly a periodic backstop.
+    - cron: "30 */6 * * *"
+  workflow_dispatch: {}
+
+# Avoid overlapping runs; each run is a fresh process, so this concurrency group
+# replaces the old in-process overlap guard the HTTP endpoint relied on.
+concurrency:
+  group: clover-process-vendor-items
+  cancel-in-progress: false
+
+# `contents: read` to check out; `packages: read` so the built-in GITHUB_TOKEN can
+# install the private @nataliebasille GitHub Packages dependency (see the install
+# step). If that package lives in another repo that does not grant this repo
+# access, set a GH_PACKAGES_TOKEN secret (a PAT with read:packages) instead.
+# (Secret names cannot start with GITHUB_, so the secret is GH_PACKAGES_TOKEN
+# even though the env var .npmrc reads is GITHUB_PACKAGES_TOKEN.)
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  process-vendor-items:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # `.npmrc` authenticates to npm.pkg.github.com with GITHUB_PACKAGES_TOKEN.
+        # Prefer a PAT secret when present (needed for cross-repo package access),
+        # otherwise fall back to the automatic token granted by `packages: read`.
+        # The secret is GH_PACKAGES_TOKEN because secret names cannot start with
+        # GITHUB_; it is mapped onto the GITHUB_PACKAGES_TOKEN env var .npmrc reads.
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || github.token }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Clover vendor items cycle
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CLOVER_URL: ${{ secrets.CLOVER_URL }}
+          CLOVER_MERCHANT_ID: ${{ secrets.CLOVER_MERCHANT_ID }}
+          CLOVER_MERCHANT_ACCESS_TOKEN: ${{ secrets.CLOVER_MERCHANT_ACCESS_TOKEN }}
+          # Optional: only needed in OAuth-token-store mode (no static token).
+          CLOVER_TOKEN_ENCRYPTION_KEY: ${{ secrets.CLOVER_TOKEN_ENCRYPTION_KEY }}
+          CLOVER_APP_ID: ${{ secrets.CLOVER_APP_ID }}
+        run: pnpm --filter @forest-city-vault/integration-clover run vendor-items:run
