@@ -4,11 +4,15 @@ import { VendorSchema } from "./vendor.entity";
 import * as events from "./vendor.events";
 import {
   activateVendor,
+  applyCloverItem,
+  ApplyCloverItemSchema,
   CreateVendorSchema,
   createVendor,
   deactivateVendor,
   LinkCloverCategorySchema,
   linkCloverCategory,
+  removeCloverItem,
+  RemoveCloverItemSchema,
   RenameVendorSchema,
   renameVendor,
   SyncCloverItemsSchema,
@@ -33,6 +37,14 @@ export const Vendor = defineAggregateType("Vendor", {
       snapshot: typeof VendorSchema.Type,
       payload: typeof SyncCloverItemsSchema.Type,
     ) => syncCloverItems(snapshot, payload),
+    applyCloverItem: (
+      snapshot: typeof VendorSchema.Type,
+      payload: typeof ApplyCloverItemSchema.Type,
+    ) => applyCloverItem(snapshot, payload),
+    removeCloverItem: (
+      snapshot: typeof VendorSchema.Type,
+      payload: typeof RemoveCloverItemSchema.Type,
+    ) => removeCloverItem(snapshot, payload),
     activate: (snapshot: typeof VendorSchema.Type, _payload: undefined) =>
       activateVendor(snapshot),
     deactivate: (snapshot: typeof VendorSchema.Type, _payload: undefined) =>

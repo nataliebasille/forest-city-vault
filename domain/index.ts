@@ -74,8 +74,10 @@ export {
   type VendorStatus,
 } from "./vendor/vendor.entity";
 export {
+  ApplyCloverItemSchema,
   CreateVendorSchema,
   LinkCloverCategorySchema,
+  RemoveCloverItemSchema,
   RenameVendorSchema,
   SyncCloverItemsSchema,
 } from "./vendor/vendor.actions";

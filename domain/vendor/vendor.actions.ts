@@ -51,6 +51,20 @@ export const SyncCloverItemsSchema = Schema.Struct({
   ),
 });
 
+/** A single Clover item to upsert onto the vendor (from a per-item sync). */
+export const ApplyCloverItemSchema = Schema.Struct({
+  item: Schema.Struct({
+    cloverItemId: Schema.String,
+    name: Schema.String,
+    price: Schema.Number,
+  }),
+});
+
+/** Identifies a single Clover item to drop from the vendor. */
+export const RemoveCloverItemSchema = Schema.Struct({
+  cloverItemId: Schema.String,
+});
+
 type VendorSnapshot = typeof VendorSchema.Type;
 
 export const createVendor = (payload: typeof CreateVendorSchema.Type) =>
@@ -168,6 +182,67 @@ export const syncCloverItems = (
     return events;
   });
 
+/**
+ * Upserts a single Clover item onto the vendor. Emits `VendorItemAdded` when the
+ * item is new, `VendorItemUpdated` when its name or price changed, and no event
+ * when it already matches — the per-item counterpart of {@link syncCloverItems},
+ * used when items stream in one at a time (e.g. from a Clover webhook/inbox).
+ */
+export const applyCloverItem = (
+  snapshot: VendorSnapshot,
+  payload: typeof ApplyCloverItemSchema.Type,
+) =>
+  Effect.gen(function* () {
+    const item = yield* normalizeItem(payload.item);
+    const updatedAt = yield* now;
+
+    const existing = snapshot.items.find(
+      (candidate) => candidate.cloverItemId === item.cloverItemId,
+    );
+
+    const events: Array<VendorItemAddedEvent | VendorItemUpdatedEvent> = [];
+
+    if (existing === undefined) {
+      events.push({ type: "VendorItemAdded", payload: { item, updatedAt } });
+    } else if (existing.name !== item.name || existing.price !== item.price) {
+      events.push({ type: "VendorItemUpdated", payload: { item, updatedAt } });
+    }
+
+    return events;
+  });
+
+/**
+ * Drops a single Clover item from the vendor. Emits `VendorItemRemoved` when the
+ * item is present and no event otherwise, so a delete for an item the vendor
+ * never held (or already dropped) is a safe no-op.
+ */
+export const removeCloverItem = (
+  snapshot: VendorSnapshot,
+  payload: typeof RemoveCloverItemSchema.Type,
+) =>
+  Effect.gen(function* () {
+    const cloverItemId = payload.cloverItemId.trim();
+    if (cloverItemId.length === 0) {
+      return yield* Effect.fail(new VendorItemCloverIdBlankError());
+    }
+
+    const present = snapshot.items.some(
+      (candidate) => candidate.cloverItemId === cloverItemId,
+    );
+    if (!present) {
+      return [] as VendorItemRemovedEvent[];
+    }
+
+    const updatedAt = yield* now;
+
+    return [
+      {
+        type: "VendorItemRemoved",
+        payload: { cloverItemId, updatedAt },
+      },
+    ] satisfies VendorItemRemovedEvent[];
+  });
+
 const now = Effect.flatMap(Clock, (clock) => clock.now);
 
 const requireName = (raw: string) => {
@@ -197,6 +272,24 @@ const requireCommissionShare = (raw: number) =>
 
 const decodeCents = Schema.decodeUnknown(CentsSchema);
 
+const normalizeItem = (raw: {
+  readonly cloverItemId: string;
+  readonly name: string;
+  readonly price: number;
+}) =>
+  Effect.gen(function* () {
+    const cloverItemId = raw.cloverItemId.trim();
+    if (cloverItemId.length === 0) {
+      return yield* Effect.fail(new VendorItemCloverIdBlankError());
+    }
+
+    const price = yield* decodeCents(raw.price).pipe(
+      Effect.mapError(() => new VendorItemPriceInvalidError({ cloverItemId })),
+    );
+
+    return { cloverItemId, name: raw.name.trim(), price } satisfies VendorItem;
+  });
+
 const normalizeIncomingItems = (
   items: typeof SyncCloverItemsSchema.Type.items,
 ) =>
@@ -205,20 +298,14 @@ const normalizeIncomingItems = (
     const normalized: VendorItem[] = [];
 
     for (const raw of items) {
-      const cloverItemId = raw.cloverItemId.trim();
-      if (cloverItemId.length === 0) {
-        return yield* Effect.fail(new VendorItemCloverIdBlankError());
+      const item = yield* normalizeItem(raw);
+      if (seen.has(item.cloverItemId)) {
+        return yield* Effect.fail(
+          new VendorItemDuplicateError({ cloverItemId: item.cloverItemId }),
+        );
       }
-      if (seen.has(cloverItemId)) {
-        return yield* Effect.fail(new VendorItemDuplicateError({ cloverItemId }));
-      }
-      seen.add(cloverItemId);
-
-      const price = yield* decodeCents(raw.price).pipe(
-        Effect.mapError(() => new VendorItemPriceInvalidError({ cloverItemId })),
-      );
-
-      normalized.push({ cloverItemId, name: raw.name.trim(), price });
+      seen.add(item.cloverItemId);
+      normalized.push(item);
     }
 
     return normalized;

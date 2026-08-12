@@ -92,6 +92,13 @@
       "when": 1786465528269,
       "tag": "0012_enforce_sale_payment_status_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786500513459,
+      "tag": "0013_add_vendor_item_inbox",
+      "breakpoints": true
     }
   ]
 }

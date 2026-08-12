@@ -107,7 +107,8 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
     const appId = event.appId;
     const merchants = Object.entries(event.merchants);
     let insertedPayments = 0;
-    let skippedNonPaymentEvents = 0;
+    let insertedVendorItems = 0;
+    let skippedOtherEvents = 0;
     let totalEvents = 0;
 
     yield* Effect.logInfo("clover.webhook.persist.begin", {
@@ -121,34 +122,67 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
       for (const cloverEvent of cloverEvents) {
         totalEvents++;
         const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
-        const [eventType, paymentId] = cloverEvent.objectId.split(":");
-        if (eventType !== "P") {
-          skippedNonPaymentEvents++;
+        const [eventType, objectId] = cloverEvent.objectId.split(":");
+
+        if (eventType === "P") {
+          const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
+            {
+              requestId,
+              status: "received",
+              provider: "clover",
+              idempotencyKey,
+              providerEventId: cloverEvent.objectId,
+              providerObjectId: objectId,
+              eventType: "payment",
+              occurredAt: new Date(cloverEvent.ts),
+              payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
+              receivedAt,
+            };
+
+          yield* db.query((sql) =>
+            sql
+              .insert(db.schema.inboxes.payments.inbox)
+              .values([paymentInboxRecord])
+              .onConflictDoNothing({
+                target: db.schema.inboxes.payments.inbox.idempotencyKey,
+              }),
+          );
+          insertedPayments++;
           continue;
         }
-        const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
-          {
-            requestId,
-            status: "received",
-            provider: "clover",
-            idempotencyKey,
-            providerEventId: cloverEvent.objectId,
-            providerObjectId: paymentId,
-            eventType: "payment",
-            occurredAt: new Date(cloverEvent.ts),
-            payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
-            receivedAt,
-          };
 
-        yield* db.query((sql) =>
-          sql
-            .insert(db.schema.inboxes.payments.inbox)
-            .values([paymentInboxRecord])
-            .onConflictDoNothing({
-              target: db.schema.inboxes.payments.inbox.idempotencyKey,
-            }),
-        );
-        insertedPayments++;
+        if (eventType === "I") {
+          // Clover inventory item event. CREATE/UPDATE both upsert the item onto
+          // its vendor; DELETE removes it. Only the item id is stored — the drain
+          // re-fetches the current item for adds/updates so it applies the latest
+          // name/price.
+          const vendorItemInboxRecord: typeof db.schema.inboxes.vendorItems.inbox.$inferInsert =
+            {
+              requestId,
+              status: "received",
+              provider: "clover",
+              idempotencyKey,
+              providerEventId: cloverEvent.objectId,
+              providerObjectId: objectId,
+              eventType: cloverEvent.type === "DELETE" ? "delete" : "upsert",
+              occurredAt: new Date(cloverEvent.ts),
+              payloadJson: JSON.stringify({ merchantId }),
+              receivedAt,
+            };
+
+          yield* db.query((sql) =>
+            sql
+              .insert(db.schema.inboxes.vendorItems.inbox)
+              .values([vendorItemInboxRecord])
+              .onConflictDoNothing({
+                target: db.schema.inboxes.vendorItems.inbox.idempotencyKey,
+              }),
+          );
+          insertedVendorItems++;
+          continue;
+        }
+
+        skippedOtherEvents++;
       }
     }
 
@@ -158,7 +192,8 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
       workflowStage: "persist_inbox",
       totalEvents,
       insertedPayments,
-      skippedNonPaymentEvents,
+      insertedVendorItems,
+      skippedOtherEvents,
     });
   });
 }
