@@ -69,6 +69,52 @@ describe("POST /api/process/payments", () => {
     );
   });
 
+  test("derives the subtotal by backing tax out of the payment amount", async () => {
+    await seedMerchantToken("merchant-tax", "valid-access-token");
+    await insertInboxMessage("merchant-tax", "payment-tax", "P:payment-tax");
+
+    // Clover's payment `amount` is the total charged, tax included. The subtotal
+    // must therefore be the pre-tax amount (amount - taxAmount), not the amount
+    // itself.
+    mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/payments/payment-tax")) {
+        return new Response(
+          JSON.stringify({
+            id: "payment-tax",
+            amount: 1080,
+            taxAmount: 80,
+            createdTime: new Date("2024-01-01T12:00:00.000Z").getTime(),
+            order: { id: "order-tax" },
+            result: "SUCCESS",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/orders/order-tax")) {
+        return new Response(
+          JSON.stringify({ id: "order-tax", lineItems: { elements: [] } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const response = await POST(processRequest(authHeader()));
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 200);
+
+    const sales = await db.select().from(dbSchema.sales);
+    const sale = sales.find((s) => s.cloverPaymentId === "payment-tax");
+    assert.ok(sale, "expected the sale to be created");
+
+    assert.equal(Number(sale.totalCents), 1080);
+    assert.equal(Number(sale.taxCents), 80);
+    assert.equal(Number(sale.subtotalCents), 1000);
+  });
+
   test("records a sale line item from the payment's order line items", async () => {
     await seedMerchantToken("merchant-items", "valid-access-token");
     await insertInboxMessage(

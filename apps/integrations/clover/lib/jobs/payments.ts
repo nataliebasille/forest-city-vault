@@ -131,7 +131,11 @@ export function processPayments(options: { readonly requestId: string }) {
               // payment-status vocabulary at this boundary, so the domain and
               // storage never carry vendor strings. Every payment is recorded.
               paymentStatus: toPaymentStatus(cloverPayment.result),
-              subtotal: cloverPayment.amount,
+              // Clover's payment `amount` is the total charged, tax included, so
+              // it is the sale total. The subtotal is the pre-tax amount, so tax
+              // is backed out of it; without this, subtotal would wrongly equal
+              // total whenever the payment carried tax.
+              subtotal: cloverPayment.amount - (cloverPayment.taxAmount ?? 0),
               tax: cloverPayment.taxAmount ?? 0,
               discount: cloverPayment.discountAmount ?? 0,
               total: cloverPayment.amount,
