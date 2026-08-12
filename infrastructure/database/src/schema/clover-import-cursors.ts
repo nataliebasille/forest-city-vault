@@ -4,10 +4,10 @@ import { createdAt, fcvTable, updatedAt } from "./+helpers";
 /**
  * Incremental-import watermark, one row per `(merchant_id, entity_type)` stream.
  *
- * Each puller (payments today; vendor items, etc. later) records the newest
+ * Each puller (orders today; vendor items, etc. later) records the newest
  * source timestamp it has already imported in `last_timestamp` (epoch
- * milliseconds on the stream's watermark axis — `createdTime` for append-mostly
- * streams like payments, `modifiedTime` for mutable streams like items). The
+ * milliseconds on the stream's watermark axis — `modifiedTime` for mutable
+ * streams like orders/items, `createdTime` for append-mostly streams). The
  * next run asks the provider only for records at/after that watermark instead of
  * rescanning from the beginning of time.
  *
@@ -19,7 +19,7 @@ export const cloverImportCursors = fcvTable(
   "clover_import_cursors",
   {
     merchantId: text("merchant_id").notNull(),
-    // The kind of entity this cursor tracks, e.g. "payment", "vendor_item".
+    // The kind of entity this cursor tracks, e.g. "order", "vendor_item".
     entityType: text("entity_type").notNull(),
     // Newest already-imported source timestamp (epoch ms) on the stream's axis.
     // `0` means nothing imported yet, so the next run performs a full backfill.

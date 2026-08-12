@@ -7,13 +7,13 @@ try {
 import { Effect, Layer } from "effect";
 import { DatabaseLive } from "../src/database";
 import { runBootstrap } from "../src/bootstrap/runtime";
-import { seedSales } from "../src/seed/seed-sales";
+import { seedOrders } from "../src/seed/seed-orders";
 
-const program = runBootstrap(seedSales(), DatabaseLive.pipe(Layer.orDie)).pipe(
+const program = runBootstrap(seedOrders(), DatabaseLive.pipe(Layer.orDie)).pipe(
   Effect.tap((result) =>
     Effect.sync(() =>
       console.log(
-        `Seeded ${result.seeded} demo sales (${result.saleIds.join(", ")}).`,
+        `Seeded ${result.seeded} demo orders (${result.orderIds.join(", ")}).`,
       ),
     ),
   ),

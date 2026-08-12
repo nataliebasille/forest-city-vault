@@ -2,27 +2,29 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Cause, Data, Effect, Exit, Layer, Option } from "effect";
 import { provideSagaScoped, withSaga } from "@forest-city-vault/platform-saga";
-import { Sales } from "@forest-city-vault/domain";
+import { Orders } from "@forest-city-vault/domain";
 import { Database } from "../index";
 import * as schema from "../schema";
 import { DatabaseTest } from "../testing";
 import { RepositoriesSagaScoped } from "./index";
 
-const { sales } = schema;
+const { orders } = schema;
 
 class BoomError extends Data.TaggedError("BoomError")<{ why: string }> {}
 
-const salePayload = (merchantId: string, paymentId: string) => ({
-  payment: {
-    idempotencyKey: `${merchantId}:${paymentId}`,
+const orderPayload = (merchantId: string, orderId: string) => ({
+  order: {
+    idempotencyKey: `${merchantId}:${orderId}`,
     merchantId,
-    paymentId,
+    orderId,
     timestamp: new Date(),
-    paymentStatus: "paid" as const,
+    modifiedTime: Date.now(),
+    paymentState: "PAID" as const,
     subtotal: 0,
     tax: 0,
     discount: 0,
     total: 0,
+    payments: [] as const,
   },
   items: [] as const,
 });
@@ -31,33 +33,33 @@ const salePayload = (merchantId: string, paymentId: string) => ({
  * Runs `effect` inside a saga: `withSaga` opens the saga, rebuilds the
  * boundary-declared saga-scoped layer (here {@link RepositoriesSagaScoped},
  * wired in `runWith`) against the saga's fresh `Saga`, and builds a
- * transaction-bound Sales repository for it. Code inside `effect` uses
- * `Sales.repository` and gets that per-saga, transaction-bound instance.
+ * transaction-bound Order repository for it. Code inside `effect` uses
+ * `Orders.repository` and gets that per-saga, transaction-bound instance.
  */
 const inSaga = <A, E, R>(effect: Effect.Effect<A, E, R>) => withSaga(effect);
 
 describe("RepositoriesSagaScoped", () => {
   test("commits repository writes through the saga transaction on success", async () => {
-    const saleId = crypto.randomUUID();
+    const orderId = "ORDER-1";
 
     await runWith(
       Effect.gen(function* () {
         yield* inSaga(
           Effect.gen(function* () {
-            const sale = yield* Sales.actions.fromCloverPayment(
-              Sales.pristine(saleId),
-              salePayload("merchant-1", "payment-1"),
+            const order = yield* Orders.actions.fromCloverOrder(
+              Orders.pristine(orderId),
+              orderPayload("merchant-1", orderId),
             );
 
-            yield* Sales.repository.save(sale);
+            yield* Orders.repository.save(order);
           }),
         );
 
         const db = yield* Database;
-        const rows = yield* db.query((sql) => sql.select().from(sales));
+        const rows = yield* db.query((sql) => sql.select().from(orders));
 
         assert.equal(rows.length, 1);
-        assert.equal(rows[0].id, saleId);
+        assert.equal(rows[0].id, orderId);
       }),
     );
   });
@@ -66,12 +68,12 @@ describe("RepositoriesSagaScoped", () => {
     const exit = await runWithExit(
       inSaga(
         Effect.gen(function* () {
-          const sale = yield* Sales.actions.fromCloverPayment(
-            Sales.pristine(crypto.randomUUID()),
-            salePayload("merchant-2", "payment-2"),
+          const order = yield* Orders.actions.fromCloverOrder(
+            Orders.pristine("ORDER-2"),
+            orderPayload("merchant-2", "ORDER-2"),
           );
 
-          yield* Sales.repository.save(sale);
+          yield* Orders.repository.save(order);
 
           return yield* Effect.fail(new BoomError({ why: "nope" }));
         }),
@@ -88,26 +90,26 @@ describe("RepositoriesSagaScoped", () => {
     // The write made before the failure was rolled back with the saga.
     const rows = await runWith(
       Effect.flatMap(Database, (db) =>
-        db.query((sql) => sql.select().from(sales)),
+        db.query((sql) => sql.select().from(orders)),
       ),
     );
     assert.equal(rows.length, 0);
   });
 
   test("builds a fresh transaction-bound repository for each saga", async () => {
-    const firstId = crypto.randomUUID();
-    const secondId = crypto.randomUUID();
+    const firstId = "ORDER-first";
+    const secondId = "ORDER-second";
 
     await runWith(
       Effect.gen(function* () {
         // First saga rolls back.
         yield* inSaga(
           Effect.gen(function* () {
-            const sale = yield* Sales.actions.fromCloverPayment(
-              Sales.pristine(firstId),
-              salePayload("merchant-3", "payment-3"),
+            const order = yield* Orders.actions.fromCloverOrder(
+              Orders.pristine(firstId),
+              orderPayload("merchant-3", firstId),
             );
-            yield* Sales.repository.save(sale);
+            yield* Orders.repository.save(order);
             return yield* Effect.fail(new BoomError({ why: "rollback" }));
           }),
         ).pipe(Effect.exit);
@@ -115,16 +117,16 @@ describe("RepositoriesSagaScoped", () => {
         // Second, independent saga commits on a fresh repository/transaction.
         yield* inSaga(
           Effect.gen(function* () {
-            const sale = yield* Sales.actions.fromCloverPayment(
-              Sales.pristine(secondId),
-              salePayload("merchant-4", "payment-4"),
+            const order = yield* Orders.actions.fromCloverOrder(
+              Orders.pristine(secondId),
+              orderPayload("merchant-4", secondId),
             );
-            yield* Sales.repository.save(sale);
+            yield* Orders.repository.save(order);
           }),
         );
 
         const db = yield* Database;
-        const rows = yield* db.query((sql) => sql.select().from(sales));
+        const rows = yield* db.query((sql) => sql.select().from(orders));
 
         assert.equal(rows.length, 1);
         assert.equal(rows[0].id, secondId);

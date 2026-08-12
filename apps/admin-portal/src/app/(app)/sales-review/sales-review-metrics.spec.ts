@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { BOOTSTRAP_STORE_ID } from "@forest-city-vault/infrastructure-database";
@@ -45,34 +45,35 @@ describe("salesReviewMetrics", () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    await db.insert(sales).values([
+    await db.insert(orders).values([
       // Month to date (June 1–8 local).
-      makeSale("2024-06-08T14:00:00.000Z", BigInt(1500)), // June 8, 10:00 local
-      makeSale("2024-06-03T13:00:00.000Z", BigInt(700)), // June 3, 09:00 local
+      makeOrder("2024-06-08T14:00:00.000Z", 1500), // June 8, 10:00 local
+      makeOrder("2024-06-03T13:00:00.000Z", 700), // June 3, 09:00 local
       // Month to date, with a $2 discount — proves net = gross - discount.
-      makeSale("2024-06-04T13:00:00.000Z", BigInt(1000), {
-        discountCents: BigInt(200),
+      makeOrder("2024-06-04T13:00:00.000Z", 800, {
+        totalCents: 1000,
+        discountCents: 200,
       }),
       // Month to date, but not captured — excluded from every figure.
-      makeSale("2024-06-05T13:00:00.000Z", BigInt(4200), {
-        paymentStatus: "rejected",
+      makeOrder("2024-06-05T13:00:00.000Z", 4200, {
+        status: "refunded",
       }),
       // After the month-to-date cutoff — excluded.
-      makeSale("2024-06-10T12:00:00.000Z", BigInt(9999)),
+      makeOrder("2024-06-10T12:00:00.000Z", 9999),
       // Previous month, within the same 8-day window (May 1–8 local) —
       // included in the pace figure.
-      makeSale("2024-05-08T14:00:00.000Z", BigInt(1200)), // May 8, 10:00 local
+      makeOrder("2024-05-08T14:00:00.000Z", 1200), // May 8, 10:00 local
       // Previous month, day 9 — outside the pace window, excluded.
-      makeSale("2024-05-09T14:00:00.000Z", BigInt(5000)),
+      makeOrder("2024-05-09T14:00:00.000Z", 5000),
       // Well before the pace window — excluded.
-      makeSale("2024-05-20T12:00:00.000Z", BigInt(9999)),
+      makeOrder("2024-05-20T12:00:00.000Z", 9999),
     ]);
 
     const metrics = await runMetrics(layer);
 
     assert.deepEqual(metrics, {
       monthToDateSaleCount: 3,
-      monthToDateGrossCents: 3200,
+      monthToDateGrossCents: 3000,
       monthToDateNetCents: 3000,
       previousMonthPaceGrossCents: 1200,
       monthStartYear: 2024,
@@ -105,11 +106,11 @@ describe("salesReviewMetrics", () => {
     // double-count it as both month-to-date and "previous month" pace.
     const may31 = new Date("2024-05-31T16:00:00.000Z");
 
-    await db.insert(sales).values([
+    await db.insert(orders).values([
       // May 1 — squarely in the current month (May), not April.
-      makeSale("2024-05-01T14:00:00.000Z", BigInt(100000)),
+      makeOrder("2024-05-01T14:00:00.000Z", 100000),
       // April 30 — the last day of the previous month, should still count.
-      makeSale("2024-04-30T14:00:00.000Z", BigInt(1000)),
+      makeOrder("2024-04-30T14:00:00.000Z", 1000),
     ]);
 
     const metrics = await Effect.runPromise(
@@ -125,23 +126,34 @@ describe("salesReviewMetrics", () => {
   });
 });
 
-function makeSale(
+function makeOrder(
   occurredAt: string,
-  totalCents: bigint,
+  collectedCents: number,
   options: {
-    paymentStatus?: "paid" | "rejected" | "incomplete";
-    discountCents?: bigint;
+    status?: "paid" | "incomplete" | "partial" | "refunded";
+    discountCents?: number;
+    totalCents?: number;
   } = {},
 ) {
-  const { paymentStatus = "paid", discountCents = BigInt(0) } = options;
+  const {
+    status = "paid",
+    discountCents = 0,
+    totalCents = collectedCents,
+  } = options;
   return {
+    id: crypto.randomUUID(),
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: crypto.randomUUID(),
+    cloverIdempotencyKey: crypto.randomUUID(),
+    status,
     occurredAt: new Date(occurredAt),
-    subtotalCents: totalCents,
+    modifiedAt: new Date(occurredAt),
+    subtotalCents: BigInt(totalCents),
     taxCents: BigInt(0),
-    discountCents,
-    totalCents,
+    discountCents: BigInt(discountCents),
+    totalCents: BigInt(totalCents),
+    collectedCents: BigInt(collectedCents),
     createdAt: SEED_TS,
     updatedAt: SEED_TS,
   };

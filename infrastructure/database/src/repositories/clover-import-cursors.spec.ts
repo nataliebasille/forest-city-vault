@@ -13,7 +13,7 @@ describe("CloverImportCursorRepository", () => {
     const { run } = await makeContext();
 
     const result = await run(
-      CloverImportCursorRepository.get("m-1", "payment"),
+      CloverImportCursorRepository.get("m-1", "order"),
     );
 
     assert.equal(Exit.isSuccess(result), true);
@@ -28,14 +28,14 @@ describe("CloverImportCursorRepository", () => {
     await run(
       CloverImportCursorRepository.advance({
         merchantId: "m-1",
-        entityType: "payment",
+        entityType: "order",
         lastTimestamp: 1000,
         runAt: NOW,
       }),
     );
 
     const result = await run(
-      CloverImportCursorRepository.get("m-1", "payment"),
+      CloverImportCursorRepository.get("m-1", "order"),
     );
 
     assert.equal(Exit.isSuccess(result), true);
@@ -52,7 +52,7 @@ describe("CloverImportCursorRepository", () => {
     const advance = (lastTimestamp: number) =>
       CloverImportCursorRepository.advance({
         merchantId: "m-1",
-        entityType: "payment",
+        entityType: "order",
         lastTimestamp,
         runAt: NOW,
       });
@@ -62,7 +62,7 @@ describe("CloverImportCursorRepository", () => {
     await run(advance(2000));
 
     const result = await run(
-      CloverImportCursorRepository.get("m-1", "payment"),
+      CloverImportCursorRepository.get("m-1", "order"),
     );
 
     if (Exit.isSuccess(result) && Option.isSome(result.value)) {
@@ -78,7 +78,7 @@ describe("CloverImportCursorRepository", () => {
     await run(
       CloverImportCursorRepository.advance({
         merchantId: "m-1",
-        entityType: "payment",
+        entityType: "order",
         lastTimestamp: 100,
         runAt: NOW,
       }),
@@ -92,20 +92,20 @@ describe("CloverImportCursorRepository", () => {
       }),
     );
 
-    const payments = await run(
-      CloverImportCursorRepository.get("m-1", "payment"),
+    const orders = await run(
+      CloverImportCursorRepository.get("m-1", "order"),
     );
     const items = await run(
       CloverImportCursorRepository.get("m-1", "vendor_item"),
     );
 
     if (
-      Exit.isSuccess(payments) &&
-      Option.isSome(payments.value) &&
+      Exit.isSuccess(orders) &&
+      Option.isSome(orders.value) &&
       Exit.isSuccess(items) &&
       Option.isSome(items.value)
     ) {
-      assert.equal(payments.value.value.lastTimestamp, 100);
+      assert.equal(orders.value.value.lastTimestamp, 100);
       assert.equal(items.value.value.lastTimestamp, 900);
     } else {
       assert.fail("expected both cursor rows");

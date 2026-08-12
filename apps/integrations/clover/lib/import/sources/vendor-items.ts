@@ -15,7 +15,7 @@ import type { ImportSource } from "../import-source";
  * contract the webhook writes, so the `POST /api/process/vendor-items` drain
  * reconciles them onto their vendor unchanged.
  *
- * Items are a **mutable** stream (unlike immutable payments), so the watermark
+ * Items are a **mutable** stream, so the watermark
  * axis is `modifiedTime` and the idempotency key includes that timestamp: a
  * given revision of an item enqueues once (re-runs at the inclusive watermark
  * boundary are absorbed), but a later edit — carrying a newer `modifiedTime` —
@@ -41,11 +41,7 @@ export const vendorItemsImportSource: ImportSource<
         // Always send the `modifiedTime>=` lower bound, including on a cold
         // cursor (`startTimestamp` 0, i.e. a full backfill from the epoch).
         //
-        // This deliberately differs from the payments source, which *omits* the
-        // filter on a cold cursor: Clover clamps time-based filters on
-        // orders/payments/refunds to a 90-day window, so `createdTime>=0` fell
-        // outside that window and returned nothing — the payments importer works
-        // around that by not sending the bound. The inventory items endpoint has
+        // This deliberately differs from the orders source. The inventory items endpoint has
         // no such 90-day clamp: verified against Clover production that
         // `GET /items?filter=modifiedTime>=0&orderBy=modifiedTime ASC` returns
         // the full catalog oldest-first (and `modifiedTime` is listed in the

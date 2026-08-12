@@ -3,8 +3,8 @@ import { describe, test } from "node:test";
 import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
-  salesLineItems,
+  orderLineItems,
+  orders,
   stores,
   vendorItems,
   vendors,
@@ -67,16 +67,16 @@ describe("salesReviewVendors", () => {
     };
 
     for (const [index, vendor] of vendorIds.entries()) {
-      const saleId = await insertSale(db, "2024-06-05T14:00:00.000Z", index);
+      const orderId = await insertOrder(db, "2024-06-05T14:00:00.000Z", index);
       const cloverItemId = `item-${index}`;
       await db
         .insert(vendorItems)
         .values(makeVendorItem(vendor.id, cloverItemId, `${vendor.name} item`));
       await db
-        .insert(salesLineItems)
+        .insert(orderLineItems)
         .values(
           makeLineItem(
-            saleId,
+            orderId,
             `${vendor.name} item`,
             grossByVendor[vendor.name] ?? 0,
             cloverItemId,
@@ -105,13 +105,13 @@ describe("salesReviewVendors", () => {
       .returning({ id: vendors.id });
 
     // Before this month entirely — should not appear at all.
-    const oldSaleId = await insertSale(db, "2024-05-20T12:00:00.000Z", 1);
+    const oldOrderId = await insertOrder(db, "2024-05-20T12:00:00.000Z", 1);
     await db
       .insert(vendorItems)
       .values(makeVendorItem(vendor!.id, "late-item", "Old item"));
     await db
-      .insert(salesLineItems)
-      .values(makeLineItem(oldSaleId, "Old item", 9999, "late-item"));
+      .insert(orderLineItems)
+      .values(makeLineItem(oldOrderId, "Old item", 9999, "late-item"));
 
     const result = await runVendors(layer);
 
@@ -122,17 +122,17 @@ describe("salesReviewVendors", () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    const saleId = await insertSale(db, "2024-06-05T14:00:00.000Z", 2);
+    const orderId = await insertOrder(db, "2024-06-05T14:00:00.000Z", 2);
     await db
-      .insert(salesLineItems)
-      .values(makeLineItem(saleId, "Custom item", 9999, "unmapped-item"));
+      .insert(orderLineItems)
+      .values(makeLineItem(orderId, "Custom item", 9999, "unmapped-item"));
 
     const result = await runVendors(layer);
 
     assert.deepEqual(result, []);
   });
 
-  test("excludes line items belonging to a sale that was not captured", async () => {
+  test("excludes line items belonging to an order that was not paid", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
@@ -141,21 +141,21 @@ describe("salesReviewVendors", () => {
       .values({ name: "Rejected Vendor", ...timestamps() })
       .returning({ id: vendors.id });
 
-    // In-window sale, mapped vendor — but the payment was rejected, so its
+    // In-window order, mapped vendor — but the order was refunded, so its
     // items must not count toward the vendor rollup.
-    const rejectedSaleId = await insertSale(
+    const refundedOrderId = await insertOrder(
       db,
       "2024-06-05T14:00:00.000Z",
       3,
-      "rejected",
+      "refunded",
     );
     await db
       .insert(vendorItems)
       .values(makeVendorItem(vendor!.id, "rejected-item", "Rejected item"));
     await db
-      .insert(salesLineItems)
+      .insert(orderLineItems)
       .values(
-        makeLineItem(rejectedSaleId, "Rejected item", 5000, "rejected-item"),
+        makeLineItem(refundedOrderId, "Rejected item", 5000, "rejected-item"),
       );
 
     const result = await runVendors(layer);
@@ -168,45 +168,52 @@ function timestamps() {
   return { createdAt: SEED_TS, updatedAt: SEED_TS };
 }
 
-function saleId(n: number): string {
+function orderId(n: number): string {
   return `01920000-0000-7000-8000-${String(n).padStart(12, "0")}`;
 }
 
-async function insertSale(
+async function insertOrder(
   db: Db,
   occurredAt: string,
   n: number,
-  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+  status: "paid" | "incomplete" | "partial" | "refunded" = "paid",
 ): Promise<string> {
-  const id = saleId(n + 1000);
-  await db.insert(sales).values({
+  const id = orderId(n + 1000);
+  await db.insert(orders).values({
     id,
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: id,
+    cloverIdempotencyKey: `${id}:seed`,
+    status,
     occurredAt: new Date(occurredAt),
+    modifiedAt: new Date(occurredAt),
     subtotalCents: BigInt(0),
     taxCents: BigInt(0),
     discountCents: BigInt(0),
     totalCents: BigInt(0),
+    collectedCents: BigInt(0),
     ...timestamps(),
   });
   return id;
 }
 
 function makeLineItem(
-  saleIdValue: string,
+  orderIdValue: string,
   name: string,
   grossAmountCents: number,
   cloverItemId: string,
 ) {
   return {
-    saleId: saleIdValue,
+    orderId: orderIdValue,
     cloverItemId,
     name,
     quantity: BigInt(1),
     grossAmountCents: BigInt(grossAmountCents),
     discountAmountCents: BigInt(0),
     netAmountCents: BigInt(grossAmountCents),
+    collectedAmountCents: BigInt(grossAmountCents),
+    refunded: false,
     ...timestamps(),
   };
 }

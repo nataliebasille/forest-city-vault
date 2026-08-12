@@ -1,13 +1,13 @@
-name: Clover process payments
+name: Clover process orders
 
 # Vercel Hobby cron jobs can only run once per day, which is too infrequent for
-# draining the Clover payments inbox. Instead of curling a deployed endpoint, this
+# draining the Clover order inbox. Instead of curling a deployed endpoint, this
 # workflow checks out the repo and runs the real import + drain code directly
-# (apps/integrations/clover → `pnpm payments:run`).
+# (apps/integrations/clover → `pnpm orders:run`).
 #
 # Because it runs the code itself, the runner needs direct access to the database
 # and Clover API. The import + drain path reads only a narrow slice of the Clover
-# config (see `cloverPaymentsJobConfig` in lib/runtime/live.ts), so only these
+# config (see `cloverOrdersJobConfig` in lib/runtime/live.ts), so only these
 # repository secrets are required:
 #   - DATABASE_URL                 Postgres connection string (must accept
 #                                  connections from GitHub-hosted runners).
@@ -36,7 +36,7 @@ name: Clover process payments
 # more often than needed, covering both EST (UTC-5) and EDT (UTC-4). The `gate`
 # job then applies the exact Eastern-time rules (using the America/New_York time
 # zone, which handles DST automatically) and decides whether the heavy
-# process-payments job actually runs. Every 5 minutes is also GitHub's minimum
+#   process-orders job actually runs. Every 5 minutes is also GitHub's minimum
 # interval, and scheduled runs are best-effort and may be delayed under load.
 on:
   schedule:
@@ -54,7 +54,7 @@ on:
 # Avoid overlapping runs; each run is a fresh process, so this concurrency group
 # replaces the old in-process overlap guard the HTTP endpoint relied on.
 concurrency:
-  group: clover-process-payments
+  group: clover-process-orders
   cancel-in-progress: false
 
 # `contents: read` to check out; `packages: read` so the built-in GITHUB_TOKEN can
@@ -105,7 +105,7 @@ jobs:
             require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `run=${run}\n`);
           '
 
-  process-payments:
+  process-orders:
     needs: gate
     # Always run on manual dispatch; otherwise only when the gate approves.
     if: ${{ github.event_name == 'workflow_dispatch' || needs.gate.outputs.run == 'true' }}
@@ -134,7 +134,7 @@ jobs:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || github.token }}
         run: pnpm install --frozen-lockfile
 
-      - name: Run Clover payments cycle
+      - name: Run Clover orders cycle
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CLOVER_URL: ${{ secrets.CLOVER_URL }}
@@ -143,4 +143,4 @@ jobs:
           # Optional: only needed in OAuth-token-store mode (no static token).
           CLOVER_TOKEN_ENCRYPTION_KEY: ${{ secrets.CLOVER_TOKEN_ENCRYPTION_KEY }}
           CLOVER_APP_ID: ${{ secrets.CLOVER_APP_ID }}
-        run: pnpm --filter @forest-city-vault/integration-clover run payments:run
+        run: pnpm --filter @forest-city-vault/integration-clover run orders:run

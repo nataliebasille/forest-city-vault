@@ -100,13 +100,6 @@ const usdFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
-const usdWholeFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   minimumFractionDigits: 1,
@@ -135,9 +128,9 @@ function formatCents(cents: number): string {
   return usdFormatter.format(cents / 100);
 }
 
-/** Whole-dollar USD for headline totals, e.g. 128450 -> "$1,285". */
+/** USD for headline totals, preserving cents, e.g. 128450 -> "$1,284.50". */
 function formatDollars(cents: number): string {
-  return usdWholeFormatter.format(cents / 100);
+  return usdFormatter.format(cents / 100);
 }
 
 /** A ratio delta as a signed percent, e.g. 0.084 -> "+8.4%". */

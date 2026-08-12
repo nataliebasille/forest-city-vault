@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { config as loadEnv } from "dotenv";
 
 // Load the canonical repo-root `.env` the same way `next.config.ts` does, so the
@@ -8,18 +9,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../../.env"), override: false });
 
 import { ManagedRuntime } from "effect";
-import { runPaymentsCycle } from "../lib/jobs/payments";
+import { runOrdersCycle } from "../lib/jobs/orders";
 import { JobLive } from "../lib/runtime/live";
 
 /**
- * Local-only scheduler that drives the Clover payment importer on an interval by
+ * Local-only scheduler that drives the Clover order importer on an interval by
  * running the real import + drain code directly — no dev server, no HTTP hop. It
- * shares the exact {@link runPaymentsCycle} job and {@link JobLive} layer
+ * shares the exact {@link runOrdersCycle} job and {@link JobLive} layer
  * the routes and the GitHub Action runner use, so behaviour matches production.
  *
  * Each cycle runs, in order:
- *   1. import — list payments from Clover into the inbox.
- *   2. process — drain the inbox into sales.
+ *   1. import — list orders from Clover into the inbox.
+ *   2. process — drain the inbox into order snapshots.
  *
  * The dependency layer (including the database pool) is built once via a
  * {@link ManagedRuntime} and reused for every cycle, then disposed on shutdown.
@@ -68,9 +69,9 @@ async function runLoop(): Promise<void> {
 }
 
 async function runCycle(): Promise<void> {
-  const requestId = crypto.randomUUID();
+  const requestId = randomUUID();
   try {
-    await runtime.runPromise(runPaymentsCycle({ requestId }));
+    await runtime.runPromise(runOrdersCycle({ requestId }));
     log(`cycle ok (requestId ${requestId})`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

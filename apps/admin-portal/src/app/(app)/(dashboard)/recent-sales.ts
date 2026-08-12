@@ -3,8 +3,8 @@ import {
   SapphoQueryable,
 } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
-  salesLineItems,
+  orderLineItems,
+  orders,
   stores,
   vendorItems,
   vendors,
@@ -47,13 +47,13 @@ export type RecentSale = {
 };
 
 /**
- * Reads the store's most recent sales for the dashboard preview in a single
+ * Reads the store's most recent orders for the dashboard preview in a single
  * database round-trip: the newest {@link RECENT_SALES_LIMIT} captured (`paid`)
- * sales ordered by `occurredAt` (ties broken by id for a stable order).
+ * orders ordered by `occurredAt` (ties broken by id for a stable order).
  * Rejected/incomplete payments are ingested for reconciliation but never shown
  * in this preview.
  *
- * Each sale's line items are folded in by left-joining them (and their vendors,
+ * Each order's line items are folded in by left-joining them (and their vendors,
  * resolved through `vendor_items` on `clover_item_id`) and aggregating into a
  * single `items` JSON array per sale, ordered lead-first by gross amount (ties
  * broken by name). A sale with no line items yields an empty array. Building the
@@ -67,28 +67,28 @@ export const recentSales = Effect.gen(function* () {
   const rows = yield* queryable.query((db) =>
     db
       .select({
-        id: sales.id,
-        occurredAt: sales.occurredAt,
-        totalCents: sales.totalCents,
+        id: orders.id,
+        occurredAt: orders.occurredAt,
+        totalCents: orders.collectedCents,
         timeZone:
           sql<string>`(select ${stores}."time_zone" from ${stores} where ${stores}."id" = ${BOOTSTRAP_STORE_ID})`.as(
             "time_zone",
           ),
         items:
-          sql<unknown>`coalesce(json_agg(json_build_object('name', ${salesLineItems}."name", 'vendorName', ${vendors}."name", 'amountCents', ${salesLineItems}."gross_amount_cents") order by ${salesLineItems}."gross_amount_cents" desc, ${salesLineItems}."name" asc) filter (where ${salesLineItems}."id" is not null), '[]'::json)`.as(
+          sql<unknown>`coalesce(json_agg(json_build_object('name', ${orderLineItems}."name", 'vendorName', ${vendors}."name", 'amountCents', ${orderLineItems}."collected_amount_cents") order by ${orderLineItems}."collected_amount_cents" desc, ${orderLineItems}."name" asc) filter (where ${orderLineItems}."id" is not null), '[]'::json)`.as(
             "items",
           ),
       })
-      .from(sales)
-      .leftJoin(salesLineItems, eq(salesLineItems.saleId, sales.id))
+      .from(orders)
+      .leftJoin(orderLineItems, eq(orderLineItems.orderId, orders.id))
       .leftJoin(
         vendorItems,
-        eq(vendorItems.cloverItemId, salesLineItems.cloverItemId),
+        eq(vendorItems.cloverItemId, orderLineItems.cloverItemId),
       )
       .leftJoin(vendors, eq(vendors.id, vendorItems.vendorId))
-      .where(eq(sales.paymentStatus, "paid"))
-      .groupBy(sales.id)
-      .orderBy(desc(sales.occurredAt), asc(sales.id))
+      .where(eq(orders.status, "paid"))
+      .groupBy(orders.id)
+      .orderBy(desc(orders.occurredAt), asc(orders.id))
       .limit(RECENT_SALES_LIMIT),
   );
 

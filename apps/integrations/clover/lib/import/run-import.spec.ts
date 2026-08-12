@@ -35,7 +35,7 @@ function makeFakeSource(dataset: readonly FakeRecord[]) {
   const enqueued: FakeRecord[] = [];
 
   const source: ImportSource<FakeRecord, never> = {
-    entityType: "payment",
+    entityType: "order",
     watermarkAxis: "createdTime",
     list: ({ startTimestamp }) => {
       listCalls.push({ startTimestamp });
@@ -63,7 +63,7 @@ describe("runImport", () => {
     const dataset = [
       { id: "before-floor", createdTime: COLD_FLOOR - 1000 },
       ...Array.from({ length: 31 }, (_, i) => ({
-        id: `p-${i}`,
+        id: `o-${i}`,
         createdTime: COLD_FLOOR + i,
       })),
     ];
@@ -99,7 +99,7 @@ describe("runImport", () => {
 
     // The cursor was advanced to the newest createdTime in the page.
     const cursor = await run(
-      CloverImportCursorRepository.get(MERCHANT, "payment"),
+      CloverImportCursorRepository.get(MERCHANT, "order"),
     );
     if (Exit.isSuccess(cursor) && Option.isSome(cursor.value)) {
       assert.equal(cursor.value.value.lastTimestamp, COLD_FLOOR + PAGE_LIMIT - 1);
@@ -115,19 +115,19 @@ describe("runImport", () => {
     await run(
       CloverImportCursorRepository.advance({
         merchantId: MERCHANT,
-        entityType: "payment",
+        entityType: "order",
         lastTimestamp: 1030,
         runAt: NOW,
       }),
     );
 
-    // Dataset now has two newer payments (1040, 1050) plus the old ones. The
+    // Dataset now has two newer orders (1040, 1050) plus the old ones. The
     // boundary (1030) plus both new records fit in a single page.
     const dataset = [
       ...makeDataset(31),
-      { id: "p-1040", createdTime: 1040 },
+      { id: "o-1040", createdTime: 1040 },
       {
-        id: "p-1050",
+        id: "o-1050",
         createdTime: 1050,
       },
     ];
@@ -155,7 +155,7 @@ describe("runImport", () => {
 
     // The inclusive boundary re-includes createdTime 1030, plus the two new ones.
     const enqueuedIds = enqueued.map((r) => r.id).sort();
-    assert.deepEqual(enqueuedIds, ["p-1030", "p-1040", "p-1050"]);
+    assert.deepEqual(enqueuedIds, ["o-1030", "o-1040", "o-1050"]);
   });
 
   test("does not advance the cursor when there is nothing new", async () => {
@@ -164,7 +164,7 @@ describe("runImport", () => {
     await run(
       CloverImportCursorRepository.advance({
         merchantId: MERCHANT,
-        entityType: "payment",
+        entityType: "order",
         lastTimestamp: 1030,
         runAt: NOW,
       }),
@@ -189,14 +189,14 @@ describe("runImport", () => {
     // Only the boundary record (1030) is re-listed and enqueued (idempotently).
     assert.deepEqual(
       enqueued.map((r) => r.id),
-      ["p-1030"],
+      ["o-1030"],
     );
   });
 });
 
 function makeDataset(count: number): FakeRecord[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `p-${1000 + i}`,
+    id: `o-${1000 + i}`,
     createdTime: 1000 + i,
   }));
 }

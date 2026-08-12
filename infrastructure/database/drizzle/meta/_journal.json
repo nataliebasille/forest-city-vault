@@ -99,6 +99,20 @@
       "when": 1786500513459,
       "tag": "0013_add_vendor_item_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786560534839,
+      "tag": "0014_drop_sales_payment_grained_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786560572082,
+      "tag": "0015_add_order_aggregate_tables",
+      "breakpoints": true
     }
   ]
 }

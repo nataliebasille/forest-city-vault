@@ -19,13 +19,11 @@ export function toVendorRows(rollups: readonly VendorRollup[]): VendorRow[] {
   }));
 }
 
-const usdWholeFormatter = new Intl.NumberFormat("en-US", {
+const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
 });
 
 function formatDollars(cents: number): string {
-  return usdWholeFormatter.format(cents / 100);
+  return usdFormatter.format(cents / 100);
 }

@@ -6,4 +6,4 @@ export * from "./event-store";
 export * from "./database-saga-scoped";
 export * from "./bootstrap/bootstrap-store";
 export * from "./bootstrap/runtime";
-export * from "./seed/seed-sales";
+export * from "./seed/seed-orders";

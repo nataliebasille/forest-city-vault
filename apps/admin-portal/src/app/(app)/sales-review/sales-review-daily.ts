@@ -4,7 +4,7 @@ import {
   SapphoQueryable,
 } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { eq, sql } from "drizzle-orm";
@@ -18,7 +18,7 @@ export type DailyGross = {
 
 /**
  * Reads the current month's per-day gross, from day 1 through today, in the
- * store's own time zone, counting only captured (`paid`) sales. Days with no
+ * store's own time zone, counting only captured (`paid`) orders. Days with no
  * sales are zero-filled — the query only gets back the days that actually had
  * sales, so a `bounds`-anchored {@link fillDays} pass turns that sparse list
  * into one entry per day, which is what the bar chart needs for a continuous
@@ -57,7 +57,7 @@ export const salesReviewDaily = Effect.gen(function* () {
           "current_day",
         ),
         daily:
-          sql<unknown>`coalesce((select json_agg(json_build_object('day', d.day, 'grossCents', d.gross) order by d.day) from (select extract(day from ${sales.occurredAt} at time zone bounds.zone)::int as day, sum(${sales.totalCents}) as gross from ${sales} where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day' group by day) d), '[]'::json)`.as(
+          sql<unknown>`coalesce((select json_agg(json_build_object('day', d.day, 'grossCents', d.gross) order by d.day) from (select extract(day from ${orders.occurredAt} at time zone bounds.zone)::int as day, sum(${orders.collectedCents}) as gross from ${orders} where ${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.month_start and ${orders.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day' group by day) d), '[]'::json)`.as(
             "daily",
           ),
       })

@@ -24,10 +24,10 @@ describe("toMonthBars", () => {
     );
   });
 
-  test("formats gross as whole-dollar USD", () => {
+  test("formats gross as USD with cents", () => {
     assert.deepEqual(
       toMonthBars(MONTHS).map((bar) => bar.grossCents),
-      ["$4,000", "$2,000", "$0"],
+      ["$4,000.00", "$2,000.00", "$0.00"],
     );
   });
 

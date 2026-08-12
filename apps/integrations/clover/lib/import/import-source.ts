@@ -16,14 +16,14 @@ import { Effect } from "effect";
 export type ImportSource<Element, R> = {
   /**
    * Stream identity, used as the cursor's `entity_type` and in logs. Stable per
-   * entity kind, e.g. `"payment"` or `"vendor_item"`.
+   * entity kind, e.g. `"order"` or `"vendor_item"`.
    */
   readonly entityType: string;
 
   /**
-   * The Clover field the watermark tracks. Append-mostly streams (payments) use
-   * `createdTime`; mutable streams (items) should use `modifiedTime` so edits are
-   * re-pulled. Documents the axis the source's `list` filters/sorts on.
+   * The Clover field the watermark tracks. Mutable streams (orders/items) use
+   * `modifiedTime`; append-mostly streams can use `createdTime`.
+   * Documents the axis the source's `list` filters/sorts on.
    */
   readonly watermarkAxis: "createdTime" | "modifiedTime";
 
