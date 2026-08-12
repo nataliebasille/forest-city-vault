@@ -32,12 +32,20 @@ export const vendorItemsImportSource: ImportSource<
   list: ({ merchantId, startTimestamp, limit, offset }) =>
     Effect.map(
       listCloverItems(merchantId, {
-        // On a cold cursor (`startTimestamp` 0) omit the lower bound and walk the
-        // whole catalog by ascending `modifiedTime`; once records are imported
-        // the watermark advances and subsequent runs send a real
-        // `modifiedTime>=<watermark>` bound.
-        filter:
-          startTimestamp > 0 ? `modifiedTime>=${startTimestamp}` : undefined,
+        // Always send the `modifiedTime>=` lower bound, including on a cold
+        // cursor (`startTimestamp` 0, i.e. a full backfill from the epoch).
+        //
+        // This deliberately differs from the payments source, which *omits* the
+        // filter on a cold cursor: Clover clamps time-based filters on
+        // orders/payments/refunds to a 90-day window, so `createdTime>=0` fell
+        // outside that window and returned nothing — the payments importer works
+        // around that by not sending the bound. The inventory items endpoint has
+        // no such documented 90-day clamp, and `modifiedTime` is a documented
+        // filterable field (Clover's own item-sync guidance uses
+        // `filter=modifiedTime>=<unix_time>`), so sending `modifiedTime>=0` here
+        // returns the full catalog. Omitting the bound is the path Clover was
+        // observed to mishandle, so the items importer never relies on it.
+        filter: `modifiedTime>=${startTimestamp}`,
         orderBy: "modifiedTime ASC",
         limit,
         offset,

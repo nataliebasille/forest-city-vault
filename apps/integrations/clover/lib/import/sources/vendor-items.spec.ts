@@ -31,7 +31,7 @@ const config = CloverConfig.make({
 type CapturedRequest = { url: string; params: URLSearchParams };
 
 describe("vendorItemsImportSource.list", () => {
-  test("omits the modifiedTime filter on a cold cursor and orders ascending", async () => {
+  test("sends a modifiedTime>=0 lower bound on a cold cursor (never omits the filter)", async () => {
     const { run, captured } = await makeContext({ elements: [] });
 
     const exit = await run(
@@ -46,7 +46,10 @@ describe("vendorItemsImportSource.list", () => {
     assert.equal(Exit.isSuccess(exit), true);
     assert.equal(captured.length, 1);
     const { params } = captured[0];
-    assert.equal(params.has("filter"), false);
+    // The items endpoint has no 90-day filter clamp (unlike payments), so a
+    // cold-cursor full backfill still sends `modifiedTime>=0` rather than
+    // omitting the bound — the "no filter" path Clover was seen to mishandle.
+    assert.equal(params.get("filter"), "modifiedTime>=0");
     assert.equal(params.get("orderBy"), "modifiedTime ASC");
     assert.equal(params.get("expand"), "categories");
   });
