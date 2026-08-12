@@ -68,8 +68,10 @@ export function processOrders(options: { readonly requestId: string }) {
             message.idempotencyKey,
           );
 
+          const pristine = Orders.pristine(cloverOrder.id);
+
           const current = yield* Orders.repository
-            .getById(cloverOrder.id)
+            .getById(pristine.id)
             .pipe(
               Effect.map(Option.some),
               Effect.catchTag(
@@ -87,10 +89,7 @@ export function processOrders(options: { readonly requestId: string }) {
 
           const order = yield* Option.match(current, {
             onNone: () =>
-              Orders.actions.fromCloverOrder(
-                Orders.pristine(cloverOrder.id),
-                actionPayload,
-              ),
+              Orders.actions.fromCloverOrder(pristine, actionPayload),
             onSome: (existing) =>
               Orders.actions.refreshFromCloverOrder(existing, actionPayload),
           });

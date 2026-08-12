@@ -7,7 +7,7 @@ import * as schema from "../../schema";
 import { DatabaseTest } from "../../testing";
 import { drain } from "./drain";
 
-const { inbox, errors } = schema.inboxes.payments;
+const { inbox, errors } = schema.inboxes.orders;
 
 type InboxInsert = (typeof inbox)["$inferSelect"];
 
@@ -15,7 +15,7 @@ describe("drain", () => {
   test("returns an empty array when there are no received items", async () => {
     const result = await runWith(
       drain({
-        inbox: "payments",
+        inbox: "orders",
         requestId: "req-1",
         action: () => Effect.void,
       }),
@@ -32,7 +32,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => Effect.void,
         });
@@ -53,7 +53,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => Effect.fail(new Error("action failed")),
         });
@@ -77,7 +77,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => Effect.fail(new Error("still failing")),
         });
@@ -108,7 +108,7 @@ describe("drain", () => {
 
         let callCount = 0;
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => {
             callCount++;
@@ -138,7 +138,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => Effect.fail(new Error("action failed")),
         });
@@ -169,7 +169,7 @@ describe("drain", () => {
 
         let callCount = 0;
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => {
             callCount++;
@@ -193,7 +193,7 @@ describe("drain", () => {
         // action writes a row on the saga transaction, then defects
         const result = yield* Effect.exit(
           drain({
-            inbox: "payments",
+            inbox: "orders",
             requestId: "req-1",
             action: () =>
               Effect.gen(function* () {
@@ -231,7 +231,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () =>
             Effect.gen(function* () {
@@ -272,7 +272,7 @@ describe("drain", () => {
         );
 
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: (msg) =>
             msg.idempotencyKey === "k2" ?
@@ -308,7 +308,7 @@ describe("drain", () => {
 
         let callCount = 0;
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           action: () => {
             callCount++;
@@ -332,7 +332,7 @@ describe("drain", () => {
 
         let callCount = 0;
         yield* drain({
-          inbox: "payments",
+          inbox: "orders",
           requestId: "req-1",
           batchSize: 5,
           action: () => {
@@ -360,7 +360,7 @@ function makeItem(overrides: Partial<InboxInsert> = {}): InboxInsert {
     provider: "clover",
     providerEventId: "evt-1",
     providerObjectId: "ORDER:order-1",
-    eventType: "payment",
+    eventType: "upsert",
     payloadJson: "{}",
     ...overrides,
   };
