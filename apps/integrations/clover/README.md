@@ -146,16 +146,16 @@ the payments cycle.
 Configuration (all optional, read from `.env` or the shell):
 
 - `CLOVER_IMPORT_INTERVAL_MS` - delay between cycles. Default `60000` (60s).
-- `CLOVER_IMPORT_PAGE_SIZE` - page size passed to the importer (default 50).
 - `CLOVER_IMPORT_BACKFILL_LOOKBACK_MS` - how far back the **first** (cold-cursor)
   run reaches. Default `15552000000` (180 days / ~6 months). See the backfill note
   below for why this is bounded.
 
 On the **first** run (no stored cursor) the importer backfills from a floor of
 `now - CLOVER_IMPORT_BACKFILL_LOOKBACK_MS` (default ~6 months), sending an explicit
-`createdTime>=<floor>` lower bound and paging the merchant's payments in ascending
-`createdTime` order. Once records are imported the per-stream watermark advances,
-and subsequent runs resume with a `createdTime>=<watermark>` bound.
+`createdTime>=<floor>` lower bound and fetching a single page of the merchant's
+payments in ascending `createdTime` order. Once records are imported the per-stream
+watermark advances, and subsequent runs resume with a `createdTime>=<watermark>`
+bound.
 
 Why a floor rather than "from the beginning of time": Clover's production payments
 list is quirky about the `createdTime` lower bound.
@@ -169,10 +169,10 @@ list is quirky about the `createdTime` lower bound.
 
 The default floor sits between the first two failure modes: old enough to reach
 well past the 90-day window, recent enough to stay inside the range Clover actually
-serves. Because each query only yields ~90 days from its lower bound, a cold
-backfill does not reach the present in a single run: it imports the oldest window
-first, advances the watermark, and **walks forward one ~90-day window per run**
-until it catches up (the scheduled cadence closes the gap within a few runs).
+serves. Each run fetches a single page (50 payments) and advances the watermark to
+the newest record seen, so a cold backfill does not reach the present in a single
+run: it imports the oldest page first, advances the watermark, and **walks forward
+one page per run** until it catches up (the scheduled cadence closes the gap).
 Because of the ~8-month ceiling, payments older than that are not retrievable
 through this endpoint at all; keep the scheduled job running so the forward-moving
 watermark never falls behind it.

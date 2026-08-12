@@ -17,15 +17,18 @@ const MERCHANT = "m-1";
 const LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const COLD_FLOOR = NOW.getTime() - LOOKBACK_MS;
 
+// The single-page size the fake source owns (the engine no longer chooses it).
+const PAGE_LIMIT = 10;
+
 type FakeRecord = { id: string; createdTime: number };
 
-type ListCall = { startTimestamp: number; limit: number; offset: number };
+type ListCall = { startTimestamp: number };
 
 /**
  * A fake import source backed by an in-memory dataset. It records every `list`
- * call (so a test can assert the watermark passed on each run) and applies the
- * same ascending `createdTime>=start` paging the real Clover list performs, so
- * the engine's paging/cursor behavior is exercised without any HTTP.
+ * call (so a test can assert the watermark passed on each run) and returns a
+ * single ascending `createdTime>=start` page whose size the source owns, so the
+ * engine's single-page/cursor behavior is exercised without any HTTP.
  */
 function makeFakeSource(dataset: readonly FakeRecord[]) {
   const listCalls: ListCall[] = [];
@@ -34,12 +37,12 @@ function makeFakeSource(dataset: readonly FakeRecord[]) {
   const source: ImportSource<FakeRecord, never> = {
     entityType: "payment",
     watermarkAxis: "createdTime",
-    list: ({ startTimestamp, limit, offset }) => {
-      listCalls.push({ startTimestamp, limit, offset });
+    list: ({ startTimestamp }) => {
+      listCalls.push({ startTimestamp });
       const page = dataset
         .filter((r) => r.createdTime >= startTimestamp)
         .sort((a, b) => a.createdTime - b.createdTime)
-        .slice(offset, offset + limit);
+        .slice(0, PAGE_LIMIT);
       return Effect.succeed(page);
     },
     getTimestamp: (r) => r.createdTime,
@@ -53,9 +56,10 @@ function makeFakeSource(dataset: readonly FakeRecord[]) {
 }
 
 describe("runImport", () => {
-  test("first run backfills from the cold-start floor, pages to the end, and advances the cursor", async () => {
+  test("first run backfills from the cold-start floor, fetches a single page, and advances the cursor", async () => {
     const { run } = await makeContext();
-    // One record before the floor (must be excluded) plus 31 at/after it.
+    // One record before the floor (must be excluded) plus 31 at/after it — more
+    // than a single page, so only the first page is imported this run.
     const dataset = [
       { id: "before-floor", createdTime: COLD_FLOOR - 1000 },
       ...Array.from({ length: 31 }, (_, i) => ({
@@ -69,7 +73,6 @@ describe("runImport", () => {
       runImport(source, {
         merchantId: MERCHANT,
         requestId: "req-1",
-        pageSize: 10,
         coldStartLookbackMs: LOOKBACK_MS,
       }),
     );
@@ -78,31 +81,28 @@ describe("runImport", () => {
     if (Exit.isSuccess(exit)) {
       // Cold cursor starts from `NOW - lookback`, never 0.
       assert.equal(exit.value.startTimestamp, COLD_FLOOR);
-      assert.equal(exit.value.listed, 31);
-      assert.equal(exit.value.enqueued, 31);
-      assert.equal(exit.value.newWatermark, COLD_FLOOR + 30);
+      // Only the first page (PAGE_LIMIT records) is listed this run.
+      assert.equal(exit.value.listed, PAGE_LIMIT);
+      assert.equal(exit.value.enqueued, PAGE_LIMIT);
+      assert.equal(exit.value.newWatermark, COLD_FLOOR + PAGE_LIMIT - 1);
     }
 
-    // First list call starts at the floor; paging walked 4 pages
-    // (10 + 10 + 10 + 1) with growing offsets.
+    // Exactly one list call, starting at the floor.
+    assert.equal(listCalls.length, 1);
     assert.equal(listCalls[0].startTimestamp, COLD_FLOOR);
-    assert.deepEqual(
-      listCalls.map((c) => c.offset),
-      [0, 10, 20, 30],
-    );
     // The record before the floor is filtered out, never enqueued.
-    assert.equal(enqueued.length, 31);
+    assert.equal(enqueued.length, PAGE_LIMIT);
     assert.equal(
       enqueued.some((r) => r.id === "before-floor"),
       false,
     );
 
-    // The cursor was advanced to the newest createdTime.
+    // The cursor was advanced to the newest createdTime in the page.
     const cursor = await run(
       CloverImportCursorRepository.get(MERCHANT, "payment"),
     );
     if (Exit.isSuccess(cursor) && Option.isSome(cursor.value)) {
-      assert.equal(cursor.value.value.lastTimestamp, COLD_FLOOR + 30);
+      assert.equal(cursor.value.value.lastTimestamp, COLD_FLOOR + PAGE_LIMIT - 1);
     } else {
       assert.fail("expected cursor to be advanced");
     }
@@ -121,7 +121,8 @@ describe("runImport", () => {
       }),
     );
 
-    // Dataset now has two newer payments (1040, 1050) plus the old ones.
+    // Dataset now has two newer payments (1040, 1050) plus the old ones. The
+    // boundary (1030) plus both new records fit in a single page.
     const dataset = [
       ...makeDataset(31),
       { id: "p-1040", createdTime: 1040 },
@@ -136,7 +137,6 @@ describe("runImport", () => {
       runImport(source, {
         merchantId: MERCHANT,
         requestId: "req-2",
-        pageSize: 10,
         coldStartLookbackMs: LOOKBACK_MS,
       }),
     );
@@ -148,11 +148,10 @@ describe("runImport", () => {
       assert.equal(exit.value.newWatermark, 1050);
     }
 
-    // Every list call used the watermark (1030) as the inclusive lower bound —
-    // it never went back to the start of time.
-    for (const call of listCalls) {
-      assert.equal(call.startTimestamp, 1030);
-    }
+    // A single list call, using the watermark (1030) as the inclusive lower
+    // bound — it never went back to the start of time.
+    assert.equal(listCalls.length, 1);
+    assert.equal(listCalls[0].startTimestamp, 1030);
 
     // The inclusive boundary re-includes createdTime 1030, plus the two new ones.
     const enqueuedIds = enqueued.map((r) => r.id).sort();
@@ -178,7 +177,6 @@ describe("runImport", () => {
       runImport(source, {
         merchantId: MERCHANT,
         requestId: "req-3",
-        pageSize: 10,
         coldStartLookbackMs: LOOKBACK_MS,
       }),
     );

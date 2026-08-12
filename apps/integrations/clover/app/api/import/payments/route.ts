@@ -7,51 +7,32 @@ import {
   httpFailure,
   unauthorized,
 } from "@forest-city-vault/platform-nextjs-effect";
-import { Effect, Redacted, Schema } from "effect";
+import { Effect, Redacted } from "effect";
 import { NextRequest } from "next/server";
 
 // Vercel Hobby caps serverless function duration at 60s. Keep the import within
-// that budget; the engine pages a bounded number of records per run and resumes
-// from its watermark on the next run.
+// that budget; the engine fetches a single bounded page per run and resumes from
+// its watermark on the next run.
 export const maxDuration = 60;
-
-const ImportPayloadSchema = Schema.Struct({
-  pageSize: Schema.optional(Schema.Number),
-});
-
-const decodeImportPayload = Schema.decodeUnknown(
-  Schema.parseJson(ImportPayloadSchema),
-);
 
 /**
  * Internal, bearer-protected endpoint that incrementally pulls the configured
  * merchant's payments from the Clover API into the payments inbox. The actual
- * incremental loop, cursor handling, and idempotent enqueue live in the shared
+ * incremental fetch, cursor handling, and idempotent enqueue live in the shared
  * {@link importPayments} job (reused by the scheduled runner); this route only
- * adds request auth, tracing, and the optional page-size override.
+ * adds request auth and tracing.
  */
-const importPaymentsRoute = internalImportRoute((request) =>
+const importPaymentsRoute = internalImportRoute(() =>
   Effect.gen(function* () {
     const { requestId } = yield* RequestTrace;
-    const { pageSize } = yield* readImportOptions(request);
 
-    yield* importPayments({ requestId, pageSize });
+    yield* importPayments({ requestId });
 
     return true;
   }),
 );
 
 export const POST = pooledRoute(importPaymentsRoute as never);
-
-function readImportOptions(request: NextRequest) {
-  return Effect.gen(function* () {
-    const raw = yield* Effect.promise(() => request.text());
-    if (raw.trim() === "") {
-      return {} as typeof ImportPayloadSchema.Type;
-    }
-    return yield* decodeImportPayload(raw);
-  });
-}
 
 const ACTIVE_GUARDS = new Set<string>();
 const IMPORT_GUARD_KEY = "clover.import.payments";

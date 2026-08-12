@@ -2,9 +2,10 @@ import { Effect } from "effect";
 
 /**
  * Describes how to incrementally pull one kind of entity from Clover into its
- * inbox. The generic {@link runImport} engine owns the cursor/paging loop; a
- * source supplies only the entity-specific pieces, so adding a new entity (e.g.
- * vendor items) is a new descriptor plus a list resource — no engine changes.
+ * inbox. The generic {@link runImport} engine owns the cursor/watermark; a
+ * source supplies only the entity-specific pieces — including how many records a
+ * single list page holds — so adding a new entity (e.g. vendor items) is a new
+ * descriptor plus a list resource — no engine changes.
  *
  * Type parameters:
  * - `Element` the shape of one listed record.
@@ -27,14 +28,14 @@ export type ImportSource<Element, R> = {
   readonly watermarkAxis: "createdTime" | "modifiedTime";
 
   /**
-   * Fetches one ascending page at/after `startTimestamp` (inclusive) on the
-   * watermark axis. The engine pages by `offset` until a short page is returned.
+   * Fetches a single ascending page at/after `startTimestamp` (inclusive) on the
+   * watermark axis. The source owns how many records the page holds; the engine
+   * fetches one page per run and advances the watermark, so a backlog is worked
+   * off across successive runs.
    */
   readonly list: (input: {
     readonly merchantId: string;
     readonly startTimestamp: number;
-    readonly limit: number;
-    readonly offset: number;
   }) => Effect.Effect<readonly Element[], unknown, R>;
 
   /** The watermark-axis timestamp (epoch ms) of a listed element. */

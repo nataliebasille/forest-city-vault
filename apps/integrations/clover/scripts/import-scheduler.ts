@@ -31,7 +31,6 @@ import { JobLive } from "../lib/runtime/live";
  *   - DATABASE_URL              (required) Postgres connection string.
  *   - CLOVER_* config           (required) the same keys `CloverConfig` reads.
  *   - CLOVER_IMPORT_INTERVAL_MS interval between cycle completions. Default 60000.
- *   - CLOVER_IMPORT_PAGE_SIZE   optional page size passed to the importer.
  */
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -46,7 +45,7 @@ function main(): void {
   log(
     `starting importer scheduler → running code directly every ${Math.round(
       settings.intervalMs / 1000,
-    )}s (page size: ${settings.pageSize ?? "default"})`,
+    )}s`,
   );
 
   process.on("SIGINT", requestStop);
@@ -71,9 +70,7 @@ async function runLoop(): Promise<void> {
 async function runCycle(): Promise<void> {
   const requestId = crypto.randomUUID();
   try {
-    await runtime.runPromise(
-      runPaymentsCycle({ requestId, pageSize: settings.pageSize }),
-    );
+    await runtime.runPromise(runPaymentsCycle({ requestId }));
     log(`cycle ok (requestId ${requestId})`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -95,12 +92,7 @@ function readSettings() {
     DEFAULT_INTERVAL_MS,
   );
 
-  const pageSize = parsePositiveInt(
-    process.env.CLOVER_IMPORT_PAGE_SIZE,
-    undefined,
-  );
-
-  return { intervalMs, pageSize };
+  return { intervalMs };
 }
 
 function parsePositiveInt<T extends number | undefined>(
