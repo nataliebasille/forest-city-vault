@@ -40,11 +40,11 @@ export const vendorItemsImportSource: ImportSource<
         // orders/payments/refunds to a 90-day window, so `createdTime>=0` fell
         // outside that window and returned nothing — the payments importer works
         // around that by not sending the bound. The inventory items endpoint has
-        // no such documented 90-day clamp, and `modifiedTime` is a documented
-        // filterable field (Clover's own item-sync guidance uses
-        // `filter=modifiedTime>=<unix_time>`), so sending `modifiedTime>=0` here
-        // returns the full catalog. Omitting the bound is the path Clover was
-        // observed to mishandle, so the items importer never relies on it.
+        // no such 90-day clamp: verified against Clover production that
+        // `GET /items?filter=modifiedTime>=0&orderBy=modifiedTime ASC` returns
+        // the full catalog oldest-first (and `modifiedTime` is listed in the
+        // response's `X-Clover-Allowed-Filter-Fields`). So we always send the
+        // bound and never rely on the no-filter path Clover was seen to mishandle.
         filter: `modifiedTime>=${startTimestamp}`,
         orderBy: "modifiedTime ASC",
         limit,
