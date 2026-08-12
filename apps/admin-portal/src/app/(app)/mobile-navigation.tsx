@@ -2,7 +2,7 @@
 
 import { CloseIcon, MenuIcon } from "@ui/icons";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -19,6 +19,20 @@ export function MobileNavigation({ sidebar }: { sidebar: ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const title = PAGE_TITLES[pathname] ?? "";
+
+  // Close the drawer after navigating, since tapping a link inside the
+  // server-rendered sidebar can't reach this client component's state directly.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // Also close when any link in the drawer is tapped — clicking the link for the
+  // current route doesn't change the pathname, so the effect above wouldn't fire.
+  const handleDrawerClick = (event: MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest("a")) {
+      setOpen(false);
+    }
+  };
 
   return (
     <>
@@ -52,6 +66,7 @@ export function MobileNavigation({ sidebar }: { sidebar: ReactNode }) {
 
       {/* Off-canvas drawer */}
       <aside
+        onClick={handleDrawerClick}
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-secondary-500 text-on-secondary-500 shadow-xl transition-transform duration-300 md:hidden",
           open ? "translate-x-0" : "-translate-x-full",
