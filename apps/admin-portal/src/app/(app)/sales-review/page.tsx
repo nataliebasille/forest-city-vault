@@ -26,6 +26,10 @@ export const dynamic = "force-dynamic";
  * strip, daily-gross bar chart with a pace pill, top vendors, and a
  * trailing-months trend) rather than a transaction table — folded in from the
  * sales-review prototype's chosen Variant B ("Comparison dashboard").
+ *
+ * The current month leads the page as an editorial hero (eyebrow + large month
+ * name + inline pace) so it's unmissable and — unlike the old desktop-only
+ * header label — reads on mobile too.
  */
 export default privatePage("sales-review", () =>
   Effect.gen(function* () {
@@ -44,14 +48,29 @@ export default privatePage("sales-review", () =>
 
     return (
       <div className="flex flex-1 flex-col">
-        <header className="hidden h-[var(--shell-header-h)] items-center justify-between gap-4 border-b border-ink/10 px-6 md:flex md:px-8">
+        <header className="hidden h-[var(--shell-header-h)] items-center border-b border-ink/10 px-6 md:flex md:px-8">
           <h1 className="font-heading font-semibold text-ink">Sales review</h1>
-          <span className="font-subheading text-sm font-medium text-on-surface-50/60">
-            {monthLabel}
-          </span>
         </header>
 
         <main className="flex flex-1 flex-col gap-6 px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-1">
+            <span className="font-subheading text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-50/50">
+              Month to date
+            </span>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 className="font-heading text-4xl font-semibold leading-none text-ink md:text-5xl">
+                {monthLabel}
+              </h2>
+              <span
+                className={`font-subheading text-sm font-semibold ${
+                  pacingAhead ? "text-success-700" : "text-danger-700"
+                }`}
+              >
+                {paceDeltaLabel} vs last month
+              </span>
+            </div>
+          </div>
+
           <MetricGrid metrics={tiles} />
 
           <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
