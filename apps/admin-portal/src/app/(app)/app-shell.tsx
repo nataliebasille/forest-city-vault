@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { MobileNavigation } from "./mobile-navigation";
 import { SidebarContent } from "./sidebar-content";
 
@@ -15,24 +14,23 @@ import { SidebarContent } from "./sidebar-content";
  * {@link MobileNavigation} as a server-rendered slot, so the shared branding,
  * navigation, and account/sign-out never cross into client code.
  */
-export async function AppShell({
+export function AppShell({
   account,
   children,
 }: {
   account: { email: string; role: string };
   children: React.ReactNode;
 }) {
-  const pathname = (await headers()).get("x-pathname") ?? "/";
   return (
     <div className="flex min-h-screen bg-[var(--shell-content-bg)]">
       {/* Desktop sidebar — permanently in the flow at md+ */}
       <aside className="hidden w-64 shrink-0 flex-col bg-secondary-500 text-on-secondary-500 md:flex">
-        <SidebarContent account={account} pathname={pathname} />
+        <SidebarContent account={account} />
       </aside>
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileNavigation sidebar={<SidebarContent account={account} pathname={pathname} />} />
+        <MobileNavigation sidebar={<SidebarContent account={account} />} />
         <main className="flex flex-1 flex-col">{children}</main>
       </div>
     </div>

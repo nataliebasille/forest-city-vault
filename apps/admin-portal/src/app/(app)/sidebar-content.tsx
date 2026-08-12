@@ -1,11 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AccountMenu } from "./account-menu";
 
 /**
  * The static contents of the portal sidebar — branding, primary navigation,
- * and the signed-in owner's account menu. It is a Server Component rendered
+ * and the signed-in owner's account menu. It is a Client Component rendered
  * into both the desktop sidebar and the mobile off-canvas drawer so the two
- * stay identical.
+ * stay identical while the active route updates immediately.
  *
  * It returns its sections as a fragment so they become direct flex children of
  * whichever `<aside>` hosts them; the nav's `flex-1` then pins the account
@@ -13,11 +16,11 @@ import { AccountMenu } from "./account-menu";
  */
 export function SidebarContent({
   account,
-  pathname,
 }: {
   account: { email: string; role: string };
-  pathname: string;
 }) {
+  const pathname = usePathname();
+
   return (
     <>
       {/* Brand header */}
@@ -26,7 +29,7 @@ export function SidebarContent({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-4 py-6" aria-label="Primary">
+      <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-6" aria-label="Primary">
         <NavLink href="/" pathname={pathname} exact>
           Dashboard
         </NavLink>
@@ -54,7 +57,9 @@ function NavLink({
   exact?: boolean;
   children: React.ReactNode;
 }) {
-  const isActive = exact ? pathname === href : pathname.startsWith(href);
+  const isActive = exact
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <Link
@@ -90,4 +95,3 @@ function Brand() {
     </span>
   );
 }
-
