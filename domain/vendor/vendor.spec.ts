@@ -154,6 +154,39 @@ describe("Vendor", () => {
     expect(expectFailure(exit)).toBeInstanceOf(VendorNameBlankError);
   });
 
+  it("renames the vendor when a Clover category name differs, trimming it", () => {
+    const synced = runAction(
+      Vendor.actions.syncCloverCategoryName(createVendor(), {
+        name: "  New Name  ",
+      }),
+    );
+
+    expect(synced.snapshot.name).toBe("New Name");
+    expect(synced.version).toBe(2);
+  });
+
+  it("emits no event when the Clover category name matches", () => {
+    const vendor = createVendor({ name: "Maple & Co." });
+
+    const synced = runAction(
+      Vendor.actions.syncCloverCategoryName(vendor, { name: "  Maple & Co.  " }),
+    );
+
+    expect(synced.version).toBe(vendor.version);
+    expect(synced.snapshot.name).toBe("Maple & Co.");
+  });
+
+  it("emits no event when the Clover category name is blank", () => {
+    const vendor = createVendor({ name: "Keep Me" });
+
+    const synced = runAction(
+      Vendor.actions.syncCloverCategoryName(vendor, { name: "   " }),
+    );
+
+    expect(synced.version).toBe(vendor.version);
+    expect(synced.snapshot.name).toBe("Keep Me");
+  });
+
   it("links a Clover category", () => {
     const linked = runAction(
       Vendor.actions.linkCloverCategory(createVendor(), {

@@ -37,6 +37,10 @@ export const RenameVendorSchema = Schema.Struct({
   name: Schema.String,
 });
 
+export const SyncCloverCategoryNameSchema = Schema.Struct({
+  name: Schema.String,
+});
+
 export const LinkCloverCategorySchema = Schema.Struct({
   cloverCategoryId: Schema.String,
 });
@@ -97,6 +101,34 @@ export const renameVendor = (
       type: "VendorRenamed",
       payload: { name, updatedAt },
     } satisfies VendorRenamedEvent;
+  });
+
+/**
+ * Renames the vendor to match its Clover category's name. Emits `VendorRenamed`
+ * when the incoming name is non-blank and differs from the current one, and no
+ * event otherwise — the lenient, sync-from-Clover counterpart to the strict
+ * {@link renameVendor} command (which rejects a blank name). Used by the
+ * vendor-items drain, where Clover is the source of truth for vendor names.
+ */
+export const syncCloverCategoryName = (
+  snapshot: VendorSnapshot,
+  payload: typeof SyncCloverCategoryNameSchema.Type,
+) =>
+  Effect.gen(function* () {
+    const name = payload.name.trim();
+
+    if (name.length === 0 || name === snapshot.name) {
+      return [] as VendorRenamedEvent[];
+    }
+
+    const updatedAt = yield* now;
+
+    return [
+      {
+        type: "VendorRenamed",
+        payload: { name, updatedAt },
+      },
+    ] satisfies VendorRenamedEvent[];
   });
 
 export const linkCloverCategory = (

@@ -165,22 +165,16 @@ function upsertItem(itemId: string, payloadJson: string) {
       const { vendor: existing, matchedCategoryId } = resolved.value;
       baseVersion = existing.version;
 
-      // Keep the vendor's name in sync with its Clover category: Clover is the
-      // source of truth, so rename when the matched category carries a non-blank
-      // name that differs from the vendor's current one.
-      const matchedName = categories
-        .find((category) => category.id === matchedCategoryId)
-        ?.name?.trim();
+      // Keep the vendor's name in sync with its Clover category — Clover is the
+      // source of truth. The action itself no-ops when the category name is
+      // blank or unchanged, so no guarding is needed here.
+      const matchedName =
+        categories.find((category) => category.id === matchedCategoryId)?.name ??
+        "";
 
-      if (
-        matchedName !== undefined &&
-        matchedName.length > 0 &&
-        matchedName !== existing.snapshot.name
-      ) {
-        vendor = yield* Vendor.actions.rename(existing, { name: matchedName });
-      } else {
-        vendor = existing;
-      }
+      vendor = yield* Vendor.actions.syncCloverCategoryName(existing, {
+        name: matchedName,
+      });
     } else if (categories.length > 0) {
       // None of the item's categories maps to a modelled vendor. Create one for
       // the first category — in Clover each category is a vendor — named after

@@ -15,6 +15,8 @@ import {
   RemoveCloverItemSchema,
   RenameVendorSchema,
   renameVendor,
+  SyncCloverCategoryNameSchema,
+  syncCloverCategoryName,
   SyncCloverItemsSchema,
   syncCloverItems,
 } from "./vendor.actions";
@@ -29,6 +31,10 @@ export const Vendor = defineAggregateType("Vendor", {
       snapshot: typeof VendorSchema.Type,
       payload: typeof RenameVendorSchema.Type,
     ) => renameVendor(snapshot, payload),
+    syncCloverCategoryName: (
+      snapshot: typeof VendorSchema.Type,
+      payload: typeof SyncCloverCategoryNameSchema.Type,
+    ) => syncCloverCategoryName(snapshot, payload),
     linkCloverCategory: (
       snapshot: typeof VendorSchema.Type,
       payload: typeof LinkCloverCategorySchema.Type,
