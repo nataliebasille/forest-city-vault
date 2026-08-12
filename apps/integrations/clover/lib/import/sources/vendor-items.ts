@@ -22,6 +22,12 @@ import type { ImportSource } from "../import-source";
  * enqueues again so the change is reconciled. Only the item id is stored; the
  * drain re-fetches the current item so it always applies the latest name/price.
  */
+
+// How many items a single list page fetches. The source owns this count: the
+// engine fetches one page per run and advances the watermark, so a larger
+// catalog is worked off across successive runs.
+const VENDOR_ITEMS_LIST_LIMIT = 50;
+
 export const vendorItemsImportSource: ImportSource<
   CloverItem,
   Clock | CloverConfig | Database | HttpClient.HttpClient
@@ -29,7 +35,7 @@ export const vendorItemsImportSource: ImportSource<
   entityType: "vendor_item",
   watermarkAxis: "modifiedTime",
 
-  list: ({ merchantId, startTimestamp, limit, offset }) =>
+  list: ({ merchantId, startTimestamp }) =>
     Effect.map(
       listCloverItems(merchantId, {
         // Always send the `modifiedTime>=` lower bound, including on a cold
@@ -47,8 +53,8 @@ export const vendorItemsImportSource: ImportSource<
         // bound and never rely on the no-filter path Clover was seen to mishandle.
         filter: `modifiedTime>=${startTimestamp}`,
         orderBy: "modifiedTime ASC",
-        limit,
-        offset,
+        limit: VENDOR_ITEMS_LIST_LIMIT,
+        offset: 0,
       }),
       (page) => page.elements,
     ),

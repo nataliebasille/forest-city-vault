@@ -11,7 +11,8 @@ export type ImportSummary = {
   readonly merchantId: string;
   /**
    * Watermark the run started from (epoch ms). On a cold cursor this is the
-   * backfill floor (`now - coldStartLookbackMs`), never `0`.
+   * backfill floor: `now - coldStartLookbackMs` when a lookback is given, or `0`
+   * (backfill from the epoch) when it is omitted.
    */
   readonly startTimestamp: number;
   /** Watermark the cursor was advanced to (epoch ms). */
@@ -33,13 +34,14 @@ export type ImportSummary = {
  * the last record(s) so nothing is skipped when timestamps tie; the source's
  * idempotent enqueue absorbs that overlap.
  *
- * On a cold cursor (no stored watermark) the run starts from a backfill floor of
- * `now - coldStartLookbackMs` rather than `0`. This matters for Clover: its
- * payments list returns only a recent window (~90 days) when queried with *no*
- * `createdTime` filter, and returns *nothing* for a lower bound that is either
- * `0` or older than its ~8-month ceiling. A real, recent-enough floor sits in the
- * window where Clover serves the full history, so the backfill actually reaches
- * the oldest records instead of only the last ~90 days.
+ * On a cold cursor (no stored watermark) the run starts from a backfill floor.
+ * A source that passes `coldStartLookbackMs` floors at `now - coldStartLookbackMs`
+ * rather than `0`; a source that omits it backfills from the epoch (`0`). The
+ * lookback matters for Clover payments: that list returns only a recent window
+ * (~90 days) when queried with *no* `createdTime` filter, and returns *nothing*
+ * for a lower bound that is either `0` or older than its ~8-month ceiling, so a
+ * real, recent-enough floor is required. Other streams (e.g. inventory items)
+ * have no such clamp and backfill cleanly from `0`.
  *
  * The cursor is advanced only after the page was enqueued, so a mid-run
  * failure leaves the watermark untouched and the next run safely reprocesses
@@ -51,11 +53,11 @@ export function runImport<Element, R>(
     readonly merchantId: string;
     readonly requestId: string;
     /**
-     * How far back (in ms) a cold run reaches. The first run starts from
-     * `now - coldStartLookbackMs`; steady-state runs resume from the stored
-     * watermark and ignore this.
+     * How far back (in ms) a cold run reaches. When set, the first run starts
+     * from `now - coldStartLookbackMs`; when omitted it backfills from the epoch
+     * (`0`). Steady-state runs resume from the stored watermark and ignore this.
      */
-    readonly coldStartLookbackMs: number;
+    readonly coldStartLookbackMs?: number;
   },
 ): Effect.Effect<ImportSummary, unknown, R | Database | Clock> {
   return Effect.gen(function* () {
@@ -67,7 +69,10 @@ export function runImport<Element, R>(
       entityType,
     );
     const runStart = yield* now;
-    const coldStartFloor = runStart.getTime() - options.coldStartLookbackMs;
+    const coldStartFloor =
+      options.coldStartLookbackMs === undefined ?
+        0
+      : runStart.getTime() - options.coldStartLookbackMs;
     const startTimestamp = Option.match(cursor, {
       onNone: () => coldStartFloor,
       onSome: (row) => row.lastTimestamp,

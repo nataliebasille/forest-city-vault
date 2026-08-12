@@ -38,8 +38,6 @@ describe("vendorItemsImportSource.list", () => {
       vendorItemsImportSource.list({
         merchantId: MERCHANT_ID,
         startTimestamp: 0,
-        limit: 50,
-        offset: 0,
       }),
     );
 
@@ -52,6 +50,9 @@ describe("vendorItemsImportSource.list", () => {
     assert.equal(params.get("filter"), "modifiedTime>=0");
     assert.equal(params.get("orderBy"), "modifiedTime ASC");
     assert.equal(params.get("expand"), "categories");
+    // The source owns its single-page count and always fetches from offset 0.
+    assert.equal(params.get("limit"), "50");
+    assert.equal(params.get("offset"), "0");
   });
 
   test("sends a modifiedTime lower bound once the cursor has advanced", async () => {
@@ -61,8 +62,6 @@ describe("vendorItemsImportSource.list", () => {
       vendorItemsImportSource.list({
         merchantId: MERCHANT_ID,
         startTimestamp: 1_700_000_000_000,
-        limit: 50,
-        offset: 0,
       }),
     );
 

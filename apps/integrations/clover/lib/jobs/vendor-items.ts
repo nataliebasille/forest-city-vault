@@ -19,10 +19,6 @@ import { runImport, vendorItemsImportSource } from "../import/public";
  * reconciliation, regardless of what triggers it.
  */
 
-// Default page size when a caller does not specify one, matching the payments
-// budget: a bounded number of records per run, resuming from the watermark.
-const DEFAULT_PAGE_SIZE = 50;
-
 // How many inbox messages a single drain pulls, and how long to wait between
 // them. Each `upsert` message costs one Clover call (the item), so the drain is
 // paced to stay under Clover's per-merchant rate limit. Both are overridable via
@@ -35,17 +31,15 @@ const DEFAULT_DRAIN_MESSAGE_DELAY_MS = 250;
  * API into the vendor-item inbox, resuming from the per-stream watermark.
  * Reconciling inbox rows onto their vendors is {@link processVendorItems}'s job.
  */
-export function importVendorItems(options: {
-  readonly requestId: string;
-  readonly pageSize?: number;
-}) {
+export function importVendorItems(options: { readonly requestId: string }) {
   return Effect.gen(function* () {
     const { merchantId } = yield* CloverConfig;
 
+    // No `coldStartLookbackMs`: the items endpoint has no 90-day filter clamp, so
+    // a cold cursor backfills the full catalog from the epoch (`modifiedTime>=0`).
     yield* runImport(vendorItemsImportSource, {
       merchantId,
       requestId: options.requestId,
-      pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
     });
   });
 }
@@ -110,10 +104,7 @@ export function processVendorItems(options: { readonly requestId: string }) {
  * then drain the inbox onto vendors. This is the unit a scheduled trigger runs on
  * each tick.
  */
-export function runVendorItemsCycle(options: {
-  readonly requestId: string;
-  readonly pageSize?: number;
-}) {
+export function runVendorItemsCycle(options: { readonly requestId: string }) {
   return Effect.gen(function* () {
     yield* importVendorItems(options);
     yield* processVendorItems({ requestId: options.requestId });
