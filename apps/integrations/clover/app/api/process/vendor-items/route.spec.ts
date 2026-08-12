@@ -113,6 +113,39 @@ describe("POST /api/process/vendor-items", () => {
     assert.equal(items[0].cloverItemId, "ITEM-rename");
   });
 
+  test("persists a category rename even when the item itself is unchanged", async () => {
+    const vendorId = crypto.randomUUID();
+    await seedVendor(vendorId, "CAT-rename-only", "Old Name");
+    // The item already exists on the vendor with the exact name/price Clover
+    // returns, so applying it produces no event — only the rename does.
+    await seedVendorItem(vendorId, "ITEM-stable", "Syrup", 1200);
+    await insertInboxMessage("ITEM-stable", "upsert");
+    stubCloverItem("ITEM-stable", {
+      id: "ITEM-stable",
+      name: "Syrup",
+      price: 1200,
+      modifiedTime: 1_700_000_000_000,
+      categories: { elements: [{ id: "CAT-rename-only", name: "New Name" }] },
+    });
+
+    const response = await POST(processRequest(authHeader()));
+
+    mock.restoreAll();
+
+    assert.equal(response.status, 200);
+
+    const vendor = (await db.select().from(dbSchema.vendors)).find(
+      (row) => row.id === vendorId,
+    );
+    assert.equal(vendor?.name, "New Name");
+
+    const items = (await db.select().from(dbSchema.vendorItems)).filter(
+      (row) => row.vendorId === vendorId,
+    );
+    assert.equal(items.length, 1);
+    assert.equal(items[0].cloverItemId, "ITEM-stable");
+  });
+
   test("leaves the vendor name untouched when the category name matches", async () => {
     const vendorId = crypto.randomUUID();
     await seedVendor(vendorId, "CAT-same", "Maple & Co.");

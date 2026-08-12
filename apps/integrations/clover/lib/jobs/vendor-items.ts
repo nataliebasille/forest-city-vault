@@ -211,8 +211,12 @@ function upsertItem(itemId: string, payloadJson: string) {
       },
     });
 
-    // Save when the vendor was created/renamed or the item apply produced an
-    // event; skip the write only when nothing changed.
+    // Persist when the item apply produced an event *or* we already mutated the
+    // vendor (created it, or renamed it). The second condition is why the plain
+    // `applied.version === vendor.version` check is not enough: a rename bumps
+    // `vendor`'s version before the apply, so when the category was renamed but
+    // the item content is unchanged the apply is a no-op and the two versions
+    // match — dropping the save would lose the rename.
     if (!dirty && applied.version === vendor.version) {
       return;
     }
