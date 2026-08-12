@@ -99,6 +99,20 @@
       "when": 1786500513459,
       "tag": "0013_add_vendor_item_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790000000000,
+      "tag": "0014_add_order_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790000000001,
+      "tag": "0015_regrain_sales_to_orders",
+      "breakpoints": true
     }
   ]
 }

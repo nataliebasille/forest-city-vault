@@ -2,12 +2,12 @@ import { EventStore, EventTracker } from "@forest-city-vault/core-domain";
 import { Layer } from "effect";
 import { EventStorePersistenceLive } from "../event-store";
 import { databaseSagaScoped } from "../database-saga-scoped";
-import { SalesRepositoryLive } from "./sales";
+import { OrdersRepositoryLive } from "./orders";
 import { StoreAccountRepositoryLive } from "./stores";
 import { StoreMembershipRepositoryLive } from "./store-memberships";
 import { VendorRepositoryLive } from "./vendors";
 
-export * from "./sales";
+export * from "./orders";
 export * from "./clover-tokens";
 export * from "./clover-import-cursors";
 export * from "./stores";
@@ -20,7 +20,7 @@ export * from "./vendors";
  * here so both the pooled and saga-scoped stacks pick them up.
  */
 const AggregateRepositoriesLive = Layer.mergeAll(
-  SalesRepositoryLive,
+  OrdersRepositoryLive,
   StoreAccountRepositoryLive,
   StoreMembershipRepositoryLive,
   VendorRepositoryLive,

@@ -106,7 +106,7 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
     const receivedAt = yield* now;
     const appId = event.appId;
     const merchants = Object.entries(event.merchants);
-    let insertedPayments = 0;
+    let insertedOrders = 0;
     let insertedVendorItems = 0;
     let skippedOtherEvents = 0;
     let totalEvents = 0;
@@ -124,8 +124,13 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
         const idempotencyKey = `${appId}:${merchantId}:${cloverEvent.objectId}:${cloverEvent.type}:${cloverEvent.ts}`;
         const [eventType, objectId] = cloverEvent.objectId.split(":");
 
-        if (eventType === "P") {
-          const paymentInboxRecord: typeof db.schema.inboxes.payments.inbox.$inferInsert =
+        if (eventType === "O") {
+          if (cloverEvent.type === "DELETE") {
+            skippedOtherEvents++;
+            continue;
+          }
+
+          const orderInboxRecord: typeof db.schema.inboxes.orders.inbox.$inferInsert =
             {
               requestId,
               status: "received",
@@ -133,21 +138,21 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
               idempotencyKey,
               providerEventId: cloverEvent.objectId,
               providerObjectId: objectId,
-              eventType: "payment",
+              eventType: "upsert",
               occurredAt: new Date(cloverEvent.ts),
-              payloadJson: JSON.stringify({ ...cloverEvent, merchantId }),
+              payloadJson: JSON.stringify({ merchantId }),
               receivedAt,
             };
 
           yield* db.query((sql) =>
             sql
-              .insert(db.schema.inboxes.payments.inbox)
-              .values([paymentInboxRecord])
+              .insert(db.schema.inboxes.orders.inbox)
+              .values([orderInboxRecord])
               .onConflictDoNothing({
-                target: db.schema.inboxes.payments.inbox.idempotencyKey,
+                target: db.schema.inboxes.orders.inbox.idempotencyKey,
               }),
           );
-          insertedPayments++;
+          insertedOrders++;
           continue;
         }
 
@@ -191,7 +196,7 @@ function recordWebhookEvents(event: typeof CloverWebhookEventPayload.Encoded) {
       appId: event.appId,
       workflowStage: "persist_inbox",
       totalEvents,
-      insertedPayments,
+      insertedOrders,
       insertedVendorItems,
       skippedOtherEvents,
     });

@@ -1,9 +1,8 @@
-import { describe, test, mock } from "node:test";
 import assert from "node:assert/strict";
+import { describe, mock, test } from "node:test";
 
 import { dbSchema } from "@forest-city-vault/infrastructure-database";
 import { NextRequest } from "next/server";
-
 import { makeRouteTest } from "@/lib/testing/make-route-test";
 
 const PROCESSOR_SECRET = "test-processor-secret";
@@ -42,7 +41,7 @@ describe("POST /api/process/vendor-items", () => {
 
     const message = (
       await db.select().from(dbSchema.inboxes.vendorItems.inbox)
-    ).find((r) => r.providerObjectId === "ITEM-add");
+    ).find((row) => row.providerObjectId === "ITEM-add");
     assert.ok(message, "expected the inbox message to exist");
     assert.equal(message.status, "processed");
 
@@ -79,7 +78,7 @@ describe("POST /api/process/vendor-items", () => {
 
     const message = (
       await db.select().from(dbSchema.inboxes.vendorItems.inbox)
-    ).find((r) => r.providerObjectId === "ITEM-del");
+    ).find((row) => row.providerObjectId === "ITEM-del");
     assert.equal(message?.status, "processed");
   });
 
@@ -116,8 +115,6 @@ describe("POST /api/process/vendor-items", () => {
   test("persists a category rename even when the item itself is unchanged", async () => {
     const vendorId = crypto.randomUUID();
     await seedVendor(vendorId, "CAT-rename-only", "Old Name");
-    // The item already exists on the vendor with the exact name/price Clover
-    // returns, so applying it produces no event — only the rename does.
     await seedVendorItem(vendorId, "ITEM-stable", "Syrup", 1200);
     await insertInboxMessage("ITEM-stable", "upsert");
     stubCloverItem("ITEM-stable", {
@@ -168,7 +165,6 @@ describe("POST /api/process/vendor-items", () => {
       (row) => row.id === vendorId,
     );
     assert.equal(vendor?.name, "Maple & Co.");
-    // Only the item apply bumped the version; no spurious rename event.
     assert.equal(vendor?.version, 2);
   });
 
@@ -219,7 +215,7 @@ describe("POST /api/process/vendor-items", () => {
 
     const message = (
       await db.select().from(dbSchema.inboxes.vendorItems.inbox)
-    ).find((r) => r.providerObjectId === "ITEM-orphan");
+    ).find((row) => row.providerObjectId === "ITEM-orphan");
     assert.equal(message?.status, "processed");
 
     const createdVendor = (await db.select().from(dbSchema.vendors)).find(
@@ -260,7 +256,7 @@ describe("POST /api/process/vendor-items", () => {
     assert.equal(createdVendor.name, "CAT-nameless");
   });
 
-  test("attaches an uncategorized item to a shared \"Custom item\" vendor and reuses it", async () => {
+  test('attaches an uncategorized item to a shared "Custom item" vendor and reuses it', async () => {
     await insertInboxMessage("ITEM-nocat-1", "upsert");
     await insertInboxMessage("ITEM-nocat-2", "upsert");
     stubCloverItems({
@@ -304,9 +300,7 @@ describe("POST /api/process/vendor-items", () => {
   });
 
   test("returns 401 when the bearer token is incorrect", async () => {
-    const response = await POST(
-      processRequest({ authorization: "Bearer wrong" }),
-    );
+    const response = await POST(processRequest({ authorization: "Bearer wrong" }));
     assert.equal(response.status, 401);
   });
 });
@@ -319,7 +313,7 @@ function processRequest(headers?: Record<string, string>) {
 }
 
 function authHeader(token = PROCESSOR_SECRET) {
-  return { authorization: `Bearer ${token}` };
+  return { authorization: "Bearer " + token };
 }
 
 async function seedVendor(
@@ -360,10 +354,7 @@ async function seedVendorItem(
   ]);
 }
 
-async function insertInboxMessage(
-  itemId: string,
-  eventType: "upsert" | "delete",
-) {
+async function insertInboxMessage(itemId: string, eventType: "upsert" | "delete") {
   await db.insert(dbSchema.inboxes.vendorItems.inbox).values([
     {
       requestId: `req-${itemId}`,

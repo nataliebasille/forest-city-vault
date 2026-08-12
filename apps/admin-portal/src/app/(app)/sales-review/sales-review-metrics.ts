@@ -4,7 +4,7 @@ import {
   SapphoQueryable,
 } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { eq, sql } from "drizzle-orm";
@@ -83,19 +83,19 @@ export const salesReviewMetrics = Effect.gen(function* () {
       .with(bounds)
       .select({
         monthToDateSaleCount:
-          sql<string>`count(${sales.id}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day')`.as(
+          sql<string>`count(${orders.id}) filter (where ${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.month_start and ${orders.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day')`.as(
             "month_to_date_sale_count",
           ),
         monthToDateGrossCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
+          sql<string>`coalesce(sum(${orders.collectedCents}) filter (where ${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.month_start and ${orders.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
             "month_to_date_gross_cents",
           ),
         monthToDateNetCents:
-          sql<string>`coalesce(sum(${sales.totalCents} - ${sales.discountCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
+          sql<string>`coalesce(sum(${orders.collectedCents}) filter (where ${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.month_start and ${orders.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'), 0)`.as(
             "month_to_date_net_cents",
           ),
         previousMonthPaceGrossCents:
-          sql<string>`coalesce(sum(${sales.totalCents}) filter (where ${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.prev_month_start and ${sales.occurredAt} at time zone bounds.zone < least(bounds.prev_month_start + (extract(day from bounds.day_start) * interval '1 day'), bounds.month_start)), 0)`.as(
+          sql<string>`coalesce(sum(${orders.collectedCents}) filter (where ${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.prev_month_start and ${orders.occurredAt} at time zone bounds.zone < least(bounds.prev_month_start + (extract(day from bounds.day_start) * interval '1 day'), bounds.month_start)), 0)`.as(
             "previous_month_pace_gross_cents",
           ),
         monthStartYear:
@@ -108,7 +108,7 @@ export const salesReviewMetrics = Effect.gen(function* () {
           ),
       })
       .from(bounds)
-      .leftJoin(sales, sql`true`);
+      .leftJoin(orders, sql`true`);
   });
 
   return yield* decodeMetrics(rows[0]);

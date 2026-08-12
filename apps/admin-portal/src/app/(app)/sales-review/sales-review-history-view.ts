@@ -26,11 +26,9 @@ export function toMonthBars(months: readonly MonthRollup[]): MonthBar[] {
   }));
 }
 
-const usdWholeFormatter = new Intl.NumberFormat("en-US", {
+const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
 });
 
 // The month/year are plain calendar components (no time zone), so format
@@ -43,5 +41,5 @@ const monthFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 function formatDollars(cents: number): string {
-  return usdWholeFormatter.format(cents / 100);
+  return usdFormatter.format(cents / 100);
 }

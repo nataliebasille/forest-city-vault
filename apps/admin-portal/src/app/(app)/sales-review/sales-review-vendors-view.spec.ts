@@ -23,10 +23,10 @@ describe("toVendorRows", () => {
     );
   });
 
-  test("formats gross as whole-dollar USD", () => {
+  test("formats gross as USD with cents", () => {
     assert.deepEqual(
       toVendorRows(ROLLUPS).map((row) => row.grossCents),
-      ["$5,000", "$2,500"],
+      ["$5,000.00", "$2,500.00"],
     );
   });
 

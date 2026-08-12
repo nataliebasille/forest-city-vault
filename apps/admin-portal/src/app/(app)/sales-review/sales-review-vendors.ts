@@ -4,8 +4,8 @@ import {
   SapphoQueryable,
 } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
-  salesLineItems,
+  orderLineItems,
+  orders,
   stores,
   vendorItems,
   vendors,
@@ -24,11 +24,11 @@ export type VendorRollup = {
 
 /**
  * Reads the current month's top vendors by gross, in a single database
- * round-trip: joins each sale's line items to their vendor, sums gross by
+ * round-trip: joins each order's line items to their vendor, sums collected by
  * vendor, and keeps only the top {@link TOP_VENDORS_LIMIT}.
  *
  * "Month to date" is anchored to the store's own time zone via the same
- * `bounds` shape `salesReviewMetrics` uses, and only captured (`paid`) sales
+ * `bounds` shape `salesReviewMetrics` uses, and only captured (`paid`) orders
  * count. A line item's vendor is resolved by joining `vendor_items` on
  * `clover_item_id`; items whose Clover item has no matching vendor record
  * (custom items, or items not yet synced) have nothing to name, so the inner
@@ -60,23 +60,23 @@ export const salesReviewVendors = Effect.gen(function* () {
       .with(bounds)
       .select({
         name: vendors.name,
-        grossCents: sql<string>`sum(${salesLineItems.grossAmountCents})`.as(
+        grossCents: sql<string>`sum(${orderLineItems.collectedAmountCents})`.as(
           "gross_cents",
         ),
       })
-      .from(salesLineItems)
-      .innerJoin(sales, eq(sales.id, salesLineItems.saleId))
+      .from(orderLineItems)
+      .innerJoin(orders, eq(orders.id, orderLineItems.orderId))
       .innerJoin(
         vendorItems,
-        eq(vendorItems.cloverItemId, salesLineItems.cloverItemId),
+        eq(vendorItems.cloverItemId, orderLineItems.cloverItemId),
       )
       .innerJoin(vendors, eq(vendors.id, vendorItems.vendorId))
       .innerJoin(bounds, sql`true`)
       .where(
-        sql`${sales.paymentStatus} = 'paid' and ${sales.occurredAt} at time zone bounds.zone >= bounds.month_start and ${sales.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'`,
+        sql`${orders.status} = 'paid' and ${orders.occurredAt} at time zone bounds.zone >= bounds.month_start and ${orders.occurredAt} at time zone bounds.zone < bounds.day_start + interval '1 day'`,
       )
       .groupBy(vendors.id, vendors.name)
-      .orderBy(sql`sum(${salesLineItems.grossAmountCents}) desc`)
+      .orderBy(sql`sum(${orderLineItems.collectedAmountCents}) desc`)
       .limit(TOP_VENDORS_LIMIT);
   });
 

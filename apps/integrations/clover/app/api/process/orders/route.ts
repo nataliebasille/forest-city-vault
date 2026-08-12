@@ -1,4 +1,4 @@
-import { processPayments } from "@/lib/jobs/payments";
+import { processOrders } from "@/lib/jobs/orders";
 import { RequestTrace } from "@/lib/runtime/middleware/request-trace";
 import { isAuthorizedInternalBearerToken } from "@/lib/security/internal-bearer-auth";
 import { pooledRoute } from "@/runtime";
@@ -13,18 +13,18 @@ import { NextRequest } from "next/server";
 // within that budget; larger backlogs are processed across successive triggers.
 export const maxDuration = 60;
 
-const processPaymentsRoute = internalProcessorRoute(() =>
+const processOrdersRoute = internalProcessorRoute(() =>
   Effect.gen(function* () {
     const { requestId } = yield* RequestTrace;
-    yield* processPayments({ requestId });
+    yield* processOrders({ requestId });
     return true;
   }),
 );
 
-export const POST = pooledRoute(processPaymentsRoute as never);
+export const POST = pooledRoute(processOrdersRoute as never);
 
 const ACTIVE_GUARDS = new Set<string>();
-const PROCESS_GUARD_KEY = "clover.process.payments";
+const PROCESS_GUARD_KEY = "clover.process.orders";
 
 export function internalProcessorRoute(
   handler: (request: NextRequest) => Effect.Effect<boolean, any, any>,
@@ -45,7 +45,7 @@ export function internalProcessorRoute(
       if (ACTIVE_GUARDS.has(PROCESS_GUARD_KEY)) {
         return yield* httpFailure(
           409,
-          "Payment processing is already running",
+          "Order processing is already running",
         );
       }
 

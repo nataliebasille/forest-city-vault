@@ -20,7 +20,7 @@
     "db:studio": "drizzle-kit studio",
     "bootstrap:store": "tsx scripts/bootstrap-store.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner-membership.ts",
-    "seed:sales": "tsx scripts/seed-sales.ts",
+    "seed:orders": "tsx scripts/seed-orders.ts",
     "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

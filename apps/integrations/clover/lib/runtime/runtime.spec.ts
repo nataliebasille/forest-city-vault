@@ -21,7 +21,7 @@ const {
   "./public",
 );
 
-const inbox = dbSchema.inboxes.payments.inbox;
+const inbox = dbSchema.inboxes.orders.inbox;
 
 function request() {
   return new NextRequest("http://localhost/runtime-test", { method: "POST" });
@@ -34,7 +34,7 @@ function tracedRequest() {
   });
 }
 
-function insertPaymentEvent(providerEventId: string) {
+function insertOrderEvent(providerEventId: string) {
   return Effect.gen(function* () {
     const database = yield* Database;
     yield* database.query((sql) =>
@@ -46,7 +46,7 @@ function insertPaymentEvent(providerEventId: string) {
           provider: "clover",
           providerEventId,
           providerObjectId: providerEventId.split(":")[1] ?? providerEventId,
-          eventType: "payment",
+          eventType: "upsert",
           payloadJson: JSON.stringify({ merchantId: "merchant-tx" }),
           occurredAt: new Date(1700000000000),
           receivedAt: FIXED_TIME,
@@ -66,7 +66,7 @@ describe("route", () => {
     test("rolls back writes when the handler fails after writing", async () => {
       const failingRoute = route(() =>
         Effect.gen(function* () {
-          yield* insertPaymentEvent("P:tx_rollback_1");
+          yield* insertOrderEvent("O:tx_rollback_1");
           return yield* Effect.fail(new Error("boom after write"));
         }),
       );
@@ -76,7 +76,7 @@ describe("route", () => {
 
       const rows = await db.select().from(inbox);
       const persisted = rows.find(
-        (r) => r.providerEventId === "P:tx_rollback_1",
+        (r) => r.providerEventId === "O:tx_rollback_1",
       );
       assert.equal(
         persisted,
@@ -88,7 +88,7 @@ describe("route", () => {
     test("commits writes when the handler succeeds", async () => {
       const succeedingRoute = route(() =>
         Effect.gen(function* () {
-          yield* insertPaymentEvent("P:tx_commit_1");
+          yield* insertOrderEvent("O:tx_commit_1");
           return true;
         }),
       );
@@ -97,7 +97,7 @@ describe("route", () => {
       assert.equal(response.status, 200);
 
       const rows = await db.select().from(inbox);
-      const persisted = rows.find((r) => r.providerEventId === "P:tx_commit_1");
+      const persisted = rows.find((r) => r.providerEventId === "O:tx_commit_1");
       assert.ok(persisted, "the write should be committed");
     });
   });

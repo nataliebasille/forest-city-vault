@@ -1,9 +1,9 @@
-export { Sales } from "./sales/sales.aggregate-root";
-export { FromCloverPaymentSchema } from "./sales/sale.actions";
+export { Orders } from "./orders/orders.aggregate-root";
+export { FromCloverOrderSchema } from "./orders/order.actions";
 export {
-  SalePaymentStatusSchema,
-  type SalePaymentStatus,
-} from "./sales/sale.entity";
+  OrderStatusSchema,
+  type OrderStatus,
+} from "./orders/order.entity";
 
 export { StoreAccount } from "./store-account/store-account.aggregate-root";
 export {

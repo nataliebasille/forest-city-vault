@@ -7,7 +7,7 @@
   "types": "./index.ts",
   "exports": {
     ".": "./index.ts",
-    "./sales/sale.events": "./sales/sale.events.ts"
+    "./orders/order.events": "./orders/order.events.ts"
   },
   "scripts": {
     "test": "node --import tsx --test **/*.spec.ts",

@@ -1,7 +1,7 @@
 export * as inboxes from "./inboxes/index";
 export * from "./event-store";
 export * from "./better-auth";
-export * from "./sales";
+export * from "./orders";
 export * from "./vendors";
 export * from "./vendor-items";
 export * from "./clover-tokens";

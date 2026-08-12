@@ -31,12 +31,12 @@ describe("toSalesReviewMetricTiles", () => {
     );
   });
 
-  test("formats the gross tile as whole-dollar USD", () => {
-    assert.equal(tiles().find((t) => t.key === "gross")?.value, "$4,000");
+  test("formats the gross tile as USD with cents", () => {
+    assert.equal(tiles().find((t) => t.key === "gross")?.value, "$4,000.00");
   });
 
-  test("formats the net tile as whole-dollar USD", () => {
-    assert.equal(tiles().find((t) => t.key === "net")?.value, "$3,600");
+  test("formats the net tile as USD with cents", () => {
+    assert.equal(tiles().find((t) => t.key === "net")?.value, "$3,600.00");
   });
 
   test("computes a positive pace delta vs. the previous month's same-day window", () => {
@@ -121,7 +121,7 @@ describe("isPacingAhead", () => {
 });
 
 describe("toPreviousMonthPaceLabel", () => {
-  test("formats the previous month's comparison window as whole-dollar USD", () => {
-    assert.equal(toPreviousMonthPaceLabel(BASE), "$3,500");
+  test("formats the previous month's comparison window as USD with cents", () => {
+    assert.equal(toPreviousMonthPaceLabel(BASE), "$3,500.00");
   });
 });

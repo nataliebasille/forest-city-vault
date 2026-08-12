@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { BOOTSTRAP_STORE_ID } from "@forest-city-vault/infrastructure-database";
@@ -44,16 +44,16 @@ describe("salesReviewHistory", () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    await db.insert(sales).values([
+    await db.insert(orders).values([
       // Current month (June 2024): two sales.
-      makeSale("2024-06-03T14:00:00.000Z", BigInt(1500)),
-      makeSale("2024-06-05T14:00:00.000Z", BigInt(700)),
+      makeOrder("2024-06-03T14:00:00.000Z", 1500),
+      makeOrder("2024-06-05T14:00:00.000Z", 700),
       // Current month, but rejected — excluded from June's gross and count.
-      makeSale("2024-06-06T14:00:00.000Z", BigInt(9999), "rejected"),
+      makeOrder("2024-06-06T14:00:00.000Z", 9999, "refunded"),
       // Two months back (April 2024): one sale.
-      makeSale("2024-04-10T14:00:00.000Z", BigInt(4200)),
+      makeOrder("2024-04-10T14:00:00.000Z", 4200),
       // Nine months back (September 2023) — outside the trailing 8, excluded.
-      makeSale("2023-09-10T14:00:00.000Z", BigInt(9999)),
+      makeOrder("2023-09-10T14:00:00.000Z", 9999),
     ]);
 
     const history = await runHistory(layer);
@@ -140,19 +140,25 @@ describe("salesReviewHistory", () => {
   });
 });
 
-function makeSale(
+function makeOrder(
   occurredAt: string,
-  totalCents: bigint,
-  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+  collectedCents: number,
+  status: "paid" | "incomplete" | "partial" | "refunded" = "paid",
 ) {
   return {
+    id: crypto.randomUUID(),
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: crypto.randomUUID(),
+    cloverIdempotencyKey: crypto.randomUUID(),
+    status,
     occurredAt: new Date(occurredAt),
-    subtotalCents: totalCents,
+    modifiedAt: new Date(occurredAt),
+    subtotalCents: BigInt(collectedCents),
     taxCents: BigInt(0),
     discountCents: BigInt(0),
-    totalCents,
+    totalCents: BigInt(collectedCents),
+    collectedCents: BigInt(collectedCents),
     createdAt: SEED_TS,
     updatedAt: SEED_TS,
   };

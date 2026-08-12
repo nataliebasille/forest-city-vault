@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
   vendors,
 } from "@forest-city-vault/infrastructure-database/schema";
@@ -47,20 +47,20 @@ describe("dashboardMetrics", () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    await db.insert(sales).values([
+    await db.insert(orders).values([
       // Today and this week (2024-06-01 06:00 local).
-      makeSale("2024-06-01T10:00:00.000Z", BigInt(1500)),
+      makeOrder("2024-06-01T10:00:00.000Z", 1500),
       // This week but before local midnight today (2024-05-31 23:00 local) —
       // proves the day window rolls over at local, not UTC, midnight.
-      makeSale("2024-06-01T03:00:00.000Z", BigInt(700)),
+      makeOrder("2024-06-01T03:00:00.000Z", 700),
       // Earlier this week (Tuesday).
-      makeSale("2024-05-28T12:00:00.000Z", BigInt(2500)),
+      makeOrder("2024-05-28T12:00:00.000Z", 2500),
       // Before this week.
-      makeSale("2024-05-20T12:00:00.000Z", BigInt(9999)),
+      makeOrder("2024-05-20T12:00:00.000Z", 9999),
       // Today and this week, but not a captured payment — excluded from both the
       // sale counts and revenue.
-      makeSale("2024-06-01T10:30:00.000Z", BigInt(4200), "rejected"),
-      makeSale("2024-06-01T10:45:00.000Z", BigInt(3100), "incomplete"),
+      makeOrder("2024-06-01T10:30:00.000Z", 4200, "refunded"),
+      makeOrder("2024-06-01T10:45:00.000Z", 3100, "incomplete"),
     ]);
 
     await db
@@ -94,19 +94,25 @@ describe("dashboardMetrics", () => {
   });
 });
 
-function makeSale(
+function makeOrder(
   occurredAt: string,
-  totalCents: bigint,
-  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+  collectedCents: number,
+  status: "paid" | "incomplete" | "partial" | "refunded" = "paid",
 ) {
   return {
+    id: crypto.randomUUID(),
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: crypto.randomUUID(),
+    cloverIdempotencyKey: crypto.randomUUID(),
+    status,
     occurredAt: new Date(occurredAt),
-    subtotalCents: totalCents,
+    modifiedAt: new Date(occurredAt),
+    subtotalCents: BigInt(collectedCents),
     taxCents: BigInt(0),
     discountCents: BigInt(0),
-    totalCents,
+    totalCents: BigInt(collectedCents),
+    collectedCents: BigInt(collectedCents),
     createdAt: SEED_TS,
     updatedAt: SEED_TS,
   };

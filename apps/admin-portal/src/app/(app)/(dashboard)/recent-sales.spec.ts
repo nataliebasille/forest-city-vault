@@ -5,8 +5,8 @@ import {
   QueryableLive,
 } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
-  salesLineItems,
+  orderLineItems,
+  orders,
   stores,
   vendorItems,
   vendors,
@@ -42,7 +42,7 @@ async function seedStore(db: Db) {
 }
 
 describe("recentSales", () => {
-  test("derives item, vendor, and time-zone facts per sale, newest first", async () => {
+  test("derives item, vendor, and time-zone facts per order, newest first", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
@@ -60,19 +60,19 @@ describe("recentSales", () => {
       makeVendorItem(VENDOR_A, "BLANKET", "Wool throw blanket", 2500),
     ]);
 
-    const newest = saleId(3);
-    const middle = saleId(2);
-    const oldest = saleId(1);
+    const newest = orderId(3);
+    const middle = orderId(2);
+    const oldest = orderId(1);
 
     await db
-      .insert(sales)
+      .insert(orders)
       .values([
-        makeSale(newest, "2024-06-01T18:00:00.000Z", 9700),
-        makeSale(middle, "2024-06-01T15:00:00.000Z", 2500),
-        makeSale(oldest, "2024-06-01T12:00:00.000Z", 4200),
+        makeOrder(newest, "2024-06-01T18:00:00.000Z", 9700),
+        makeOrder(middle, "2024-06-01T15:00:00.000Z", 2500),
+        makeOrder(oldest, "2024-06-01T12:00:00.000Z", 4200),
       ]);
 
-    await db.insert(salesLineItems).values([
+    await db.insert(orderLineItems).values([
       // Newest sale: three items across two vendors; the $60 lamp is the lead.
       makeLineItem(newest, "Vintage brass lamp", 6000, "LAMP"),
       makeLineItem(newest, "Ceramic mug", 2500, "MUG"),
@@ -146,14 +146,14 @@ describe("recentSales", () => {
     );
   });
 
-  test("returns a sale with no line items as an empty summary", async () => {
+  test("returns an order with no line items as an empty summary", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    const only = saleId(1);
+    const only = orderId(1);
     await db
-      .insert(sales)
-      .values(makeSale(only, "2024-06-01T12:00:00.000Z", 800));
+      .insert(orders)
+      .values(makeOrder(only, "2024-06-01T12:00:00.000Z", 800));
 
     const result = await runRecentSales(layer);
 
@@ -177,9 +177,9 @@ describe("recentSales", () => {
       const occurredAt = new Date(
         Date.UTC(2024, 5, 1, 12, 0, 0) - i * 60 * 60 * 1000,
       ).toISOString();
-      return makeSale(saleId(total - i), occurredAt, 1000 + i);
+      return makeOrder(orderId(total - i), occurredAt, 1000 + i);
     });
-    await db.insert(sales).values(rows);
+    await db.insert(orders).values(rows);
 
     const result = await runRecentSales(layer);
 
@@ -196,20 +196,20 @@ describe("recentSales", () => {
     );
   });
 
-  test("excludes sales whose payment was not captured", async () => {
+  test("excludes orders whose status is not paid", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    const paid = saleId(3);
-    const rejected = saleId(2);
-    const incomplete = saleId(1);
+    const paid = orderId(3);
+    const rejected = orderId(2);
+    const incomplete = orderId(1);
 
     await db
-      .insert(sales)
+      .insert(orders)
       .values([
-        makeSale(paid, "2024-06-01T18:00:00.000Z", 5000),
-        makeSale(rejected, "2024-06-01T17:00:00.000Z", 9999, "rejected"),
-        makeSale(incomplete, "2024-06-01T16:00:00.000Z", 8888, "incomplete"),
+        makeOrder(paid, "2024-06-01T18:00:00.000Z", 5000),
+        makeOrder(rejected, "2024-06-01T17:00:00.000Z", 9999, "refunded"),
+        makeOrder(incomplete, "2024-06-01T16:00:00.000Z", 8888, "incomplete"),
       ]);
 
     const result = await runRecentSales(layer);
@@ -220,7 +220,7 @@ describe("recentSales", () => {
     );
   });
 
-  test("returns an empty list when the store has no sales", async () => {
+  test("returns an empty list when the store has no orders", async () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
@@ -234,43 +234,50 @@ function timestamps() {
   return { createdAt: SEED_TS, updatedAt: SEED_TS };
 }
 
-function saleId(n: number): string {
+function orderId(n: number): string {
   return `01920000-0000-7000-8000-${String(n).padStart(12, "0")}`;
 }
 
-function makeSale(
+function makeOrder(
   id: string,
   occurredAt: string,
-  totalCents: number,
-  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+  collectedCents: number,
+  status: "paid" | "incomplete" | "partial" | "refunded" = "paid",
 ) {
   return {
     id,
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: id,
+    cloverIdempotencyKey: `${id}:seed`,
+    status,
     occurredAt: new Date(occurredAt),
-    subtotalCents: BigInt(totalCents),
+    modifiedAt: new Date(occurredAt),
+    subtotalCents: BigInt(collectedCents),
     taxCents: BigInt(0),
     discountCents: BigInt(0),
-    totalCents: BigInt(totalCents),
+    totalCents: BigInt(collectedCents),
+    collectedCents: BigInt(collectedCents),
     ...timestamps(),
   };
 }
 
 function makeLineItem(
-  saleIdValue: string,
+  orderIdValue: string,
   name: string,
   grossAmountCents: number,
   cloverItemId: string,
 ) {
   return {
-    saleId: saleIdValue,
+    orderId: orderIdValue,
     cloverItemId,
     name,
     quantity: BigInt(1),
     grossAmountCents: BigInt(grossAmountCents),
     discountAmountCents: BigInt(0),
     netAmountCents: BigInt(grossAmountCents),
+    collectedAmountCents: BigInt(grossAmountCents),
+    refunded: false,
     ...timestamps(),
   };
 }

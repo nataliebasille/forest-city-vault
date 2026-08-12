@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { config as loadEnv } from "dotenv";
 
 // Load the canonical repo-root `.env` the same way `next.config.ts` does so a
@@ -10,18 +11,19 @@ loadEnv({ path: path.resolve(__dirname, "../../../../.env"), override: false });
 
 import { Cause, Effect, Exit } from "effect";
 import { inspect } from "node:util";
-import { runPaymentsCycle } from "../lib/jobs/payments";
+import { runOrdersCycle } from "../lib/jobs/orders";
 import { JobLive } from "../lib/runtime/live";
 
 /**
- * Standalone entrypoint that runs one full Clover payments cycle — import new
- * payments into the inbox, then drain the inbox into sales — directly against the
+ * Standalone entrypoint that runs one full Clover orders cycle — import
+ * new/changed orders into the inbox, then drain the inbox into order snapshots —
+ * directly against the
  * database and Clover API, with no HTTP hop.
  *
- * This is what the `clover-process-payments` GitHub Action executes on its
+ * This is what the `clover-process-orders` GitHub Action executes on its
  * schedule: instead of `curl`ing a deployed processor endpoint, the runner checks
  * out the repo and runs the real code here. It reuses the same {@link JobLive}
- * layer and the same {@link runPaymentsCycle} job the routes use.
+ * layer and the same {@link runOrdersCycle} job the routes use.
  *
  * Configuration (env / repo-root `.env`):
  *   - DATABASE_URL              (required) Postgres connection string.
@@ -31,14 +33,14 @@ import { JobLive } from "../lib/runtime/live";
  * in-process guard is needed here.
  */
 
-const requestId = crypto.randomUUID();
+const requestId = randomUUID();
 
-const program = runPaymentsCycle({ requestId }).pipe(Effect.provide(JobLive));
+const program = runOrdersCycle({ requestId }).pipe(Effect.provide(JobLive));
 
 const exit = await Effect.runPromiseExit(program);
 
 if (Exit.isFailure(exit)) {
-  console.error(`[payments-cycle ${new Date().toISOString()}] cycle failed`);
+  console.error(`[orders-cycle ${new Date().toISOString()}] cycle failed`);
   // Readable stack view of the failure.
   console.error(Cause.pretty(exit.cause));
   // Wrapped errors (e.g. DatabaseError) hide the real driver error in their
@@ -49,5 +51,5 @@ if (Exit.isFailure(exit)) {
 }
 
 console.log(
-  `[payments-cycle ${new Date().toISOString()}] cycle completed (requestId ${requestId})`,
+  `[orders-cycle ${new Date().toISOString()}] cycle completed (requestId ${requestId})`,
 );

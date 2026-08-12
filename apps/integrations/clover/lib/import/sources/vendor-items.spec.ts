@@ -44,7 +44,7 @@ describe("vendorItemsImportSource.list", () => {
     assert.equal(Exit.isSuccess(exit), true);
     assert.equal(captured.length, 1);
     const { params } = captured[0];
-    // The items endpoint has no 90-day filter clamp (unlike payments), so a
+    // The items endpoint has no 90-day filter clamp, so a
     // cold-cursor full backfill still sends `modifiedTime>=0` rather than
     // omitting the bound — the "no filter" path Clover was seen to mishandle.
     assert.equal(params.get("filter"), "modifiedTime>=0");

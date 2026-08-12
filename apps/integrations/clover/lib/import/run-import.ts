@@ -36,12 +36,7 @@ export type ImportSummary = {
  *
  * On a cold cursor (no stored watermark) the run starts from a backfill floor.
  * A source that passes `coldStartLookbackMs` floors at `now - coldStartLookbackMs`
- * rather than `0`; a source that omits it backfills from the epoch (`0`). The
- * lookback matters for Clover payments: that list returns only a recent window
- * (~90 days) when queried with *no* `createdTime` filter, and returns *nothing*
- * for a lower bound that is either `0` or older than its ~8-month ceiling, so a
- * real, recent-enough floor is required. Other streams (e.g. inventory items)
- * have no such clamp and backfill cleanly from `0`.
+ * rather than `0`; a source that omits it backfills from the epoch (`0`).
  *
  * The cursor is advanced only after the page was enqueued, so a mid-run
  * failure leaves the watermark untouched and the next run safely reprocesses

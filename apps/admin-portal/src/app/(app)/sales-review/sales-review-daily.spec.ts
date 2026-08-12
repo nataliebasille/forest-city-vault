@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { staticClock } from "@forest-city-vault/core-clock";
 import { QueryableLive } from "@forest-city-vault/infrastructure-database";
 import {
-  sales,
+  orders,
   stores,
 } from "@forest-city-vault/infrastructure-database/schema";
 import { BOOTSTRAP_STORE_ID } from "@forest-city-vault/infrastructure-database";
@@ -44,16 +44,16 @@ describe("salesReviewDaily", () => {
     const { layer, db } = await makeDatabaseTestContext();
     await seedStore(db);
 
-    await db.insert(sales).values([
+    await db.insert(orders).values([
       // Two sales on June 3 (day 3) — should sum into one entry.
-      makeSale("2024-06-03T14:00:00.000Z", BigInt(1500)), // 10:00 local
-      makeSale("2024-06-03T17:00:00.000Z", BigInt(700)), // 13:00 local
+      makeOrder("2024-06-03T14:00:00.000Z", 1500), // 10:00 local
+      makeOrder("2024-06-03T17:00:00.000Z", 700), // 13:00 local
       // One sale on June 8 (day 8, today).
-      makeSale("2024-06-08T14:00:00.000Z", BigInt(1200)),
+      makeOrder("2024-06-08T14:00:00.000Z", 1200),
       // A rejected payment on June 3 — excluded from the day's gross.
-      makeSale("2024-06-03T18:00:00.000Z", BigInt(9999), "rejected"),
+      makeOrder("2024-06-03T18:00:00.000Z", 9999, "refunded"),
       // After the cutoff — excluded.
-      makeSale("2024-06-10T12:00:00.000Z", BigInt(9999)),
+      makeOrder("2024-06-10T12:00:00.000Z", 9999),
     ]);
 
     const daily = await runDaily(layer);
@@ -85,19 +85,25 @@ describe("salesReviewDaily", () => {
   });
 });
 
-function makeSale(
+function makeOrder(
   occurredAt: string,
-  totalCents: bigint,
-  paymentStatus: "paid" | "rejected" | "incomplete" = "paid",
+  collectedCents: number,
+  status: "paid" | "incomplete" | "partial" | "refunded" = "paid",
 ) {
   return {
+    id: crypto.randomUUID(),
     source: "clover" as const,
-    paymentStatus,
+    cloverMerchantId: "merchant-1",
+    cloverOrderId: crypto.randomUUID(),
+    cloverIdempotencyKey: crypto.randomUUID(),
+    status,
     occurredAt: new Date(occurredAt),
-    subtotalCents: totalCents,
+    modifiedAt: new Date(occurredAt),
+    subtotalCents: BigInt(collectedCents),
     taxCents: BigInt(0),
     discountCents: BigInt(0),
-    totalCents,
+    totalCents: BigInt(collectedCents),
+    collectedCents: BigInt(collectedCents),
     createdAt: SEED_TS,
     updatedAt: SEED_TS,
   };

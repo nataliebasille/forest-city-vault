@@ -15,7 +15,7 @@ import { RequestTraceLayer } from "./middleware/request-trace";
  * HTTP client. Config is added separately because routes and jobs need different
  * amounts of it — routes load the full {@link CloverConfig} (OAuth, webhook and
  * processor secrets included), while a job loads only the narrow subset the
- * import/drain path actually reads (see {@link cloverPaymentsJobConfig}).
+ * import/drain path actually reads (see {@link cloverOrdersJobConfig}).
  */
 const CoreServices = Layer.mergeAll(
   SystemClock,
@@ -41,7 +41,7 @@ const AppCommon = Layer.mergeAll(
 );
 
 /**
- * A {@link CloverConfig} loaded from only the environment variables the payments
+ * A {@link CloverConfig} loaded from only the environment variables the orders
  * import + drain path actually reads, so a scheduled job does not have to be
  * given secrets it never uses.
  *
@@ -67,7 +67,7 @@ const AppCommon = Layer.mergeAll(
  * surfaces the job never touches, so they are filled with unused placeholders
  * rather than demanded as configuration.
  */
-const cloverPaymentsJobConfig = Layer.effect(
+const cloverOrdersJobConfig = Layer.effect(
   CloverConfig,
   Effect.gen(function* () {
     const url = yield* Config.string("CLOVER_URL");
@@ -146,18 +146,18 @@ export const AppLivePooled = Layer.merge(AppCommon, DatabaseLive).pipe(
 
 /**
  * Dependency layer for standalone jobs (the scheduled GitHub Action runner and
- * the local interval scheduler) that run the Clover payments cycle outside any
+ * the local interval scheduler) that run the Clover orders cycle outside any
  * HTTP request. It provides the base pool {@link Database} and the core services,
  * but differs from {@link AppLivePooled} in two deliberate ways:
  *
  * 1. No {@link RequestTraceLayer} — a job has no request headers, and its callers
  *    supply their own `requestId` explicitly.
- * 2. A **narrow** {@link CloverConfig} ({@link cloverPaymentsJobConfig}) that only
+ * 2. A **narrow** {@link CloverConfig} ({@link cloverOrdersJobConfig}) that only
  *    loads the keys the import + drain path reads, so the job (and its workflow
  *    secrets) never require the OAuth/webhook/processor configuration.
  */
 export const JobLive = Layer.mergeAll(
-  cloverPaymentsJobConfig,
+  cloverOrdersJobConfig,
   CoreServices,
   DatabaseLive,
 ).pipe(Layer.orDie);
