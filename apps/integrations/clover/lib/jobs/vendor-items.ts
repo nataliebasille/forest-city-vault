@@ -155,10 +155,15 @@ function upsertItem(itemId: string, payloadJson: string) {
     const resolved = yield* resolveVendorByCategories(categoryIds);
 
     let vendor: VendorAggregate;
-    let dirty = false;
+    // The vendor's version before we apply anything this run. We persist only
+    // when the final aggregate has moved past it — the same "changed since we
+    // loaded it" test the EventTracker uses — which captures a rename, a create,
+    // and an item change alike without needing a separate flag.
+    let baseVersion: number;
 
     if (Option.isSome(resolved)) {
       const { vendor: existing, matchedCategoryId } = resolved.value;
+      baseVersion = existing.version;
 
       // Keep the vendor's name in sync with its Clover category: Clover is the
       // source of truth, so rename when the matched category carries a non-blank
@@ -173,7 +178,6 @@ function upsertItem(itemId: string, payloadJson: string) {
         matchedName !== existing.snapshot.name
       ) {
         vendor = yield* Vendor.actions.rename(existing, { name: matchedName });
-        dirty = true;
       } else {
         vendor = existing;
       }
@@ -183,24 +187,22 @@ function upsertItem(itemId: string, payloadJson: string) {
       // the category (falling back to its id when Clover gives no name).
       const primary = categories[0];
       const primaryName = primary.name?.trim();
+      const pristine = Vendor.pristine(crypto.randomUUID());
+      baseVersion = pristine.version;
 
-      vendor = yield* Vendor.actions.create(
-        Vendor.pristine(crypto.randomUUID()),
-        {
-          name:
-            primaryName !== undefined && primaryName.length > 0 ?
-              primaryName
-            : primary.id,
-          cloverCategoryId: primary.id,
-        },
-      );
-      dirty = true;
+      vendor = yield* Vendor.actions.create(pristine, {
+        name:
+          primaryName !== undefined && primaryName.length > 0 ?
+            primaryName
+          : primary.id,
+        cloverCategoryId: primary.id,
+      });
     } else {
       // The item is filed under no category at all; attach it to the shared
       // "Custom item" vendor so it is never dropped and can be re-filed later.
       const custom = yield* resolveCustomItemVendor;
       vendor = custom.vendor;
-      dirty = custom.created;
+      baseVersion = custom.baseVersion;
     }
 
     const applied = yield* Vendor.actions.applyCloverItem(vendor, {
@@ -211,13 +213,9 @@ function upsertItem(itemId: string, payloadJson: string) {
       },
     });
 
-    // Persist when the item apply produced an event *or* we already mutated the
-    // vendor (created it, or renamed it). The second condition is why the plain
-    // `applied.version === vendor.version` check is not enough: a rename bumps
-    // `vendor`'s version before the apply, so when the category was renamed but
-    // the item content is unchanged the apply is a no-op and the two versions
-    // match — dropping the save would lose the rename.
-    if (!dirty && applied.version === vendor.version) {
+    // Nothing changed since we loaded the vendor (no rename, no create, and the
+    // item already matched); skip the redundant write.
+    if (applied.version === baseVersion) {
       return;
     }
 
@@ -244,8 +242,8 @@ function resolveVendorByCategories(categoryIds: readonly string[]) {
 }
 
 // Loads the shared "Custom item" vendor by its fixed id, creating it on first
-// use. `created` tells the caller whether a save is required even when the item
-// apply itself is a no-op.
+// use. `baseVersion` is the vendor's version before this run so the caller can
+// tell whether the create (or a later item apply) actually moved it.
 const resolveCustomItemVendor = Effect.gen(function* () {
   const pristine = Vendor.pristine(CUSTOM_ITEM_VENDOR_ID);
 
@@ -258,14 +256,14 @@ const resolveCustomItemVendor = Effect.gen(function* () {
   );
 
   if (Option.isSome(existing)) {
-    return { vendor: existing.value, created: false };
+    return { vendor: existing.value, baseVersion: existing.value.version };
   }
 
   const created = yield* Vendor.actions.create(pristine, {
     name: CUSTOM_ITEM_VENDOR_NAME,
   });
 
-  return { vendor: created, created: true };
+  return { vendor: created, baseVersion: pristine.version };
 });
 
 function removeItem(itemId: string) {
