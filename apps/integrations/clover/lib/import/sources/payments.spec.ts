@@ -40,8 +40,6 @@ describe("paymentsImportSource.list", () => {
       paymentsImportSource.list({
         merchantId: MERCHANT_ID,
         startTimestamp: coldStartFloor,
-        limit: 50,
-        offset: 0,
       }),
     );
 
@@ -50,6 +48,7 @@ describe("paymentsImportSource.list", () => {
     const { params } = captured[0];
     assert.equal(params.get("filter"), `createdTime>=${coldStartFloor}`);
     assert.equal(params.get("orderBy"), "createdTime ASC");
+    // The source owns its single-page count and always fetches from offset 0.
     assert.equal(params.get("limit"), "50");
     assert.equal(params.get("offset"), "0");
   });
@@ -61,8 +60,6 @@ describe("paymentsImportSource.list", () => {
       paymentsImportSource.list({
         merchantId: MERCHANT_ID,
         startTimestamp: 1_700_000_000_000,
-        limit: 50,
-        offset: 0,
       }),
     );
 

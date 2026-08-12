@@ -26,18 +26,14 @@ import { JobLive } from "../lib/runtime/live";
  * Configuration (env / repo-root `.env`):
  *   - DATABASE_URL              (required) Postgres connection string.
  *   - CLOVER_* config           (required) the same keys `CloverConfig` reads.
- *   - CLOVER_IMPORT_PAGE_SIZE   (optional) page size passed to the importer.
  *
  * Overlapping runs are prevented by the workflow's `concurrency` group, so no
  * in-process guard is needed here.
  */
 
 const requestId = crypto.randomUUID();
-const pageSize = parsePositiveInt(process.env.CLOVER_IMPORT_PAGE_SIZE);
 
-const program = runPaymentsCycle({ requestId, pageSize }).pipe(
-  Effect.provide(JobLive),
-);
+const program = runPaymentsCycle({ requestId }).pipe(Effect.provide(JobLive));
 
 const exit = await Effect.runPromiseExit(program);
 
@@ -55,14 +51,3 @@ if (Exit.isFailure(exit)) {
 console.log(
   `[payments-cycle ${new Date().toISOString()}] cycle completed (requestId ${requestId})`,
 );
-
-function parsePositiveInt(raw: string | undefined): number | undefined {
-  if (raw === undefined || raw.trim() === "") {
-    return undefined;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-  return Math.floor(parsed);
-}

@@ -16,28 +16,22 @@ export type ImportSummary = {
   readonly startTimestamp: number;
   /** Watermark the cursor was advanced to (epoch ms). */
   readonly newWatermark: number;
-  /** Total elements listed from Clover across all pages this run. */
+  /** Total elements listed from Clover this run (the single page). */
   readonly listed: number;
   /** Rows newly inserted into the inbox (excludes idempotent duplicates). */
   readonly enqueued: number;
-  /** Pages fetched from Clover this run. */
-  readonly pages: number;
 };
-
-// Safety bound so a runaway/misordered provider response can never loop forever
-// within a single request. At `pageSize` 50 this covers 5000 records per run;
-// larger backlogs simply continue on the next scheduled run from the advanced
-// watermark.
-const MAX_PAGES = 100;
 
 /**
  * Runs one incremental import for a single entity stream.
  *
- * Reads the stream's watermark, asks Clover only for records at/after it
- * (ascending, inclusive), enqueues each page into the entity's inbox, and
- * advances the watermark to the newest timestamp seen. The inclusive `>=`
- * boundary re-includes the last record(s) so nothing is skipped when timestamps
- * tie; the source's idempotent enqueue absorbs that overlap.
+ * Reads the stream's watermark, asks Clover for a single ascending page of
+ * records at/after it (inclusive), enqueues that page into the entity's inbox,
+ * and advances the watermark to the newest timestamp seen. The source owns how
+ * many records the page holds, so a backlog is worked off across successive runs
+ * rather than in one long paging loop. The inclusive `>=` boundary re-includes
+ * the last record(s) so nothing is skipped when timestamps tie; the source's
+ * idempotent enqueue absorbs that overlap.
  *
  * On a cold cursor (no stored watermark) the run starts from a backfill floor of
  * `now - coldStartLookbackMs` rather than `0`. This matters for Clover: its
@@ -47,7 +41,7 @@ const MAX_PAGES = 100;
  * window where Clover serves the full history, so the backfill actually reaches
  * the oldest records instead of only the last ~90 days.
  *
- * The cursor is advanced only after the pages were enqueued, so a mid-run
+ * The cursor is advanced only after the page was enqueued, so a mid-run
  * failure leaves the watermark untouched and the next run safely reprocesses
  * from the same point (again idempotently).
  */
@@ -56,7 +50,6 @@ export function runImport<Element, R>(
   options: {
     readonly merchantId: string;
     readonly requestId: string;
-    readonly pageSize: number;
     /**
      * How far back (in ms) a cold run reaches. The first run starts from
      * `now - coldStartLookbackMs`; steady-state runs resume from the stored
@@ -66,7 +59,7 @@ export function runImport<Element, R>(
   },
 ): Effect.Effect<ImportSummary, unknown, R | Database | Clock> {
   return Effect.gen(function* () {
-    const { merchantId, requestId, pageSize } = options;
+    const { merchantId, requestId } = options;
     const { entityType } = source;
 
     const cursor = yield* CloverImportCursorRepository.get(
@@ -86,47 +79,29 @@ export function runImport<Element, R>(
       entityType,
       merchantId,
       startTimestamp,
-      pageSize,
     });
 
-    let offset = 0;
-    let pages = 0;
-    let listed = 0;
-    let enqueued = 0;
     let newWatermark = startTimestamp;
 
-    while (pages < MAX_PAGES) {
-      const receivedAt = yield* now;
-      const elements = yield* source.list({
+    const receivedAt = yield* now;
+    const elements = yield* source.list({ merchantId, startTimestamp });
+    const listed = elements.length;
+    let enqueued = 0;
+
+    if (elements.length > 0) {
+      const { inserted } = yield* source.enqueue(elements, {
         merchantId,
-        startTimestamp,
-        limit: pageSize,
-        offset,
+        requestId,
+        receivedAt,
       });
-      pages += 1;
-      listed += elements.length;
+      enqueued += inserted;
 
-      if (elements.length > 0) {
-        const { inserted } = yield* source.enqueue(elements, {
-          merchantId,
-          requestId,
-          receivedAt,
-        });
-        enqueued += inserted;
-
-        for (const element of elements) {
-          const timestamp = source.getTimestamp(element);
-          if (timestamp > newWatermark) {
-            newWatermark = timestamp;
-          }
+      for (const element of elements) {
+        const timestamp = source.getTimestamp(element);
+        if (timestamp > newWatermark) {
+          newWatermark = timestamp;
         }
       }
-
-      // A short page means we have reached the end of the available records.
-      if (elements.length < pageSize) {
-        break;
-      }
-      offset += elements.length;
     }
 
     if (newWatermark > startTimestamp) {
@@ -148,7 +123,6 @@ export function runImport<Element, R>(
       newWatermark,
       listed,
       enqueued,
-      pages,
     });
 
     return {
@@ -158,7 +132,6 @@ export function runImport<Element, R>(
       newWatermark,
       listed,
       enqueued,
-      pages,
     };
   });
 }

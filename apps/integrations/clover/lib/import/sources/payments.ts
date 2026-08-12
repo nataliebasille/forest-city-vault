@@ -15,6 +15,13 @@ import type { ImportSource } from "../import-source";
  * writes, so the existing `POST /api/process/payments` drain turns them into
  * sales unchanged.
  */
+
+// How many payments a single list page fetches. The source owns this count: the
+// engine fetches one page per run and advances the watermark, so a larger
+// backlog is worked off across successive runs. 50 keeps each run well within
+// the Vercel Hobby 60s budget.
+const PAYMENTS_LIST_LIMIT = 50;
+
 export const paymentsImportSource: ImportSource<
   CloverPayment,
   Clock | CloverConfig | Database | HttpClient.HttpClient
@@ -22,7 +29,7 @@ export const paymentsImportSource: ImportSource<
   entityType: "payment",
   watermarkAxis: "createdTime",
 
-  list: ({ merchantId, startTimestamp, limit, offset }) =>
+  list: ({ merchantId, startTimestamp }) =>
     Effect.map(
       listCloverPayments(merchantId, {
         // Always send an explicit `createdTime>=<startTimestamp>` lower bound.
@@ -35,8 +42,8 @@ export const paymentsImportSource: ImportSource<
         // ascending `createdTime` paging then walks the history forward.
         filter: `createdTime>=${startTimestamp}`,
         orderBy: "createdTime ASC",
-        limit,
-        offset,
+        limit: PAYMENTS_LIST_LIMIT,
+        offset: 0,
       }),
       (page) => page.elements,
     ),

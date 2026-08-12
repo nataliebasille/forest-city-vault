@@ -25,10 +25,6 @@ import { paymentsImportSource, runImport } from "../import/public";
  * regardless of what triggers it.
  */
 
-// Default page size when a caller does not specify one. Matches the Clover Hobby
-// budget: a bounded number of records per run, resuming from the watermark.
-const DEFAULT_PAGE_SIZE = 50;
-
 // How far back a cold (first) run reaches when there is no stored watermark, in
 // ms. Clover's payments list only returns ~90 days with no `createdTime` filter,
 // and returns nothing for a bound older than its ~8-month ceiling, so the floor
@@ -49,10 +45,7 @@ const DEFAULT_DRAIN_MESSAGE_DELAY_MS = 250;
  * the payments inbox, resuming from the per-stream watermark. Turning inbox rows
  * into sales is {@link processPayments}'s job.
  */
-export function importPayments(options: {
-  readonly requestId: string;
-  readonly pageSize?: number;
-}) {
+export function importPayments(options: { readonly requestId: string }) {
   return Effect.gen(function* () {
     const { merchantId } = yield* CloverConfig;
 
@@ -63,7 +56,6 @@ export function importPayments(options: {
     yield* runImport(paymentsImportSource, {
       merchantId,
       requestId: options.requestId,
-      pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
       coldStartLookbackMs,
     });
   });
@@ -164,10 +156,7 @@ export function processPayments(options: { readonly requestId: string }) {
  * the inbox into sales. This is the unit a scheduled trigger (GitHub Actions, the
  * local scheduler) runs on each tick.
  */
-export function runPaymentsCycle(options: {
-  readonly requestId: string;
-  readonly pageSize?: number;
-}) {
+export function runPaymentsCycle(options: { readonly requestId: string }) {
   return Effect.gen(function* () {
     yield* importPayments(options);
     yield* processPayments({ requestId: options.requestId });
