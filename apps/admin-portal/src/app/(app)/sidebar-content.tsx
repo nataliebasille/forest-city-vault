@@ -13,8 +13,10 @@ import { AccountMenu } from "./account-menu";
  */
 export function SidebarContent({
   account,
+  pathname,
 }: {
   account: { email: string; role: string };
+  pathname: string;
 }) {
   return (
     <>
@@ -25,12 +27,12 @@ export function SidebarContent({
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-6" aria-label="Primary">
-        <Link
-          href="/sales-review"
-          className="flex items-center gap-3 rounded-lg px-2 py-2 font-subheading text-sm font-medium text-on-secondary-500/80 transition-colors hover:bg-white/8 hover:text-on-secondary-500"
-        >
+        <NavLink href="/" pathname={pathname} exact>
+          Dashboard
+        </NavLink>
+        <NavLink href="/sales-review" pathname={pathname}>
           Sales review
-        </Link>
+        </NavLink>
       </nav>
 
       {/* Account menu (appearance + sign out) */}
@@ -38,6 +40,40 @@ export function SidebarContent({
         <AccountMenu account={account} />
       </div>
     </>
+  );
+}
+
+function NavLink({
+  href,
+  pathname,
+  exact,
+  children,
+}: {
+  href: string;
+  pathname: string;
+  exact?: boolean;
+  children: React.ReactNode;
+}) {
+  const isActive = exact ? pathname === href : pathname.startsWith(href);
+
+  return (
+    <Link
+      href={href}
+      className={[
+        "flex items-center gap-2.5 rounded-lg px-3 py-2 font-subheading text-sm font-medium transition-colors",
+        isActive
+          ? "bg-white/15 text-on-secondary-500"
+          : "text-on-secondary-500/55 hover:bg-white/8 hover:text-on-secondary-500/85",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          isActive ? "bg-primary-500" : "bg-transparent",
+        ].join(" ")}
+      />
+      {children}
+    </Link>
   );
 }
 
@@ -54,3 +90,4 @@ function Brand() {
     </span>
   );
 }
+
