@@ -1,4 +1,9 @@
 import { CloverConfig } from "@forest-city-vault/core-config";
+import type {
+  AggregateType_GetId,
+  AggregateType_GetSnapshot,
+  MaterializedAggregateRoot,
+} from "@forest-city-vault/core-domain";
 import { Vendor } from "@forest-city-vault/domain";
 import { getCloverItem } from "@forest-city-vault/infrastructure-clover";
 import {
@@ -9,6 +14,11 @@ import {
 import { provideSagaScoped } from "@forest-city-vault/platform-saga";
 import { Config, Duration, Effect, Option, Schema } from "effect";
 import { runImport, vendorItemsImportSource } from "../import/public";
+
+type VendorAggregate = MaterializedAggregateRoot<
+  AggregateType_GetId<typeof Vendor>,
+  AggregateType_GetSnapshot<typeof Vendor>
+>;
 
 /**
  * The Clover vendor-items jobs, expressed as plain Effect programs independent of
@@ -50,15 +60,17 @@ export function importVendorItems(options: { readonly requestId: string }) {
  * item fails in isolation and is recorded without rolling back the rest of the
  * batch. Returns the number of messages processed this run.
  *
- * - An `upsert` message fetches the current Clover item, resolves the vendor
- *   through the item's category, and applies it (add/update, or a no-op when the
- *   vendor already matches).
+ * - An `upsert` message fetches the current Clover item and reconciles it onto a
+ *   vendor: when a category maps to an existing vendor the vendor's name is kept
+ *   in sync with the category (Clover is the source of truth), when a category
+ *   maps to no vendor one is created for it, and when the item has no category at
+ *   all it is attached to a shared "Custom item" vendor so nothing is dropped.
  * - A `delete` message resolves the owning vendor by the persisted item id and
  *   removes the item.
  *
- * A message whose item maps to no known vendor category (or a delete for an item
- * no vendor holds) is a successful no-op: it is marked processed so it does not
- * retry forever, since the vendor may simply not be modelled here.
+ * A `delete` for an item no vendor holds is a successful no-op: it is marked
+ * processed so it does not retry forever, since the vendor may simply not be
+ * modelled here.
  */
 export function processVendorItems(options: { readonly requestId: string }) {
   const { requestId } = options;
@@ -119,25 +131,79 @@ const decodeVendorItemPayload = Schema.decodeUnknown(
   Schema.parseJson(VendorItemPayloadSchema),
 );
 
+// A fixed, stable identity for the single shared vendor that holds items which
+// arrive with no Clover category to derive a vendor from. Like the bootstrap
+// store id, a hard-coded id is what makes the fallback idempotent: every
+// uncategorized item resolves to the same vendor instead of minting a new one.
+const CUSTOM_ITEM_VENDOR_ID = "01920000-0000-7000-8000-0000000000c1";
+const CUSTOM_ITEM_VENDOR_NAME = "Custom item";
+
 function upsertItem(itemId: string, payloadJson: string) {
   return Effect.gen(function* () {
     const { merchantId } = yield* decodeVendorItemPayload(payloadJson);
 
     const item = yield* getCloverItem(merchantId, itemId);
 
-    // Find the vendor the item belongs to: a Clover category is a vendor, and an
-    // item can be filed under several categories, so try each and take the first
-    // that maps to a modelled vendor.
-    const categoryIds =
-      item.categories?.elements?.map((category) => category.id) ?? [];
+    // A Clover category is a vendor, and an item can be filed under several
+    // categories. Resolve the vendor from those categories — reusing an existing
+    // one, creating one for an unmodelled category, or falling back to the shared
+    // "Custom item" vendor when the item has no category at all — then apply the
+    // item to it.
+    const categories = item.categories?.elements ?? [];
+    const categoryIds = categories.map((category) => category.id);
 
-    const vendor = yield* resolveVendorByCategories(categoryIds);
-    if (Option.isNone(vendor)) {
-      // The item is not filed under any vendor category we model; nothing to do.
-      return;
+    const resolved = yield* resolveVendorByCategories(categoryIds);
+
+    let vendor: VendorAggregate;
+    let dirty = false;
+
+    if (Option.isSome(resolved)) {
+      const { vendor: existing, matchedCategoryId } = resolved.value;
+
+      // Keep the vendor's name in sync with its Clover category: Clover is the
+      // source of truth, so rename when the matched category carries a non-blank
+      // name that differs from the vendor's current one.
+      const matchedName = categories
+        .find((category) => category.id === matchedCategoryId)
+        ?.name?.trim();
+
+      if (
+        matchedName !== undefined &&
+        matchedName.length > 0 &&
+        matchedName !== existing.snapshot.name
+      ) {
+        vendor = yield* Vendor.actions.rename(existing, { name: matchedName });
+        dirty = true;
+      } else {
+        vendor = existing;
+      }
+    } else if (categories.length > 0) {
+      // None of the item's categories maps to a modelled vendor. Create one for
+      // the first category — in Clover each category is a vendor — named after
+      // the category (falling back to its id when Clover gives no name).
+      const primary = categories[0];
+      const primaryName = primary.name?.trim();
+
+      vendor = yield* Vendor.actions.create(
+        Vendor.pristine(crypto.randomUUID()),
+        {
+          name:
+            primaryName !== undefined && primaryName.length > 0 ?
+              primaryName
+            : primary.id,
+          cloverCategoryId: primary.id,
+        },
+      );
+      dirty = true;
+    } else {
+      // The item is filed under no category at all; attach it to the shared
+      // "Custom item" vendor so it is never dropped and can be re-filed later.
+      const custom = yield* resolveCustomItemVendor;
+      vendor = custom.vendor;
+      dirty = custom.created;
     }
 
-    const applied = yield* Vendor.actions.applyCloverItem(vendor.value, {
+    const applied = yield* Vendor.actions.applyCloverItem(vendor, {
       item: {
         cloverItemId: item.id,
         name: item.name ?? "",
@@ -145,8 +211,9 @@ function upsertItem(itemId: string, payloadJson: string) {
       },
     });
 
-    // No event means the vendor already matched the item; skip the write.
-    if (applied.version === vendor.value.version) {
+    // Save when the vendor was created/renamed or the item apply produced an
+    // event; skip the write only when nothing changed.
+    if (!dirty && applied.version === vendor.version) {
       return;
     }
 
@@ -159,12 +226,43 @@ function resolveVendorByCategories(categoryIds: readonly string[]) {
     for (const categoryId of categoryIds) {
       const found = yield* VendorQueries.getByCloverCategoryId(categoryId);
       if (Option.isSome(found)) {
-        return found;
+        return Option.some({
+          vendor: found.value,
+          matchedCategoryId: categoryId,
+        });
       }
     }
-    return Option.none();
+    return Option.none<{
+      vendor: VendorAggregate;
+      matchedCategoryId: string;
+    }>();
   });
 }
+
+// Loads the shared "Custom item" vendor by its fixed id, creating it on first
+// use. `created` tells the caller whether a save is required even when the item
+// apply itself is a no-op.
+const resolveCustomItemVendor = Effect.gen(function* () {
+  const pristine = Vendor.pristine(CUSTOM_ITEM_VENDOR_ID);
+
+  const existing = yield* Vendor.repository.getById(pristine.id).pipe(
+    Effect.asSome,
+    Effect.catchTag(
+      "core/domain/Repository/AggregateNotFoundError",
+      () => Effect.succeedNone,
+    ),
+  );
+
+  if (Option.isSome(existing)) {
+    return { vendor: existing.value, created: false };
+  }
+
+  const created = yield* Vendor.actions.create(pristine, {
+    name: CUSTOM_ITEM_VENDOR_NAME,
+  });
+
+  return { vendor: created, created: true };
+});
 
 function removeItem(itemId: string) {
   return Effect.gen(function* () {

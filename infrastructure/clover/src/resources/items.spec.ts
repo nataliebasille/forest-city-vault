@@ -43,7 +43,7 @@ describe("listCloverItems", () => {
           name: "Syrup",
           price: 1200,
           modifiedTime: 1_700_000_000_000,
-          categories: { elements: [{ id: "CAT1" }] },
+          categories: { elements: [{ id: "CAT1", name: "Maple & Co." }] },
         },
         {
           id: "ITEM2",
@@ -68,6 +68,10 @@ describe("listCloverItems", () => {
       assert.equal(exit.value.elements.length, 2);
       assert.equal(exit.value.elements[0].id, "ITEM1");
       assert.equal(exit.value.elements[0].categories?.elements?.[0].id, "CAT1");
+      assert.equal(
+        exit.value.elements[0].categories?.elements?.[0].name,
+        "Maple & Co.",
+      );
       // Price arrives as a string on the second element but decodes to a number.
       assert.equal(exit.value.elements[1].price, 800);
     }

@@ -6,7 +6,16 @@ import { resolveMerchantAccessToken } from "../auth";
 // (e.g. `"price": "1000"`), so decode tolerates both and lands as a number.
 const CloverNumber = Schema.Union(Schema.Number, Schema.NumberFromString);
 
-const CloverReference = Schema.Struct({ id: Schema.String });
+/**
+ * A Clover category as it appears expanded on an item. `name` is populated when
+ * the item is fetched with `expand=categories`; it is the human-readable name of
+ * the vendor the category maps to, used when a vendor has to be created for — or
+ * renamed to match — a category during the vendor-items drain.
+ */
+const CloverItemCategory = Schema.Struct({
+  id: Schema.String,
+  name: Schema.optional(Schema.String),
+});
 
 /**
  * A Clover inventory item. Each item is the source of a vendor item
@@ -22,7 +31,7 @@ export const CloverItemSchema = Schema.Struct({
   modifiedTime: Schema.Number,
   categories: Schema.optional(
     Schema.Struct({
-      elements: Schema.optional(Schema.Array(CloverReference)),
+      elements: Schema.optional(Schema.Array(CloverItemCategory)),
     }),
   ),
 });
