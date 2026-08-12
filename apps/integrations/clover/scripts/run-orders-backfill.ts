@@ -46,7 +46,7 @@ const program = Effect.gen(function* () {
     });
 
     cycles += 1;
-    if (summary.listed === 0 && processed === 0) {
+    if (summary.enqueued === 0 && processed === 0) {
       break;
     }
   }
