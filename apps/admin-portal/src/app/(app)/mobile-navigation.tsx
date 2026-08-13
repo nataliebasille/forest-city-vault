@@ -97,4 +97,5 @@ export function MobileNavigation({ sidebar }: { sidebar: ReactNode }) {
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/sales-review": "Sales review",
+  "/vendors": "Vendors",
 };
