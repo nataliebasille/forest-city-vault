@@ -29,12 +29,18 @@ export function SidebarContent({
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-6" aria-label="Primary">
+      <nav
+        className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-6"
+        aria-label="Primary"
+      >
         <NavLink href="/" pathname={pathname} exact>
           Dashboard
         </NavLink>
         <NavLink href="/sales-review" pathname={pathname}>
           Sales review
+        </NavLink>
+        <NavLink href="/vendors" pathname={pathname}>
+          Vendors
         </NavLink>
       </nav>
 
@@ -57,8 +63,9 @@ function NavLink({
   exact?: boolean;
   children: React.ReactNode;
 }) {
-  const isActive = exact
-    ? pathname === href
+  const isActive =
+    exact ?
+      pathname === href
     : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
@@ -66,9 +73,9 @@ function NavLink({
       href={href}
       className={[
         "flex items-center gap-2.5 rounded-lg px-3 py-2 font-subheading text-sm font-medium transition-colors",
-        isActive
-          ? "bg-white/15 text-on-secondary-500"
-          : "text-on-secondary-500/55 hover:bg-white/8 hover:text-on-secondary-500/85",
+        isActive ?
+          "bg-white/15 text-on-secondary-500"
+        : "text-on-secondary-500/55 hover:bg-white/8 hover:text-on-secondary-500/85",
       ].join(" ")}
     >
       <span
