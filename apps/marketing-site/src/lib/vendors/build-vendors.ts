@@ -1,146 +1,114 @@
-/**
- * Vendor data processing algorithm.
- *
- * Reads the Clover POS inventory export (`vendor-data.xlsx`) and converts it
- * into the in-memory {@link VendorData} shape used by the marketing site for
- * browsing, searching, and featuring vendors.
- *
- * This module is the *process* that produces vendor data. It is invoked once at
- * build time through a cached loader (see `data.ts`), so the workbook is parsed
- * a single time and the result is cached indefinitely by Next.js — there is no
- * committed `vendors.json` artifact.
- *
- * Domain mapping
- * --------------
- * The workbook is a Clover inventory export, not a purpose-built vendor list.
- * In this marketplace every Clover **Category** corresponds to one vendor/brand,
- * and each row in the `Items` sheet is attributed to a vendor through its
- * `Categories` column. We therefore:
- *
- *   1. Read the `Items` sheet and group visible items by their `Categories`
- *      value (the vendor name). Hidden items and items with no category
- *      (store-general SKUs) are skipped.
- *   2. For each vendor, aggregate an item count, price range, a few sample item
- *      names, and — most importantly — a normalized `searchKey` combining the
- *      vendor name and all of its item names so search is a cheap lookup at
- *      runtime.
- */
-import { join } from "node:path";
-import { Data, Effect } from "effect";
-import ExcelJS from "exceljs";
+import {
+  DatabaseLive,
+  QueryableLive,
+  SapphoQueryable,
+} from "@forest-city-vault/infrastructure-database";
+import {
+  vendorItems,
+  vendors,
+} from "@forest-city-vault/infrastructure-database/schema";
+import { eq, sql } from "drizzle-orm";
+import { Data, Effect, Layer } from "effect";
 import { buildSearchKey, slugify } from "./normalize";
-import type { PriceRange, Product, Vendor, VendorData } from "./types";
+import type { PriceRange, Vendor, VendorData } from "./types";
 
-const SOURCE_FILE = "vendor-data.xlsx";
-const SOURCE_PATH = join(process.cwd(), "src/lib/vendors", SOURCE_FILE);
-
-const ITEMS_SHEET = "Items";
+const SOURCE = "database";
 const MAX_SAMPLE_ITEMS = 5;
+const CENTS_PER_DOLLAR = 100;
 
-/** Raised when the vendor workbook cannot be read or parsed. */
+/** Raised when the vendor catalog cannot be read from the database. */
 export class VendorDataError extends Data.TaggedError("VendorDataError")<{
   readonly cause: unknown;
 }> {}
 
-/** Coerce an ExcelJS cell value into a trimmed plain string. */
-function cellText(value: ExcelJS.CellValue): string {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  if (typeof value === "object") {
-    if ("richText" in value && Array.isArray(value.richText)) {
-      return value.richText
-        .map((run) => run.text)
-        .join("")
-        .trim();
-    }
-    if ("text" in value && typeof value.text === "string") {
-      return value.text.trim();
-    }
-    if ("result" in value) {
-      return cellText(value.result as ExcelJS.CellValue);
-    }
-  }
-  return "";
-}
-
-function cellNumber(value: ExcelJS.CellValue): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  const text = cellText(value);
-  if (!text) {
-    return null;
-  }
-  const parsed = Number.parseFloat(text.replace(/[^0-9.\-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
+/** A vendor's item as read from the database, with price already in dollars. */
 type RawItem = {
+  cloverItemId: string;
   name: string;
-  category: string;
-  price: number | null;
-  hidden: boolean;
+  price: number;
 };
 
-/** Map the `Items` sheet header row to column indexes (1-based). */
-function readHeader(row: ExcelJS.Row): Map<string, number> {
-  const header = new Map<string, number>();
-  row.eachCell((cell, colNumber) => {
-    const key = cellText(cell.value).toLowerCase();
-    if (key) {
-      header.set(key, colNumber);
+/**
+ * Fetch every active vendor with its items and fold them into {@link VendorData}.
+ *
+ * Requires {@link SapphoQueryable} so it can be exercised in tests against an
+ * in-memory database; `buildVendorData` provides the concrete layer. The join
+ * mirrors the vendor repository's `loadVendorWithItems`:
+ *  - The item's `name` is aliased to `item_name` so it does not collide with the
+ *    vendor's `name` column, which the effect-sql/drizzle driver maps by name.
+ *  - `price_cents` is cast to text so drizzle's `bigint` mapper is not applied to
+ *    the NULL a left join produces for a vendor with no items (that mapper would
+ *    otherwise throw "Cannot convert undefined to a BigInt").
+ */
+export const loadVendorData = Effect.gen(function* () {
+  const queryable = yield* SapphoQueryable;
+
+  const rows = yield* queryable.query((db) =>
+    db
+      .select({
+        vendorId: vendors.id,
+        vendorName: vendors.name,
+        itemCloverItemId: vendorItems.cloverItemId,
+        itemName: sql<string | null>`${vendorItems}."name"`.as("item_name"),
+        itemPriceCents: sql<
+          string | null
+        >`${vendorItems}."price_cents"::text`.as("item_price_cents"),
+      })
+      .from(vendors)
+      .leftJoin(vendorItems, eq(vendorItems.vendorId, vendors.id))
+      .where(eq(vendors.status, "active"))
+      .orderBy(vendors.name, vendorItems.name, vendorItems.cloverItemId),
+  );
+
+  const byVendor = new Map<string, { name: string; items: RawItem[] }>();
+  for (const row of rows) {
+    const entry = byVendor.get(row.vendorId) ?? {
+      name: row.vendorName,
+      items: [],
+    };
+    if (!byVendor.has(row.vendorId)) {
+      byVendor.set(row.vendorId, entry);
     }
-  });
-  return header;
-}
-
-function readItems(worksheet: ExcelJS.Worksheet): RawItem[] {
-  const header = readHeader(worksheet.getRow(1));
-  const nameCol = header.get("name");
-  const categoryCol = header.get("categories");
-  const priceCol = header.get("price");
-  const hiddenCol = header.get("hidden?");
-
-  if (!nameCol || !categoryCol) {
-    throw new Error(
-      `Unexpected sheet layout: could not find "Name"/"Categories" columns in "${ITEMS_SHEET}".`,
-    );
+    if (row.itemCloverItemId !== null) {
+      entry.items.push({
+        cloverItemId: row.itemCloverItemId,
+        name: row.itemName ?? "",
+        price: Number(row.itemPriceCents) / CENTS_PER_DOLLAR,
+      });
+    }
   }
 
-  const items: RawItem[] = [];
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) {
-      return;
-    }
-    const name = cellText(row.getCell(nameCol).value);
-    const category = cellText(row.getCell(categoryCol).value);
-    if (!name || !category) {
-      return;
-    }
-    const hidden =
-      hiddenCol ?
-        cellText(row.getCell(hiddenCol).value).toLowerCase() === "yes"
-      : false;
-    const price = priceCol ? cellNumber(row.getCell(priceCol).value) : null;
-    items.push({ name, category, price, hidden });
-  });
-  return items;
-}
+  const vendorList = [...byVendor.values()]
+    // Only surface vendors that actually have items to show.
+    .filter((entry) => entry.items.length > 0)
+    .map((entry) => toVendor(entry.name, entry.items))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    source: SOURCE,
+    count: vendorList.length,
+    vendors: vendorList,
+  } satisfies VendorData;
+});
+
+/**
+ * Build the full {@link VendorData} from the database.
+ *
+ * Provides the read-only query layer ({@link QueryableLive} over
+ * {@link DatabaseLive}) itself, so it requires no services (`R = never`) and
+ * callers can execute it with a plain `Effect.runPromise` — see the cached
+ * loader in `data.ts`. Any failure (config, connection, or query) surfaces as a
+ * typed {@link VendorDataError} on the error channel.
+ */
+export const buildVendorData: Effect.Effect<VendorData, VendorDataError> =
+  loadVendorData.pipe(
+    Effect.provide(QueryableLive.pipe(Layer.provide(DatabaseLive))),
+    Effect.mapError((cause) => new VendorDataError({ cause })),
+  );
 
 function toVendor(name: string, items: RawItem[]): Vendor {
-  const prices = items
-    .map((item) => item.price)
-    .filter((price): price is number => price !== null && price > 0);
+  const prices = items.map((item) => item.price).filter((price) => price > 0);
 
   const priceRange: PriceRange | null =
     prices.length > 0 ?
@@ -161,86 +129,10 @@ function toVendor(name: string, items: RawItem[]): Vendor {
     priceRange,
     sampleItems: uniqueItemNames.slice(0, MAX_SAMPLE_ITEMS),
     items: uniqueItemNames,
-    products: dedupeProducts(items),
+    products: items.map((item) => ({
+      id: item.cloverItemId,
+      name: item.name,
+      price: item.price,
+    })),
   };
 }
-
-/**
- * Collapse a vendor's raw items into a unique product list keyed by name. The
- * first-seen price wins; a later priced occurrence backfills a price only when
- * the earlier one was unknown. Order follows first appearance in the sheet.
- */
-function dedupeProducts(items: RawItem[]): Product[] {
-  const byName = new Map<string, Product>();
-  for (const item of items) {
-    const existing = byName.get(item.name);
-    if (!existing) {
-      byName.set(item.name, { name: item.name, price: item.price });
-    } else if (existing.price === null && item.price !== null) {
-      existing.price = item.price;
-    }
-  }
-  return [...byName.values()];
-}
-
-/**
- * Synchronously turn a loaded workbook into the full {@link VendorData}. Pure
- * (no IO) so it composes inside `Effect.try`; may throw on an unexpected sheet
- * layout, which the caller converts into a {@link VendorDataError}.
- */
-function parseWorkbook(workbook: ExcelJS.Workbook): VendorData {
-  const itemsSheet = workbook.getWorksheet(ITEMS_SHEET);
-  if (!itemsSheet) {
-    throw new Error(`Missing "${ITEMS_SHEET}" sheet in ${SOURCE_FILE}.`);
-  }
-
-  const items = readItems(itemsSheet);
-
-  const byVendor = new Map<string, RawItem[]>();
-  for (const item of items) {
-    if (item.hidden) {
-      continue;
-    }
-    const existing = byVendor.get(item.category);
-    if (existing) {
-      existing.push(item);
-    } else {
-      byVendor.set(item.category, [item]);
-    }
-  }
-
-  const vendors = [...byVendor.entries()]
-    .map(([name, vendorItems]) => toVendor(name, vendorItems))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return {
-    generatedAt: new Date().toISOString(),
-    source: SOURCE_FILE,
-    count: vendors.length,
-    vendors,
-  };
-}
-
-/**
- * Parse the vendor workbook and build the full {@link VendorData}.
- *
- * Modeled as an Effect (matching the rest of the codebase): the workbook read
- * is wrapped with `Effect.tryPromise` and the pure parse with `Effect.try`, so
- * both failure modes surface as a typed {@link VendorDataError} on the error
- * channel. It requires no services (`R = never`), so callers can execute it
- * with a plain `Effect.runPromise` — see the cached loader in `data.ts`.
- */
-export const buildVendorData: Effect.Effect<VendorData, VendorDataError> =
-  Effect.gen(function* () {
-    const workbook = new ExcelJS.Workbook();
-
-    yield* Effect.tryPromise({
-      try: () => workbook.xlsx.readFile(SOURCE_PATH),
-      catch: (cause) => new VendorDataError({ cause }),
-    });
-
-    return yield* Effect.try({
-      try: () => parseWorkbook(workbook),
-      catch: (cause) => new VendorDataError({ cause }),
-    });
-  });

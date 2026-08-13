@@ -5,6 +5,8 @@ export type PriceRange = {
 
 /** A single product (Clover item) attributed to a vendor. */
 export type Product = {
+  /** Stable identity of the item — its Clover item id. Unique within a vendor. */
+  id: string;
   /** Display name of the item. */
   name: string;
   /** Item price in dollars, or null when unpriced / "ask in store". */
@@ -43,9 +45,9 @@ export type Vendor = {
 };
 
 export type VendorData = {
-  /** ISO timestamp of when vendors.json was generated. */
+  /** ISO timestamp of when this vendor data was loaded. */
   generatedAt: string;
-  /** Source workbook the data was derived from. */
+  /** Source the data was derived from (the database). */
   source: string;
   /** Number of vendors. */
   count: number;

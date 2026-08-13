@@ -12,7 +12,7 @@ import type { PriceRange } from "@/lib/vendors/types";
  * It adapts to the data it is given rather than the place it renders:
  *
  *   - **Media** — a photo when `imageSrc` is set (homepage), otherwise a
- *     gradient identity band with a monogram avatar so photo-less workbook
+ *     gradient identity band with a monogram avatar so photo-less database
  *     vendors still get a distinct visual anchor. An optional `badge` overlays
  *     either.
  *   - **Detail** — the most specific thing available: matched-item pills when a

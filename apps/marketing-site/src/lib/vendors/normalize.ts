@@ -1,7 +1,7 @@
 /**
- * Text normalization shared by the build-time vendor processor and the runtime
- * search. Keeping a single implementation guarantees the `searchKey` baked into
- * `vendors.json` is normalized exactly the same way as incoming search queries.
+ * Text normalization shared by the vendor data loader and the runtime search.
+ * Keeping a single implementation guarantees the `searchKey` computed for each
+ * vendor is normalized exactly the same way as incoming search queries.
  */
 
 /**

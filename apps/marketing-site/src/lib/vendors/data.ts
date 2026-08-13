@@ -4,28 +4,29 @@ import { buildVendorData, VendorDataError } from "./build-vendors";
 import { selectFeaturedVendors } from "./featured";
 import type { Vendor, VendorData } from "./types";
 
+const ONE_HOUR_IN_SECONDS = 60 * 60;
+
 /**
  * Internal "Promise island": `unstable_cache` needs a
  * `() => Promise<serializable>`, so we run the `buildVendorData` Effect to a
  * plain `VendorData` with `Effect.runPromise` *inside* the cached callback.
  *
- * `revalidate: false` persists the parsed result in Next.js' built-in cache
- * across requests and deployments. Because `/vendors` is statically
- * prerendered, the workbook is parsed a single time at build and reused
- * forever — it never expires on a timer. Invalidate on demand with
- * `revalidateTag("vendors")` (e.g. after uploading a new workbook).
+ * `revalidate: ONE_HOUR_IN_SECONDS` persists the loaded result in Next.js'
+ * built-in cache and refreshes it on a timer, so vendor edits in the database
+ * appear on the statically prerendered pages within the window without a
+ * redeploy. Invalidate on demand with `revalidateTag("vendors")` (e.g. after a
+ * bulk vendor import).
  */
 const vendorDataCache = unstable_cache(
   (): Promise<VendorData> => Effect.runPromise(buildVendorData),
   ["vendors"],
-  { revalidate: false, tags: ["vendors"] },
+  { revalidate: ONE_HOUR_IN_SECONDS, tags: ["vendors"] },
 );
 
 /**
- * Vendor data, produced by parsing `vendor-data.xlsx` and cached
- * **indefinitely**.
+ * Vendor data, loaded from the database and cached for one hour.
  *
- * Effect stays on both ends: the parsing is an Effect ({@link buildVendorData})
+ * Effect stays on both ends: the load is an Effect ({@link buildVendorData})
  * and so is this public value. In between, `unstable_cache` can only speak
  * Promises, so we bridge across it — `runPromise` on the way *in* (see
  * {@link vendorDataCache}) and `Effect.tryPromise` on the way *out* here. The
@@ -48,8 +49,8 @@ export const getVendors: Effect.Effect<Vendor[], VendorDataError> = Effect.map(
 
 /**
  * A single vendor by slug, or `undefined` when no vendor matches. Derived from
- * the same indefinitely-cached {@link getVendorData}, so the vendor detail page
- * shares the one workbook parse with the directory.
+ * the same cached {@link getVendorData}, so the vendor detail page shares the
+ * one database load with the directory.
  */
 export const getVendorBySlug = (
   slug: string,

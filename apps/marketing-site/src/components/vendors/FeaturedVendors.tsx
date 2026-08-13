@@ -18,7 +18,7 @@ const SPOTLIGHT_COUNT = 3;
 
 /**
  * Homepage "Featured in the Vault" section. Server component: it runs the cached
- * {@link getFeaturedVendors} Effect to pick a rotating set of *real* workbook
+ * {@link getFeaturedVendors} Effect to pick a rotating set of *real* database
  * vendors, then splits them into a "New this week" spotlight column and a
  * "Featured vendors" grid — each card's "View collection" link resolves to that
  * vendor's `/vendors/[slug]` page. Falls back to rendering nothing if the vendor
@@ -129,7 +129,7 @@ export async function FeaturedVendors() {
 }
 
 /**
- * Adapt a workbook-derived {@link Vendor} into the {@link VendorCardVendor}
+ * Adapt a database-derived {@link Vendor} into the {@link VendorCardVendor}
  * shape the unified card consumes. Real vendors have no dedicated photography
  * yet, so we reuse the shared marketplace photo; their sample items, price
  * range, and item count carry through so the featured card shows the same
