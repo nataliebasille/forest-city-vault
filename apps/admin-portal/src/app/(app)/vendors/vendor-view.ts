@@ -64,6 +64,47 @@ export function unsyncedCount(vendor: VendorView): number {
   return vendor.items.filter((i) => i.syncState !== "synced").length;
 }
 
+/**
+ * Merges `patch` into the vendor with `id`, stamping `updatedAt`. Pure: returns a
+ * new array and a new vendor object, leaving the inputs untouched. Non-matching
+ * vendors are returned by reference so React can skip re-rendering their rows.
+ */
+export function applyVendorPatch(
+  vendors: VendorView[],
+  id: string,
+  patch: Partial<VendorView>,
+): VendorView[] {
+  return vendors.map((v) =>
+    v.id === id ? { ...v, ...patch, updatedAt: "just now" } : v,
+  );
+}
+
+/** Flips the vendor's active/inactive status, stamping `updatedAt`. Pure. */
+export function toggleVendorStatus(
+  vendors: VendorView[],
+  id: string,
+): VendorView[] {
+  return applyVendorPatch(vendors, id, {
+    status:
+      vendors.find((v) => v.id === id)?.status === "active" ?
+        "inactive"
+      : "active",
+  });
+}
+
+/** Drops the vendor with `id`; a no-op (by content) when it is absent. Pure. */
+export function removeVendor(vendors: VendorView[], id: string): VendorView[] {
+  return vendors.filter((v) => v.id !== id);
+}
+
+/** Returns a new list with `vendor` prepended (newest-first). Pure. */
+export function prependVendor(
+  vendors: VendorView[],
+  vendor: VendorView,
+): VendorView[] {
+  return [vendor, ...vendors];
+}
+
 let itemSeq = 0;
 /** A fresh blank item for "add item" flows (client-only, non-persisting). */
 export function blankItem(): ItemView {

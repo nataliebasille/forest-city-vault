@@ -1,264 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   blankItem,
-  blankVendor,
   type ItemSyncState,
   type ItemView,
   parseDollars,
-  type PricingModel,
   unsyncedCount,
   type VendorStatus,
-  type VendorView,
 } from "./vendor-view";
+import { useVendors } from "./vendors-context";
 
-const pricingLabel: Record<PricingModel, string> = {
-  consignment: "Consignment",
-  wholesale: "Wholesale",
-};
+/**
+ * The add/edit panel for a single vendor, built around its items. It reads the
+ * vendor from the shared store by `vendorId` and writes edits straight back to
+ * it, so the list behind the panel reflects changes live. It is rendered by the
+ * `/vendors/new` and `/vendors/[vendorId]` routes; closing it navigates back to
+ * the list. A `vendorId` with no matching vendor (e.g. a stale deep link)
+ * redirects to `/vendors` rather than rendering an empty shell.
+ *
+ * Edits are not persisted yet — mutations live only in the client store.
+ */
+export function VendorSlideOver({ vendorId }: { vendorId: string }) {
+  const { vendors, updateVendor } = useVendors();
+  const router = useRouter();
+  const vendor = vendors.find((v) => v.id === vendorId);
 
-const pricingBadge: Record<PricingModel, string> = {
-  consignment: "badge-soft/accent",
-  wholesale: "badge-soft/primary",
-};
+  // Send stale deep links (unknown id) back to the list.
+  useEffect(() => {
+    if (vendor === undefined) {
+      router.replace("/vendors");
+    }
+  }, [vendor, router]);
 
-export function VendorWorkspace({
-  vendors: initialVendors,
-}: {
-  vendors: VendorView[];
-}) {
-  const [vendors, setVendors] = useState<VendorView[]>(initialVendors);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | VendorStatus>("all");
-
-  const editing = vendors.find((v) => v.id === editingId) ?? null;
-  const shown = vendors.filter((v) => filter === "all" || v.status === filter);
-  const activeCount = vendors.filter((v) => v.status === "active").length;
-
-  function updateVendor(id: string, patch: Partial<VendorView>) {
-    setVendors((prev) =>
-      prev.map((v) =>
-        v.id === id ? { ...v, ...patch, updatedAt: "just now" } : v,
-      ),
-    );
-  }
-
-  function addVendor() {
-    const draft = blankVendor();
-    setVendors((prev) => [draft, ...prev]);
-    setEditingId(draft.id);
-  }
-
-  function toggleStatus(id: string) {
-    setVendors((prev) =>
-      prev.map((v) =>
-        v.id === id ?
-          {
-            ...v,
-            status: v.status === "active" ? "inactive" : "active",
-            updatedAt: "just now",
-          }
-        : v,
-      ),
-    );
-  }
-
-  return (
-    <div className="flex flex-1 flex-col bg-surface-50 text-on-surface-50">
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm text-on-surface-50/60">
-            {activeCount} active · {vendors.length} total
-          </p>
-          <div className="flex items-center gap-3">
-            <div className="flex overflow-hidden rounded-md border border-secondary-500/20 text-sm">
-              {(["all", "active", "inactive"] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setFilter(key)}
-                  className={`px-3 py-1.5 font-subheading capitalize ${
-                    filter === key ?
-                      "bg-secondary-500 text-on-secondary-500"
-                    : "text-on-surface-50/70 hover:bg-secondary-500/5"
-                  }`}
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addVendor}
-              className="btn-solid/primary font-subheading text-sm"
-            >
-              + Add vendor
-            </button>
-          </div>
-        </div>
-
-        <section className="mt-6 overflow-hidden rounded-lg border border-secondary-500/15">
-          {/* Desktop table */}
-          <table className="hidden w-full text-left text-sm sm:table">
-            <thead className="bg-secondary-500/5 font-subheading text-xs uppercase tracking-wide text-on-surface-50/55">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Vendor</th>
-                <th className="px-4 py-2.5 font-medium">Tags</th>
-                <th className="px-4 py-2.5 font-medium">Pricing</th>
-                <th className="px-4 py-2.5 font-medium">Items</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-secondary-500/10">
-              {shown.map((v) => {
-                const unsynced = unsyncedCount(v);
-                return (
-                  <tr
-                    key={v.id}
-                    className="group cursor-pointer hover:bg-secondary-500/5"
-                    onClick={() => setEditingId(v.id)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-subheading font-semibold text-ink">
-                        {v.name || "Untitled vendor"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-on-surface-50/75">
-                      {v.tags || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`${pricingBadge[v.pricingModel]} font-subheading font-semibold`}
-                      >
-                        {pricingLabel[v.pricingModel]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="tabular-nums text-on-surface-50/75">
-                        {
-                          v.items.filter((i) => i.syncState !== "removed")
-                            .length
-                        }
-                      </span>
-                      {unsynced > 0 && (
-                        <span className="ml-2 rounded-full bg-accent-500/20 px-2 py-0.5 font-subheading text-[10px] font-semibold uppercase tracking-wide text-accent-700">
-                          {unsynced} unsynced
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={statusBadge[v.status]}>{v.status}</span>
-                    </td>
-                    <td
-                      className="px-4 py-3 text-right"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex justify-end gap-2 opacity-60 transition group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(v.id)}
-                          className="rounded-md border border-secondary-500/25 px-2.5 py-1 font-subheading text-xs text-on-surface-50/80 hover:bg-secondary-500/5"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleStatus(v.id)}
-                          className="rounded-md border border-secondary-500/25 px-2.5 py-1 font-subheading text-xs text-on-surface-50/80 hover:bg-secondary-500/5"
-                        >
-                          {v.status === "active" ? "Deactivate" : "Reactivate"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* Mobile list */}
-          <ul className="divide-y divide-secondary-500/10 sm:hidden">
-            {shown.map((v) => {
-              const unsynced = unsyncedCount(v);
-              return (
-                <li key={v.id}>
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(v.id)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-secondary-500/5"
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-heading text-sm font-bold ${
-                        v.status === "inactive" ?
-                          "bg-secondary-500/10 text-on-surface-50/50"
-                        : "bg-primary-500/15 text-primary-700"
-                      }`}
-                    >
-                      {(v.name || "??").slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-subheading text-sm font-semibold text-ink">
-                        {v.name || "Untitled vendor"}
-                      </span>
-                      <span className="mt-1 flex items-center gap-2">
-                        <span
-                          className={`${pricingBadge[v.pricingModel]} font-subheading font-semibold`}
-                        >
-                          {pricingLabel[v.pricingModel]}
-                        </span>
-                        <span className="text-xs text-on-surface-50/55">
-                          {
-                            v.items.filter((i) => i.syncState !== "removed")
-                              .length
-                          }{" "}
-                          items
-                        </span>
-                      </span>
-                    </span>
-                    {unsynced > 0 && (
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-accent-500" />
-                    )}
-                    <span className={statusBadge[v.status]}>{v.status}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      </div>
-
-      {editing && (
-        <VendorSlideOver
-          key={editing.id}
-          vendor={editing}
-          onClose={() => setEditingId(null)}
-          onChange={(patch) => updateVendor(editing.id, patch)}
-        />
-      )}
-    </div>
-  );
-}
-
-const statusBadge: Record<VendorStatus, string> = {
-  active: "badge-soft/success",
-  inactive: "badge-soft/surface",
-};
-
-function VendorSlideOver({
-  vendor,
-  onClose,
-  onChange,
-}: {
-  vendor: VendorView;
-  onClose: () => void;
-  onChange: (patch: Partial<VendorView>) => void;
-}) {
-  const unsynced = unsyncedCount(vendor);
-  const active = vendor.status === "active";
-
-  // Lock the page scroll while the slide-over is open, compensating for the
+  // Lock the page scroll while the panel is open, compensating for the
   // scrollbar's width so the background doesn't shift when it disappears.
   useEffect(() => {
     const root = document.documentElement;
@@ -275,9 +51,20 @@ function VendorSlideOver({
     };
   }, []);
 
+  if (vendor === undefined) {
+    return null;
+  }
+
+  const unsynced = unsyncedCount(vendor);
+  const active = vendor.status === "active";
+  const items = vendor.items;
+  const close = () => router.push("/vendors");
+  const onChange = (patch: Partial<typeof vendor>) =>
+    updateVendor(vendorId, patch);
+
   function setItem(id: string, patch: Partial<ItemView>) {
     onChange({
-      items: vendor.items.map((item) =>
+      items: items.map((item) =>
         item.id === id ?
           {
             ...item,
@@ -293,17 +80,17 @@ function VendorSlideOver({
   }
 
   function addItem() {
-    onChange({ items: [...vendor.items, blankItem()] });
+    onChange({ items: [...items, blankItem()] });
   }
 
   function removeItem(id: string) {
-    const item = vendor.items.find((i) => i.id === id);
+    const item = items.find((i) => i.id === id);
     if (!item) return;
     if (item.syncState === "new") {
-      onChange({ items: vendor.items.filter((i) => i.id !== id) });
+      onChange({ items: items.filter((i) => i.id !== id) });
     } else {
       onChange({
-        items: vendor.items.map((i) =>
+        items: items.map((i) =>
           i.id === id ? { ...i, syncState: "removed" } : i,
         ),
       });
@@ -312,7 +99,7 @@ function VendorSlideOver({
 
   function restoreItem(id: string) {
     onChange({
-      items: vendor.items.map((i) =>
+      items: items.map((i) =>
         i.id === id ?
           { ...i, syncState: i.cloverItemId ? "edited" : "new" }
         : i,
@@ -322,7 +109,7 @@ function VendorSlideOver({
 
   function syncToClover() {
     onChange({
-      items: vendor.items
+      items: items
         .filter((i) => i.syncState !== "removed")
         .map((i) => ({
           ...i,
@@ -338,7 +125,7 @@ function VendorSlideOver({
       <button
         type="button"
         aria-label="Close"
-        onClick={onClose}
+        onClick={close}
         className="absolute inset-0 bg-black/30"
       />
       <aside className="palette-surface relative flex h-full w-full max-w-2xl animate-[slideIn_.25s_ease-out] flex-col bg-surface-50 shadow-2xl">
@@ -346,7 +133,7 @@ function VendorSlideOver({
         <header className="flex items-center gap-3 border-b border-secondary-500/15 px-5 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             aria-label="Back to vendors"
             className="-ml-1 shrink-0 rounded-md p-1 text-on-surface-50/60 hover:bg-secondary-500/10 hover:text-ink"
           >
@@ -506,7 +293,7 @@ function VendorSlideOver({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={close}
               className="rounded-md px-4 py-2 font-subheading text-sm text-on-surface-50/70 hover:bg-secondary-500/5"
             >
               Done
@@ -556,9 +343,7 @@ function ItemRow({
         <input
           inputMode="decimal"
           value={(item.priceCents / 100).toString()}
-          onChange={(e) =>
-            onChange({ priceCents: parseDollars(e.target.value) })
-          }
+          onChange={(e) => onChange({ priceCents: parseDollars(e.target.value) })}
           disabled={removed}
           className="w-full min-w-0 text-right tabular-nums"
         />
@@ -618,11 +403,7 @@ function StatusToggle({
 }) {
   const active = status === "active";
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex items-center gap-2"
-    >
+    <button type="button" onClick={onToggle} className="flex items-center gap-2">
       <span
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
           active ? "bg-success-500" : "bg-secondary-500/30"
