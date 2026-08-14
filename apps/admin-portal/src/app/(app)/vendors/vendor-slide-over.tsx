@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   blankItem,
   type ItemSyncState,
@@ -12,24 +12,30 @@ import {
 } from "./vendor-view";
 import { useVendors } from "./vendors-context";
 
-/** Duration of the slide-in/out animation; kept in sync with the keyframes. */
-const CLOSE_ANIMATION_MS = 250;
-
 /**
  * The add/edit panel for a single vendor, built around its items. It reads the
  * vendor from the shared store by `vendorId` and writes edits straight back to
- * it, so the list behind the panel reflects changes live. It is rendered by the
- * `/vendors/new` and `/vendors/[vendorId]` routes; closing it navigates back to
- * the list. A `vendorId` with no matching vendor (e.g. a stale deep link)
- * redirects to `/vendors` rather than rendering an empty shell.
+ * it, so the list behind the panel reflects changes live.
+ *
+ * Presence is owned by the {@link import("./vendor-panel-host").VendorPanelHost}:
+ * the `open` prop drives the slide-in/out animation, and closing simply navigates
+ * to `/vendors` (via a control here or the browser back button) — the host then
+ * flips `open` to false and unmounts the panel once the slide-out has played. A
+ * `vendorId` with no matching vendor (e.g. a stale deep link) redirects to
+ * `/vendors` rather than rendering an empty shell.
  *
  * Edits are not persisted yet — mutations live only in the client store.
  */
-export function VendorSlideOver({ vendorId }: { vendorId: string }) {
+export function VendorSlideOver({
+  vendorId,
+  open,
+}: {
+  vendorId: string;
+  open: boolean;
+}) {
   const { vendors, updateVendor } = useVendors();
   const router = useRouter();
   const vendor = vendors.find((v) => v.id === vendorId);
-  const [closing, setClosing] = useState(false);
 
   // Send stale deep links (unknown id) back to the list.
   useEffect(() => {
@@ -37,16 +43,6 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
       router.replace("/vendors");
     }
   }, [vendor, router]);
-
-  // Once closing, let the slide-out animation play, then navigate back — so the
-  // panel animates away instead of vanishing when the route unmounts it.
-  useEffect(() => {
-    if (!closing) {
-      return;
-    }
-    const timer = setTimeout(() => router.push("/vendors"), CLOSE_ANIMATION_MS);
-    return () => clearTimeout(timer);
-  }, [closing, router]);
 
   // Lock the page scroll while the panel is open, compensating for the
   // scrollbar's width so the background doesn't shift when it disappears.
@@ -72,7 +68,7 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
   const unsynced = unsyncedCount(vendor);
   const active = vendor.status === "active";
   const items = vendor.items;
-  const close = () => setClosing(true);
+  const close = () => router.push("/vendors");
   const onChange = (patch: Partial<typeof vendor>) =>
     updateVendor(vendorId, patch);
 
@@ -141,14 +137,14 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
         aria-label="Close"
         onClick={close}
         className={`absolute inset-0 bg-black/30 transition-opacity duration-[250ms] ${
-          closing ? "opacity-0" : "opacity-100"
+          open ? "opacity-100" : "opacity-0"
         }`}
       />
       <aside
         className={`palette-surface relative flex h-full w-full max-w-2xl flex-col bg-surface-50 shadow-2xl ${
-          closing ?
-            "animate-[slideOut_.25s_ease-in_forwards]"
-          : "animate-[slideIn_.25s_ease-out]"
+          open ?
+            "animate-[slideIn_.25s_ease-out]"
+          : "animate-[slideOut_.25s_ease-in_forwards]"
         }`}
       >
         {/* Header */}

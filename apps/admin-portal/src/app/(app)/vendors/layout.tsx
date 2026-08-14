@@ -1,6 +1,7 @@
 import { privatePage } from "@/runtime";
 import { Effect } from "effect";
 import { VendorList } from "./vendor-list";
+import { VendorPanelHost } from "./vendor-panel-host";
 import { VendorsProvider } from "./vendors-context";
 import { vendorsList } from "./vendors-list";
 import { toVendorViews } from "./vendors-list-view";
@@ -12,10 +13,11 @@ export const dynamic = "force-dynamic";
 /**
  * Chrome for the vendor management area. Loads the vendor roster once (wired to
  * the real `Vendor` read model) and hosts the {@link VendorsProvider} client
- * store, then renders the {@link VendorList} with each sub-route's slide-over
- * (`{children}`) layered over it. Living in the layout keeps the list and its
- * local, not-yet-persisted edits mounted while the URL moves between the roster,
- * the add route, and each edit route.
+ * store, then renders the {@link VendorList} beneath the {@link VendorPanelHost}.
+ * The host owns the add/edit slide-over for every sub-route, so the panel stays
+ * mounted across navigation (animating in and out) while the list and its local,
+ * not-yet-persisted edits persist. The sub-route pages themselves render nothing;
+ * they exist only so their URLs resolve.
  */
 export default privatePage(
   "vendors",
@@ -32,6 +34,7 @@ export default privatePage(
           <VendorsProvider initial={vendors}>
             <div className="flex flex-1 flex-col bg-surface-50 text-on-surface-50">
               <VendorList />
+              <VendorPanelHost />
               {children}
             </div>
           </VendorsProvider>
