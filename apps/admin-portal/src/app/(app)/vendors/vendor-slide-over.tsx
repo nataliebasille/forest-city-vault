@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   blankItem,
   type ItemSyncState,
@@ -11,6 +11,9 @@ import {
   type VendorStatus,
 } from "./vendor-view";
 import { useVendors } from "./vendors-context";
+
+/** Duration of the slide-in/out animation; kept in sync with the keyframes. */
+const CLOSE_ANIMATION_MS = 250;
 
 /**
  * The add/edit panel for a single vendor, built around its items. It reads the
@@ -26,6 +29,7 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
   const { vendors, updateVendor } = useVendors();
   const router = useRouter();
   const vendor = vendors.find((v) => v.id === vendorId);
+  const [closing, setClosing] = useState(false);
 
   // Send stale deep links (unknown id) back to the list.
   useEffect(() => {
@@ -33,6 +37,16 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
       router.replace("/vendors");
     }
   }, [vendor, router]);
+
+  // Once closing, let the slide-out animation play, then navigate back — so the
+  // panel animates away instead of vanishing when the route unmounts it.
+  useEffect(() => {
+    if (!closing) {
+      return;
+    }
+    const timer = setTimeout(() => router.push("/vendors"), CLOSE_ANIMATION_MS);
+    return () => clearTimeout(timer);
+  }, [closing, router]);
 
   // Lock the page scroll while the panel is open, compensating for the
   // scrollbar's width so the background doesn't shift when it disappears.
@@ -58,7 +72,7 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
   const unsynced = unsyncedCount(vendor);
   const active = vendor.status === "active";
   const items = vendor.items;
-  const close = () => router.push("/vendors");
+  const close = () => setClosing(true);
   const onChange = (patch: Partial<typeof vendor>) =>
     updateVendor(vendorId, patch);
 
@@ -126,9 +140,17 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
         type="button"
         aria-label="Close"
         onClick={close}
-        className="absolute inset-0 bg-black/30"
+        className={`absolute inset-0 bg-black/30 transition-opacity duration-[250ms] ${
+          closing ? "opacity-0" : "opacity-100"
+        }`}
       />
-      <aside className="palette-surface relative flex h-full w-full max-w-2xl animate-[slideIn_.25s_ease-out] flex-col bg-surface-50 shadow-2xl">
+      <aside
+        className={`palette-surface relative flex h-full w-full max-w-2xl flex-col bg-surface-50 shadow-2xl ${
+          closing ?
+            "animate-[slideOut_.25s_ease-in_forwards]"
+          : "animate-[slideIn_.25s_ease-out]"
+        }`}
+      >
         {/* Header */}
         <header className="flex items-center gap-3 border-b border-secondary-500/15 px-5 py-4">
           <button
@@ -309,7 +331,7 @@ export function VendorSlideOver({ vendorId }: { vendorId: string }) {
         </footer>
       </aside>
 
-      <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
+      <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}@keyframes slideOut{from{transform:translateX(0)}to{transform:translateX(100%)}}`}</style>
     </div>
   );
 }
@@ -343,7 +365,9 @@ function ItemRow({
         <input
           inputMode="decimal"
           value={(item.priceCents / 100).toString()}
-          onChange={(e) => onChange({ priceCents: parseDollars(e.target.value) })}
+          onChange={(e) =>
+            onChange({ priceCents: parseDollars(e.target.value) })
+          }
           disabled={removed}
           className="w-full min-w-0 text-right tabular-nums"
         />
@@ -403,7 +427,11 @@ function StatusToggle({
 }) {
   const active = status === "active";
   return (
-    <button type="button" onClick={onToggle} className="flex items-center gap-2">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-center gap-2"
+    >
       <span
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
           active ? "bg-success-500" : "bg-secondary-500/30"
